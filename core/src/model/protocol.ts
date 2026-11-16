@@ -81,9 +81,9 @@ export type CoreCommand =
   /** Ещё раз визуальная проверка (например, после правки команды запуска) — с приёмки или остановленного прогона. */
   | { type: 'run.rerunVisual'; runId: string }
   | { type: 'run.merge'; runId: string; target: string }
-  /** Отправить ветку на GitHub и открыть Pull Request в base. */
+  /** Отправить ветку в origin и открыть Pull/Merge Request в base. */
   | { type: 'run.pr'; runId: string; base: string }
-  /** Влить открытый PR (gh pr merge --merge). */
+  /** Влить открытый PR/MR средствами провайдера (gh pr merge / слияние MR в GitLab). */
   | { type: 'run.prMerge'; runId: string }
   | { type: 'run.prFollowup'; runId: string; items: PrFollowupItem[]; note?: string }
   | { type: 'run.updateBranch'; runId: string }

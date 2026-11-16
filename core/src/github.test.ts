@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { createPr, failedJobLog, parsePrUrl, prComments, prReadiness, prStatus } from './github.js';
+import { createPr, failedJobLog, githubForge, parsePrUrl, prComments, prReadiness, prStatus } from './github.js';
 
 const unix = { skip: process.platform === 'win32' };
 const URL_ = 'https://github.com/acme/app/pull/42';
@@ -170,15 +170,21 @@ test('failedJobLog: только ссылки на Actions; префиксы job
   assert.equal(await failedJobLog(failed.bin, failed.dir, process.env, 'https://github.com/a/b/actions/runs/1/job/2'), null);
 });
 
-test('prReadiness: нет gh, нет origin, origin не на GitHub', unix, async (t) => {
-  assert.match((await prReadiness(null, 'git', process.cwd(), process.env)) ?? '', /GitHub CLI/);
+test('prReadiness: нет gh, gh не авторизован, всё в порядке', unix, async (t) => {
+  assert.match((await prReadiness(null, process.cwd(), process.env)) ?? '', /GitHub CLI/);
+  const bad = fakeGh(t, '', 1);
+  assert.match((await prReadiness(bad.bin, bad.dir, process.env)) ?? '', /не авторизован/);
+  const ok = fakeGh(t, '');
+  assert.equal(await prReadiness(ok.bin, ok.dir, process.env), null);
+  assert.deepEqual(ok.args(), ['auth', 'status']);
+});
+
+test('githubForge: parseUrl и те же вызовы gh', unix, async (t) => {
   const gh = fakeGh(t, '');
-  const fakeGit = (url: string, code = 0) => {
-    const bin = path.join(gh.dir, `git-${code}-${url.length}`);
-    fs.writeFileSync(bin, `#!/bin/sh\necho "${url}"\nexit ${code}\n`, { mode: 0o755 });
-    return bin;
-  };
-  assert.match((await prReadiness(gh.bin, fakeGit('', 2), gh.dir, process.env)) ?? '', /нет удалённого/);
-  assert.match((await prReadiness(gh.bin, fakeGit('git@gitlab.com:a/b.git'), gh.dir, process.env)) ?? '', /не на GitHub/);
-  assert.equal(await prReadiness(gh.bin, fakeGit('git@github.com:a/b.git'), gh.dir, process.env), null);
+  const forge = githubForge(gh.bin, process.env);
+  assert.deepEqual([forge.kind, forge.host], ['github', 'github.com']);
+  assert.deepEqual(forge.parseUrl(URL_), { project: 'acme/app', number: 42 });
+  assert.equal(forge.parseUrl('https://gitlab.com/acme/app/-/merge_requests/1'), null);
+  await forge.merge(gh.dir, URL_);
+  assert.deepEqual(gh.args(), ['pr', 'merge', URL_, '--merge']);
 });

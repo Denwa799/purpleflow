@@ -1,5 +1,5 @@
 // Общее для экранов проектов и «Новой задачи»: загрузка и сохранение команд проекта, выбор проекта, режимы работы.
-import type { ProjectCommands, ProjectConfig, ProjectListItem, RelatedRepo, Workspace } from '@purpleflow/core';
+import type { ForgeRef, ProjectCommands, ProjectConfig, ProjectListItem, RelatedRepo, Workspace } from '@purpleflow/core';
 import { Check, ChevronDown, FolderGit2, FolderOpen, Minus, Plus, Settings2, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { shortPath } from '../../lib/format';
@@ -25,6 +25,8 @@ export interface LoadedProject {
   prepare?: string;
   /** Соседние репозитории — агенты читают, но не меняют. */
   related?: RelatedRepo[];
+  /** Сохранённый провайдер PR/MR; пусто — определяется по origin. */
+  forge?: ForgeRef | null;
 }
 export const projectName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
 export async function loadProject(dir: string): Promise<LoadedProject> {
@@ -43,6 +45,7 @@ export async function loadProject(dir: string): Promise<LoadedProject> {
       quickTest: cfg.quickTestCommand ?? '',
       prepare: cfg.prepareCommand ?? '',
       related: cfg.relatedRepos ?? [],
+      forge: cfg.forge ?? null,
     };
   }
   const from = det.detectedFrom ? `по ${det.detectedFrom}` : '';
@@ -59,6 +62,8 @@ export async function loadProject(dir: string): Promise<LoadedProject> {
 export function saveLoaded(
   p: Pick<LoadedProject, 'cmds' | 'notes' | 'workspace' | 'visualNotes' | 'envFiles' | 'quickTest' | 'prepare' | 'related'> & {
     path: string;
+    /** undefined — не менять сохранённый провайдер, null — сбросить к автоопределению. */
+    forge?: ForgeRef | null;
   },
 ) {
   return bridge.core.saveProjectConfig(p.path, {
@@ -72,6 +77,7 @@ export function saveLoaded(
     visualNotes: p.visualNotes,
     envFiles: p.envFiles,
     relatedRepos: p.related,
+    forge: p.forge,
     workspace: p.workspace,
     notes: { setup: p.notes.setup, lint: p.notes.lint, test: p.notes.test, run: p.notes.run },
   });

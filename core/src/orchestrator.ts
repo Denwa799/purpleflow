@@ -31,7 +31,7 @@ import type {
   CoreCommand,
   ManagerMessage,
   ProjectCommands,
-  ProjectConfig,
+  ProjectConfigInput,
   ProjectKnowledge,
   StorageItem,
   ToolName,
@@ -253,8 +253,11 @@ export class Orchestrator implements CoreApi {
   async getProjectConfig(dir: string) {
     return projects.getProjectConfig(this.kernel, dir);
   }
-  async saveProjectConfig(dir: string, cfg: Omit<ProjectConfig, 'updatedAt'>) {
+  async saveProjectConfig(dir: string, cfg: ProjectConfigInput) {
     return projects.saveProjectConfig(this.kernel, dir, cfg);
+  }
+  async detectForge(dir: string) {
+    return projects.detectProjectForge(this.kernel, dir);
   }
   async getKnowledge(dir: string) {
     return projects.getKnowledge(this.kernel, dir);

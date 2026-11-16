@@ -155,6 +155,7 @@ export const CORE_METHODS: Record<CoreMethod, true> = {
   stopPreview: true,
   getPreview: true,
   saveProjectConfig: true,
+  detectForge: true,
   listProjects: true,
   projectOverview: true,
   forgetProject: true,

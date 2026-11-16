@@ -14,7 +14,7 @@ export interface PrStatus {
   behind: boolean;
   review: string | null;
   checks: { total: number; passed: number; failed: number; pending: number };
-  /** Упавшие проверки CI: название и ссылка (для GitHub Actions — на job с логом). */
+  /** Упавшие проверки CI: название и ссылка (для GitHub Actions и GitLab CI — на job с логом). */
   failedChecks?: { name: string; url: string | null }[];
   mergeCommit: string | null;
 }
@@ -54,4 +54,13 @@ export interface PrFollowupItem {
   path?: string;
   line?: number;
   url?: string;
+}
+
+/** Провайдер Pull/Merge Request. */
+export type ForgeKind = 'github' | 'gitlab';
+
+/** Провайдер и хост инстанса: хранится в настройках проекта и в `run.pr`. */
+export interface ForgeRef {
+  kind: ForgeKind;
+  host: string;
 }

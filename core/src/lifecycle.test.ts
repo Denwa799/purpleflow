@@ -355,9 +355,10 @@ test('запуск из очереди: проект на другой ветк�
 
 test('«Стоп» во время подготовки копии: прогон останавливается, копия остаётся', unix, async (t) => {
   const { core, k, repo, env } = setup(t);
-  env.INIT_SLEEP = '1';
+  env.INIT_SLEEP = '3';
   const p = start(core, repo, { mode: 'task', workspace: 'worktree' });
-  for (let i = 0; i < 100 && !k.preparing.size; i++) await new Promise((r) => setTimeout(r, 20));
+  // Запас по времени: под нагрузкой полного прогона подготовка копии стартует не сразу.
+  for (let i = 0; i < 500 && !k.preparing.size; i++) await new Promise((r) => setTimeout(r, 20));
   const [id] = k.preparing;
   assert.ok(id);
   await core.dispatch({ type: 'run.stop', runId: id });

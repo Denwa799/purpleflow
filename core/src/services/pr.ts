@@ -1,44 +1,52 @@
-// Ветки и Pull Request: слияние результата, PR на GitHub, статус CI и круг доработки по замечаниям.
+// Ветки и Pull Request: слияние результата, PR/MR у провайдера, статус CI и круг доработки по замечаниям.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { c } from '../agents/common.js';
-import { which } from '../env.js';
+import { forgeOfRun, resolveForge } from '../forge.js';
 import { Git } from '../git.js';
-import { createPr, failedJobLog, mergePr, prComments, prReadiness, prStatus, pushBranch } from '../github.js';
+import { pushBranch } from '../github.js';
 import { isRunBranch } from '../ids.js';
 import type { Kernel } from '../kernel.js';
 
 import type { PrDetails, PrFollowupItem, PrStatus, RunFile } from '../types.js';
 import { getChangeDocs } from './runs.js';
 import { copyEnvFiles } from './workspace.js';
-export function ghBin(k: Kernel): string | null {
-  return which('gh', k.opts.env);
-}
 
-/** null — PR создать можно; иначе причина, почему нет (нет gh, origin не на GitHub…). */
+/** null — PR/MR создать можно; иначе причина, почему нет (нет CLI провайдера, хост не настроен…). */
 export async function prReady(k: Kernel, id: string): Promise<string | null> {
   const r = k.mustLoad(id);
-  const tools = await k.tools(['git']);
-  return prReadiness(ghBin(k), tools.git, r.projectPath, k.opts.env);
+  return (await resolveForge(k, r.projectPath)).reason;
 }
 
+/** Прогоны, для которых PR/MR уже создаётся: двойной клик не должен породить второй push и create. */
+const opening = new Set<string>();
+
 export async function openPr(k: Kernel, id: string, base: string) {
+  if (opening.has(id)) throw new Error('PR/MR уже создаётся');
+  opening.add(id);
+  try {
+    await openPrOnce(k, id, base);
+  } finally {
+    opening.delete(id);
+  }
+}
+
+async function openPrOnce(k: Kernel, id: string, base: string) {
   const r = k.mustLoad(id);
   if (r.status !== 'finished') throw new Error('PR можно открыть только для завершённого прогона');
   if (r.pr) throw new Error(`PR уже открыт: ${r.pr.url}`);
   if (!base.trim()) throw new Error('Выберите ветку, в которую открыть PR');
   const tools = await k.tools(['git']);
-  const gh = ghBin(k);
-  const why = await prReadiness(gh, tools.git, r.projectPath, k.opts.env);
-  if (why || !gh) throw new Error(why ?? 'Нет gh');
+  const { forge, reason } = await resolveForge(k, r.projectPath);
+  if (reason || !forge) throw new Error(reason ?? 'Нет провайдера PR');
   k.log(r, c.sky(`$ git push -u origin ${r.branch}`) + '\n');
   await pushBranch(tools.git, r.projectPath, r.branch, k.opts.env);
   const bodyFile = path.join(os.tmpdir(), `purpleflow-pr-${r.id}.md`);
   fs.writeFileSync(bodyFile, await prBody(k, r));
   try {
-    const pr = await createPr(gh, r.projectPath, k.opts.env, { base, head: r.branch, title: r.title, bodyFile });
-    r.pr = { ...pr, base, createdAt: new Date().toISOString() };
+    const pr = await forge.create(r.projectPath, { base, head: r.branch, title: r.title, bodyFile });
+    r.pr = { ...pr, base, createdAt: new Date().toISOString(), kind: forge.kind, host: forge.host };
     k.save(r);
     k.log(r, c.mint(`✓ PR #${pr.number}: ${pr.url}`) + '\n');
   } finally {
@@ -78,10 +86,10 @@ export async function prBody(k: Kernel, r: RunFile): Promise<string> {
 
 export async function getPrStatus(k: Kernel, id: string): Promise<PrStatus | null> {
   const r = k.mustLoad(id);
-  const gh = ghBin(k);
-  if (!r.pr || !gh) return null;
-  const st = await prStatus(gh, r.projectPath, k.opts.env, r.pr.url);
-  // Влили на GitHub (из приложения или руками) — отмечаем у прогона.
+  const forge = forgeOfRun(k, r);
+  if (!r.pr || !forge) return null;
+  const st = await forge.status(r.projectPath, r.pr.url);
+  // Влили у провайдера (из приложения или руками) — отмечаем у прогона.
   if (st.state === 'MERGED' && !r.merged) {
     r.merged = { into: r.pr.base, commit: st.mergeCommit ?? '', at: new Date().toISOString() };
     k.save(r);
@@ -92,9 +100,9 @@ export async function getPrStatus(k: Kernel, id: string): Promise<PrStatus | nul
 /** PR с замечаниями — по запросу со вкладки «Pull Request» (без фонового опроса). */
 export async function getPrDetails(k: Kernel, id: string): Promise<PrDetails | null> {
   const r = k.mustLoad(id);
-  const gh = ghBin(k);
-  if (!r.pr || !gh) return null;
-  const [status, c] = await Promise.all([getPrStatus(k, id), prComments(gh, r.projectPath, k.opts.env, r.pr.url)]);
+  const forge = forgeOfRun(k, r);
+  if (!r.pr || !forge) return null;
+  const [status, c] = await Promise.all([getPrStatus(k, id), forge.comments(r.projectPath, r.pr.url)]);
   if (!status) return null;
   const checks = (status.failedChecks ?? []).map((x, i) => ({
     id: `check:${x.name}:${i}`,
@@ -120,11 +128,11 @@ export async function prFollowup(k: Kernel, id: string, items: PrFollowupItem[],
   const { git, pulled } = await reopenWorkspace(k, r);
 
   // Логи упавших проверок CI — исполнителю, чтобы не гадать, что сломалось.
-  const gh = ghBin(k);
+  const forge = forgeOfRun(k, r);
   const lines: string[] = [];
   for (const it of items) {
     if (it.kind === 'check') {
-      const log = gh && it.url ? await failedJobLog(gh, r.projectPath, k.opts.env, it.url).catch(() => null) : null;
+      const log = forge && it.url ? await forge.failedJobLog(r.projectPath, it.url).catch(() => null) : null;
       lines.push(`- Упала проверка CI «${it.body}»${it.url ? ` (${it.url})` : ''}${log ? `. Хвост лога:\n\`\`\`\n${log}\n\`\`\`` : ''}`);
     } else {
       const where = it.path ? `${it.path}${it.line ? `:${it.line}` : ''}` : it.kind === 'review' ? 'итог ревью' : 'комментарий к PR';
@@ -189,7 +197,7 @@ export async function reopenWorkspace(k: Kernel, r: RunFile): Promise<{ git: Git
   }
   const pulled = await git.pullFastForward(r.worktreePath, r.branch);
   if (pulled === 'diverged')
-    throw new Error(`Ветка ${r.branch} на GitHub разошлась с локальной — подтяните изменения вручную (git pull) и повторите`);
+    throw new Error(`Ветка ${r.branch} у провайдера разошлась с локальной — подтяните изменения вручную (git pull) и повторите`);
   return { git, pulled };
 }
 
@@ -257,9 +265,9 @@ export async function updateBranch(k: Kernel, id: string) {
 
 export async function mergePrOf(k: Kernel, id: string) {
   const r = k.mustLoad(id);
-  const gh = ghBin(k);
-  if (!r.pr || !gh) throw new Error('У прогона нет PR');
-  await mergePr(gh, r.projectPath, k.opts.env, r.pr.url);
+  const forge = forgeOfRun(k, r);
+  if (!r.pr || !forge) throw new Error('У прогона нет PR');
+  await forge.merge(r.projectPath, r.pr.url);
   k.log(r, c.mint(`✓ PR #${r.pr.number} влит в ${r.pr.base}`) + '\n');
   await getPrStatus(k, id);
 }

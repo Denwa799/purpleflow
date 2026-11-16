@@ -95,7 +95,7 @@ export function Overview({ p, onTab }: { p: LoadedProject; onTab: (t: ProjectTab
                   <span className="muted">{o.prReady}</span>
                 ) : (
                   <>
-                    <GitPullRequest size={13} className="ok" /> можно создавать через gh
+                    <GitPullRequest size={13} className="ok" /> можно создавать MR/PR
                   </>
                 )
               ) : (

@@ -1,5 +1,6 @@
 // Проекты: команды, знания, окружение, статистика.
 
+import type { ForgeRef } from './pr.js';
 import type { RunMode, StageId, Workspace } from './run.js';
 
 export interface ProjectCommands {
@@ -33,10 +34,25 @@ export interface ProjectConfig {
   /** Соседние репозитории: агенты читают их для контекста (API бэкенда, общие типы), но не меняют. */
   relatedRepos?: RelatedRepo[];
   workspace?: Workspace;
+  /** Провайдер Pull/Merge Request и хост; без него провайдер определяется по origin для github.com и gitlab.com. */
+  forge?: ForgeRef;
   /** Знания о проекте для всех агентов: профиль (стек, структура, соглашения) и уроки прошлых прогонов. */
   knowledge?: ProjectKnowledge;
   notes: { setup: string; lint: string; test: string; run?: string };
   updatedAt: string;
+}
+
+/** Вход saveProjectConfig: `forge` — undefined оставляет прежний провайдер, null сбрасывает к автоопределению. */
+export type ProjectConfigInput = Omit<ProjectConfig, 'updatedAt' | 'forge'> & { forge?: ForgeRef | null };
+
+/** Результат `detectForge`: что видно по origin и что уже сохранено в настройках проекта. */
+export interface ForgeDetectionInfo {
+  remote: string | null;
+  host: string | null;
+  suggested: ForgeRef | null;
+  /** Хост точно известен (github.com, gitlab.com) — подтверждать не нужно. */
+  confirmed: boolean;
+  saved: ForgeRef | null;
 }
 
 /** Заготовка следующей части большой задачи: текст, проект, вложения, от какой ветки начать. */
