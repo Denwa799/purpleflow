@@ -119,3 +119,27 @@ test('проект с нуля: папка без git — «Создать ре�
   expect(git('branch', '--show-current')).toBe('main');
   expect(git('ls-files').split('\n').sort()).toEqual(['.gitignore', 'index.js']);
 });
+
+test('«Сообщить о проблеме» рядом с настройками открывает issue на GitHub с версией и окружением', async () => {
+  await start({ onboarded: true });
+  // Настоящий браузер не открываем — запоминаем адрес.
+  await l.app.evaluate(({ shell }) => {
+    const g = globalThis as unknown as { opened: string[] };
+    g.opened = [];
+    shell.openExternal = (async (url: string) => void g.opened.push(url)) as typeof shell.openExternal;
+  });
+  await expect(l.page.locator('.side-tools .tool-chip.is-ok', { hasText: 'claude' })).toBeVisible();
+  const bug = l.page.getByRole('button', { name: 'Сообщить о проблеме' });
+  await bug.hover();
+  await expect(bug.getByRole('tooltip')).toHaveCSS('opacity', '1');
+  if (process.env.PF_SHOT) await l.page.locator('.side').screenshot({ path: process.env.PF_SHOT });
+  await l.page.getByRole('button', { name: 'Сообщить о проблеме' }).click();
+  await expect.poll(() => l.app.evaluate(() => (globalThis as unknown as { opened: string[] }).opened.length)).toBe(1);
+  const url = new URL(await l.app.evaluate(() => (globalThis as unknown as { opened: string[] }).opened[0]));
+  expect(`${url.origin}${url.pathname}`).toBe('https://github.com/PurpleSchool/purpleflow/issues/new');
+  const body = url.searchParams.get('body')!;
+  expect(body).toMatch(/- PurpleFlow: \d+\.\d+\.\d+/);
+  expect(body).toMatch(/- claude: 2\.0\.0/);
+  // Ни путей, ни папки профиля в отчёте.
+  expect(body).not.toContain(box.root);
+});

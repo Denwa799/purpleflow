@@ -227,6 +227,8 @@ export interface PurpleFlowBridge {
     download(): Promise<void>;
     install(): Promise<void>;
   };
+  /** Новый issue на GitHub с версией приложения, ОС и версиями инструментов — в браузере пользователя. */
+  reportBug(tools: { name: string; version?: string }[]): Promise<void>;
   /** «Что нового»: выпуски с GitHub и какая версия уже показана. */
   whatsNew: {
     releases(): Promise<{ releases: Release[]; error?: string }>;

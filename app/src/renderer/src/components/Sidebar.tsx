@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import {
+  Bug,
   ChevronDown,
   FolderGit2,
   Gift,
@@ -207,9 +208,26 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             </span>
           )}
         </div>
-        <button className={`side-link ${v.name === 'settings' ? 'is-on' : ''}`} onClick={() => go({ name: 'settings' })}>
-          <Settings size={16} /> Настройки
-        </button>
+        <div className="side-settings">
+          <button className={`side-link ${v.name === 'settings' ? 'is-on' : ''}`} onClick={() => go({ name: 'settings' })}>
+            <Settings size={16} /> Настройки
+          </button>
+          <button
+            className="side-bug"
+            aria-label="Сообщить о проблеме"
+            onClick={() =>
+              void bridge.reportBug(
+                shownTools(state.settings?.enabledAgents).map((t) => ({ name: t, version: state.tools?.[t]?.version ?? undefined })),
+              )
+            }
+          >
+            <Bug size={16} />
+            <span className="side-tip" role="tooltip">
+              <strong>Сообщить о проблеме</strong>
+              <span>Откроется issue на GitHub — версия и окружение уже подставлены</span>
+            </span>
+          </button>
+        </div>
         <div className="side-tools" title="Найденные инструменты">
           {shownTools(state.settings?.enabledAgents).map((t) => {
             const info = state.tools?.[t];

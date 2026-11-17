@@ -22,6 +22,7 @@ import type { CoreCommand, CoreEvent } from '@purpleflow/core';
 import type { CoreMethod, HostMessage, HostRequest, SettingsPatch } from '../shared/ipc';
 import { coreSettings, publicSettings, seenVersion, setSeenVersion, updateSettings } from './settings';
 import { releases } from './releases';
+import { bugReportUrl } from '../shared/bugReport';
 import * as account from './account';
 import { proxyModels } from './models';
 import { isLocalUrl, isSameDocument, isWebUrl } from '../shared/urls';
@@ -510,6 +511,18 @@ const checkForUpdates = () => {
 handle('update:state', () => updateState());
 handle('update:check', () => checkForUpdates());
 handle('update:download', () => downloadUpdate());
+const OS_NAME: Record<string, string> = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
+handle('app:reportBug', (_e, tools: { name: string; version?: string }[]) =>
+  shell.openExternal(
+    bugReportUrl({
+      version: app.getVersion(),
+      os: `${OS_NAME[process.platform] ?? process.platform} ${process.getSystemVersion()}`,
+      arch: process.arch,
+      electron: process.versions.electron,
+      tools: Array.isArray(tools) ? tools.slice(0, 10) : [],
+    }),
+  ),
+);
 handle('whatsNew:releases', () => releases());
 handle('whatsNew:versions', () => ({ current: app.getVersion(), seen: seenVersion(app.getVersion()) }));
 handle('whatsNew:seen', () => setSeenVersion(app.getVersion()));

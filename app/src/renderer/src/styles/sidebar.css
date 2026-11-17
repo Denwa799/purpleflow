@@ -365,3 +365,71 @@
   background: var(--err);
   box-shadow: 0 0 0 3px var(--err-wash);
 }
+.side-settings {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.side-settings > .side-link {
+  flex: 1;
+  min-width: 0;
+}
+.side-bug {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--text-3);
+  transition:
+    background 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+.side-bug:hover,
+.side-bug:focus-visible {
+  background: var(--bg-4);
+  color: var(--text-1);
+}
+/* Подсказка над кнопкой, прижата к её правому краю — не выходит за сайдбар. */
+.side-tip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 10;
+  width: max-content;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--pop-bg);
+  box-shadow:
+    0 0 0 1px var(--line-2),
+    0 12px 28px -12px rgba(0, 0, 0, 0.7);
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.15s var(--ease),
+    transform 0.15s var(--ease);
+}
+.side-tip strong {
+  color: var(--text-1);
+  font-size: var(--fs-13);
+  font-weight: 500;
+}
+.side-tip span {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.side-bug:hover .side-tip,
+.side-bug:focus-visible .side-tip {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.3s;
+}

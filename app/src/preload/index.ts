@@ -68,6 +68,7 @@ const bridge: PurpleFlowBridge = {
     download: () => ipcRenderer.invoke('update:download'),
     install: () => ipcRenderer.invoke('update:install'),
   },
+  reportBug: (tools) => ipcRenderer.invoke('app:reportBug', tools),
   whatsNew: {
     releases: () => ipcRenderer.invoke('whatsNew:releases'),
     versions: () => ipcRenderer.invoke('whatsNew:versions'),
