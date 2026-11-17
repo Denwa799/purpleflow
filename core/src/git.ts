@@ -72,6 +72,28 @@ export class Git {
     return real(root) === real(dir) ? null : root;
   }
 
+  /**
+   * Сделать папку репозиторием с первым коммитом: git init (ветка main), .gitignore, если его нет, и коммит всего, что есть.
+   * Уже репозиторий с коммитами — ничего не трогаем. Возвращает коммит.
+   */
+  async initRepo(dir: string, gitignore: string): Promise<string> {
+    const own = (await this.isRepo(dir)) && !(await this.enclosingRoot(dir));
+    if (own) {
+      const head = await this.head(dir).catch(() => '');
+      if (head) return head;
+    } else {
+      await this.git(dir, ['init', '-q']);
+      // Без -b: старые git его не знают. Ветка ещё не родилась — просто называем её main.
+      await this.git(dir, ['symbolic-ref', 'HEAD', 'refs/heads/main']);
+    }
+    const ignore = path.join(dir, '.gitignore');
+    if (!fs.existsSync(ignore)) fs.writeFileSync(ignore, gitignore);
+    await this.git(dir, ['add', '-A'], 120_000);
+    const identity = await this.identity(dir);
+    await this.git(dir, [...identity, 'commit', '-q', '--allow-empty', '--no-verify', '-m', 'Первый коммит'], 120_000);
+    return this.head(dir);
+  }
+
   async head(dir: string): Promise<string> {
     return (await this.git(dir, ['rev-parse', 'HEAD'])).trim();
   }

@@ -12,7 +12,7 @@ import { checkRelatedUntouched, relatedState } from '../services/projects.js';
 import { feedbackBlock, modeRules, phaseBlock, taskText, tpl } from '../services/prompting.js';
 
 import { repoSlots, slotPath } from '../services/repos.js';
-import type { RunFile } from '../types.js';
+import type { AgentKind, RunFile } from '../types.js';
 import { captureBaseChecks, settleBaseChecks } from './checks.js';
 import { startFilesBlock } from './plan.js';
 export async function stageImplement(k: Kernel, run: RunFile) {
@@ -36,11 +36,16 @@ export async function stageImplement(k: Kernel, run: RunFile) {
   });
   let res: AgentResult;
   const systemPrompt = k.prompts.raw('executor.system.md') + modeRules(k, 'executor', run);
-  const onClaude = run.agents.executor === 'claude';
+  const agent = run.agents.executor;
+  const onClaude = agent === 'claude';
+  // claude и opencode умеют продолжить сессию; codex exec — нет, у него каждая попытка с нуля.
+  const resumable = onClaude || agent === 'opencode';
+  // opencode сам выдаёт ID сессии — запоминаем, как только он его сообщил.
+  const onSession = agent === 'opencode' ? (id: string) => setSession(run, agent, id) : undefined;
   const related = await relatedState(k, run.projectPath);
   try {
-    // Следующая попытка на claude продолжает сессию прошлой: только замечания, без повторного изучения проекта.
-    if (onClaude && run.executorSession) {
+    // Следующая попытка продолжает сессию прошлой: только замечания, без повторного изучения проекта.
+    if (resumable && run.executorSession && (run.executorSessionAgent ?? 'claude') === agent) {
       k.log(run, c.dim('продолжаю сессию исполнителя — в контексте прошлая попытка') + '\n');
       const short = k.prompts.render('implement-continue.md', {
         changeId: run.changeId,
@@ -49,21 +54,14 @@ export async function stageImplement(k: Kernel, run: RunFile) {
         limit: run.implAttemptsLimit,
         feedback: phaseBlock(k, run) + feedbackBlock(k, run.feedback),
       });
-      res = await runRole(k, run, 'executor', { prompt: short, systemPrompt, openspec: true, resume: run.executorSession });
+      res = await runRole(k, run, 'executor', { prompt: short, systemPrompt, openspec: true, resume: run.executorSession, onSession });
       if (!res.ok && !res.stopped && /no conversation|session|не найден/i.test(res.error ?? '')) {
-        // Сессия пропала (чистка ~/.claude, другой компьютер) — начинаем заново с полной постановкой.
+        // Сессия пропала (чистка ~/.claude или данных opencode, другой компьютер) — начинаем заново с полной постановкой.
         k.log(run, c.dim('сессия не найдена — начинаю заново') + '\n');
-        run.executorSession = crypto.randomUUID();
-        res = await runRole(k, run, 'executor', { prompt, systemPrompt, openspec: true, sessionId: run.executorSession });
+        res = await freshAttempt(k, run, prompt, systemPrompt, onSession);
       }
     } else {
-      if (onClaude) run.executorSession = crypto.randomUUID();
-      res = await runRole(k, run, 'executor', {
-        prompt,
-        systemPrompt,
-        openspec: true,
-        sessionId: onClaude ? run.executorSession : undefined,
-      });
+      res = await freshAttempt(k, run, prompt, systemPrompt, onSession);
     }
     k.afterAgent(run, attempt, res);
     await checkRelatedUntouched(k, run, related);
@@ -86,6 +84,24 @@ export async function stageImplement(k: Kernel, run: RunFile) {
   await dropArtifacts(k, run);
   run.next = 'tests';
   k.save(run);
+}
+
+function setSession(run: RunFile, agent: AgentKind, id: string | undefined) {
+  run.executorSession = id;
+  run.executorSessionAgent = id ? agent : undefined;
+}
+
+/** Попытка с полной постановкой: claude получает новый ID сессии, opencode сообщит свой сам; у codex сессии нет. */
+function freshAttempt(k: Kernel, run: RunFile, prompt: string, systemPrompt: string, onSession?: (id: string) => void) {
+  const agent = run.agents.executor;
+  setSession(run, agent, agent === 'claude' ? crypto.randomUUID() : undefined);
+  return runRole(k, run, 'executor', {
+    prompt,
+    systemPrompt,
+    openspec: true,
+    sessionId: agent === 'claude' ? run.executorSession : undefined,
+    onSession,
+  });
 }
 
 /** Сборочные артефакты (tsbuildinfo, next-env.d.ts…), которые агент изменил запуском сборки, — назад к базе: в дифф и коммит они не идут. */

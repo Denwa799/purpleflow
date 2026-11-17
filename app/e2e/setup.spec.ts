@@ -99,3 +99,23 @@ test('выключенный codex не нужен: строка пропада�
   await expect(l.page.getByRole('heading', { name: 'Агенты и модели по ролям' })).toBeVisible();
   await expect(l.page.getByRole('radio', { name: 'codex' })).toHaveCount(0);
 });
+
+test('проект с нуля: папка без git — «Создать репозиторий» делает main, .gitignore и первый коммит', async () => {
+  await start({ onboarded: true });
+  const dir = path.join(box.root, 'fresh');
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(dir, 'index.js'), 'console.log(1)\n');
+  fs.writeFileSync(path.join(dir, '.env'), 'SECRET=1\n');
+  await l.app.evaluate(({ dialog }, d) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [d] })) as typeof dialog.showOpenDialog;
+  }, dir);
+  await l.page.getByRole('button', { name: 'Как начать?' }).click();
+  await l.page.getByRole('button', { name: 'Выбрать папку…' }).click();
+  await expect(l.page.getByText('Папка ещё не git-репозиторий')).toBeVisible();
+  await l.page.getByRole('button', { name: 'Создать репозиторий' }).click();
+  await expect(l.page.getByRole('button', { name: 'Создать репозиторий' })).toHaveCount(0);
+  await expect(l.page.getByText('Папка ещё не git-репозиторий')).toHaveCount(0);
+  const git = (...a: string[]) => box.git('-C', dir, ...a);
+  expect(git('branch', '--show-current')).toBe('main');
+  expect(git('ls-files').split('\n').sort()).toEqual(['.gitignore', 'index.js']);
+});

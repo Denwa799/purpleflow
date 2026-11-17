@@ -83,7 +83,7 @@ export function ProjectScreen({ path, initialTab }: { path: string; initialTab?:
             <>
               {(tab === 'overview' || !repo) && (
                 <div className="project-tab step-enter">
-                  <Overview p={p} onTab={setTab} />
+                  <Overview p={p} onTab={setTab} onReload={() => void reload()} />
                 </div>
               )}
               {/* Команды живут и на других вкладках: иначе несохранённые правки терялись бы при переключении. */}

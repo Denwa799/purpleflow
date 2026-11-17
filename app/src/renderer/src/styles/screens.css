@@ -862,3 +862,19 @@ a.btn {
     opacity: 1;
   }
 }
+.init-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-top: var(--s-3);
+}
+.init-note > p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.init-note-text {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: 1.6;
+}

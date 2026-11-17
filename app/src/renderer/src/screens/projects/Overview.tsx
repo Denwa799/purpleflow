@@ -6,10 +6,10 @@ import { Button } from '../../components/ui';
 import { shortPath, tokens, when } from '../../lib/format';
 import { MODES, stageTitle } from '../../lib/stages';
 import { useStore, type ProjectTab } from '../../lib/store';
-import { CmdChips, type LoadedProject, plural } from './common';
+import { CmdChips, InitRepoButton, type LoadedProject, plural } from './common';
 import { bridge } from '../../lib/api';
 
-export function Overview({ p, onTab }: { p: LoadedProject; onTab: (t: ProjectTab) => void }) {
+export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: ProjectTab) => void; onReload: () => void }) {
   const { state, go } = useStore();
   const [o, setO] = useState<ProjectOverview | null>(null);
   const [k, setK] = useState<ProjectKnowledge | null>(null);
@@ -35,7 +35,9 @@ export function Overview({ p, onTab }: { p: LoadedProject; onTab: (t: ProjectTab
         <span className="browser-empty-icon">
           <TriangleAlert size={22} />
         </span>
-        <strong>{p.info.repoRoot ? 'Папка внутри другого репозитория' : 'Это не git-репозиторий'}</strong>
+        <strong>
+          {p.info.repoRoot ? 'Папка внутри другого репозитория' : p.info.empty ? 'В репозитории нет коммитов' : 'Это не git-репозиторий'}
+        </strong>
         <p>
           {p.info.repoRoot ? (
             <>
@@ -44,10 +46,17 @@ export function Overview({ p, onTab }: { p: LoadedProject; onTab: (t: ProjectTab
             </>
           ) : (
             <>
-              Выполните <code>git init</code> и первый коммит — прогоны работают в отдельных ветках.
+              Прогоны работают в отдельных ветках — нужен репозиторий с первым коммитом. Создадим его: ветка main, .gitignore и коммит того,
+              что есть в папке.
             </>
           )}
         </p>
+        <InitRepoButton
+          dir={repo}
+          tone={p.info.repoRoot ? 'ghost' : 'primary'}
+          label={p.info.repoRoot ? 'Сделать отдельным репозиторием' : p.info.empty ? 'Сделать первый коммит' : 'Создать репозиторий'}
+          onDone={onReload}
+        />
       </section>
     );
   }

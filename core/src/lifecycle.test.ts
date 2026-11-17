@@ -40,6 +40,7 @@ function setup(t: { after: (fn: () => void) => void }, claude: Claude = () => ok
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, 'claude'), '#!/bin/sh\necho "claude 1.0.0"\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, 'opencode'), '#!/bin/sh\necho "1.0.0"\n', { mode: 0o755 });
   const calls = path.join(root, 'openspec-calls');
   fs.writeFileSync(
     path.join(bin, 'openspec'),
@@ -47,7 +48,7 @@ function setup(t: { after: (fn: () => void) => void }, claude: Claude = () => ok
     { mode: 0o755 },
   );
   const settings = {
-    toolPaths: { claude: path.join(bin, 'claude'), openspec: path.join(bin, 'openspec') },
+    toolPaths: { claude: path.join(bin, 'claude'), opencode: path.join(bin, 'opencode'), openspec: path.join(bin, 'openspec') },
     proxy: { baseUrl: '', apiKey: '' },
     models: { planner: '', executor: '', reviewer: '' },
     agents: { planner: 'claude', executor: 'claude', reviewer: 'claude' },
@@ -61,7 +62,8 @@ function setup(t: { after: (fn: () => void) => void }, claude: Claude = () => ok
     promptsDir: PROMPTS,
     env,
     getSettings: () => settings,
-    runners: { claude: (async (o: AgentRunOptions) => claude(o)) as never },
+    // opencode — тот же фейк: в опциях он получает resumeSession и onSession.
+    runners: { claude: (async (o: AgentRunOptions) => claude(o)) as never, opencode: (async (o: AgentRunOptions) => claude(o)) as never },
   });
   const k = core.kernel;
   const head = g('rev-parse', 'HEAD');
@@ -572,6 +574,36 @@ test('реализация: сессия пропала — начинаем з�
   mode = 'fail';
   await assert.rejects(stageImplement(k, run), /Нет ключа/);
   assert.equal(run.implAttemptsUsed, 1, 'попытка не потрачена');
+});
+
+test('реализация на opencode: следующая попытка продолжает его сессию; сменили агента — заново', unix, async (t) => {
+  const calls: (AgentRunOptions & { resumeSession?: string })[] = [];
+  const { k, save } = setup(t, (o) => {
+    const x = o as AgentRunOptions & { resumeSession?: string };
+    calls.push(x);
+    if (!x.resumeSession) o.onSession?.('ses_1');
+    return okReply('Сделано');
+  });
+  const run = save({ implAttemptsUsed: 0, agents: { planner: 'claude', executor: 'opencode', reviewer: 'claude' } as never });
+  await stageImplement(k, run);
+  assert.equal(calls[0].resumeSession, undefined);
+  assert.ok(calls[0].systemPrompt);
+  assert.deepEqual([run.executorSession, run.executorSessionAgent], ['ses_1', 'opencode']);
+
+  run.feedback = { source: 'review', text: 'поправь null' };
+  await stageImplement(k, run);
+  assert.equal(calls[1].resumeSession, 'ses_1');
+  // Продолжение: только замечания, системный промпт уже в сессии.
+  assert.equal(calls[1].systemPrompt, undefined);
+  assert.match(calls[1].prompt, /поправь null/);
+  assert.match(calls[1].prompt, /Продолжаем то же изменение/);
+
+  // Исполнителя сменили на claude — сессия opencode ему чужая.
+  run.agents.executor = 'claude';
+  await stageImplement(k, run);
+  assert.equal(calls[2].resume, undefined);
+  assert.ok(calls[2].sessionId);
+  assert.deepEqual([run.executorSession, run.executorSessionAgent], [calls[2].sessionId, 'claude']);
 });
 
 test('ревью: второй ревьюер делит замечания на блокирующие, заметки и отклонённые', unix, async (t) => {

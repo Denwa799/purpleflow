@@ -331,25 +331,69 @@ export function ProjectPicker({ project, draft, onPick }: { project: ProjectInfo
     </div>
   );
 }
-/** Почему папка не годится под проект: не репозиторий или подпапка чужого — тогда предлагаем его корень. */
+/** Проект с нуля: git init, .gitignore и первый коммит одной кнопкой. onDone — папку перечитать. */
+export function InitRepoButton({
+  dir,
+  label,
+  tone = 'primary',
+  onDone,
+}: {
+  dir: string;
+  label: string;
+  tone?: 'primary' | 'ghost';
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const init = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await bridge.core.initRepo(dir);
+      onDone();
+    } catch (e) {
+      setError(cleanErr(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <Button tone={tone} icon={<FolderGit2 size={15} />} busy={busy} onClick={() => void init()}>
+        {label}
+      </Button>
+      {error && <span className="inline-error">{error}</span>}
+    </>
+  );
+}
+
+/** Почему папка не годится под проект: не репозиторий или подпапка чужого — тогда предлагаем его корень или свой репозиторий. */
 export function NotRepoNote({ project, onRoot }: { project: ProjectInfo; onRoot: (dir: string) => void }) {
   if (project.isRepo) return null;
   if (project.nested?.length && !project.repoRoot) return <MultiRepoSetup key={project.path} project={project} onCreated={onRoot} />;
+  const reload = () => onRoot(project.path);
   if (project.repoRoot)
     return (
-      <p className="inline-error">
-        <TriangleAlert size={14} /> Папка лежит внутри репозитория <code>{shortPath(project.repoRoot)}</code> — задача ушла бы в него.
-        Выполните в папке <code>git init</code> или{' '}
-        <button className="link" onClick={() => onRoot(project.repoRoot!)}>
-          возьмите корень репозитория
-        </button>
-        .
-      </p>
+      <div className="init-note">
+        <p className="inline-error">
+          <TriangleAlert size={14} /> Папка лежит внутри репозитория <code>{shortPath(project.repoRoot)}</code> — задача ушла бы в него.{' '}
+          <button className="link" onClick={() => onRoot(project.repoRoot!)}>
+            Возьмите корень репозитория
+          </button>{' '}
+          или сделайте папку отдельным репозиторием.
+        </p>
+        <InitRepoButton dir={project.path} tone="ghost" label="Сделать отдельным репозиторием" onDone={reload} />
+      </div>
     );
   return (
-    <p className="inline-error">
-      <TriangleAlert size={14} /> Это не git-репозиторий. Выполните <code>git init</code> и первый коммит или выберите другую папку.
-    </p>
+    <div className="init-note">
+      <p className="init-note-text">
+        {project.empty
+          ? 'В репозитории ещё нет коммитов — прогонам не от чего начать ветку.'
+          : 'Папка ещё не git-репозиторий. Начнём проект с нуля: создадим репозиторий с веткой main, .gitignore без зависимостей и секретов и первый коммит с тем, что уже есть в папке.'}
+      </p>
+      <InitRepoButton dir={project.path} label={project.empty ? 'Сделать первый коммит' : 'Создать репозиторий'} onDone={reload} />
+    </div>
   );
 }
 export function plural(n: number, one: string, few: string, many: string) {

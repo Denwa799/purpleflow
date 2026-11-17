@@ -1,5 +1,6 @@
 // Фасад ядра: публичный API (CoreApi) поверх движка, стадий и сервисов.
 // Логики здесь нет — только сборка ядра и разводка команд по модулям.
+import fs from 'node:fs';
 import path from 'node:path';
 import { checkCommand, detectProjectCommands, findEnvFiles } from './detect.js';
 import * as engine from './engine.js';
@@ -37,6 +38,25 @@ import type {
   StorageItem,
   ToolName,
 } from './types.js';
+
+/** .gitignore нового проекта: без зависимостей, сборки и секретов в первом коммите. */
+const DEFAULT_GITIGNORE = `node_modules/
+dist/
+build/
+out/
+coverage/
+.venv/
+venv/
+__pycache__/
+target/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+`;
 
 export class Orchestrator implements CoreApi {
   readonly kernel: Kernel;
@@ -225,17 +245,29 @@ export class Orchestrator implements CoreApi {
     const inside = await git.isRepo(dir).catch(() => false);
     // Подпапка чужого репозитория — не проект: прогон ушёл бы в корень того репозитория.
     const repoRoot = inside ? ((await git.enclosingRoot(dir).catch(() => null)) ?? undefined) : undefined;
+    // Репозиторий без единого коммита: прогону не от чего ответвиться — как и обычной папке, ему нужен первый коммит.
+    const empty = inside && !repoRoot && !(await git.head(dir).catch(() => ''));
     const base = {
       ...detectProjectCommands(dir),
       envFiles: findEnvFiles(dir),
-      isRepo: inside && !repoRoot,
+      isRepo: inside && !repoRoot && !empty,
       repoRoot,
+      empty: empty || undefined,
       name: path.basename(dir),
     };
     if (inside) return base;
     const projectOf = projects.projectOfRoot(this.kernel, dir) ?? undefined;
     const nested = nestedRepos(dir);
     return { ...base, nested: nested.length ? nested : undefined, projectOf };
+  }
+  /** Проект с нуля: git init, .gitignore и первый коммит — дальше папка готова к прогонам. */
+  async initRepo(dir: string): Promise<DetectedProject> {
+    const { env, getSettings } = this.kernel.opts;
+    const git = new Git(getSettings().toolPaths.git || which('git', env) || 'git', env);
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error(`Папка не найдена: ${dir}`);
+    if (nestedRepos(dir).length) throw new Error('В папке есть другие репозитории — соберите проект из них, а не делайте общий');
+    await git.initRepo(dir, DEFAULT_GITIGNORE);
+    return this.detectProject(dir);
   }
   async checkCommands(dir: string, cmds: Record<string, string>): Promise<Record<string, CommandIssue[]>> {
     return Object.fromEntries(Object.entries(cmds).map(([key, cmd]) => [key, cmd.trim() ? checkCommand(dir, cmd) : []]));

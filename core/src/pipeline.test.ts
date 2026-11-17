@@ -1131,3 +1131,41 @@ test(
     assert.ok(!gw('branch').includes(r.branch), 'ветка в участнике удалена');
   },
 );
+
+test('initRepo: проект с нуля — main, .gitignore без секретов и зависимостей, первый коммит; повтор ничего не меняет', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-init-')));
+  try {
+    const core = makeCore(fakeClaude({ implement: () => {}, review: () => ({ blocking: [], notes: [] }) }));
+    const dir = path.join(root, 'app');
+    fs.mkdirSync(path.join(dir, 'node_modules', 'x'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'node_modules', 'x', 'i.js'), '');
+    fs.writeFileSync(path.join(dir, 'index.js'), 'console.log(1)\n');
+    fs.writeFileSync(path.join(dir, '.env'), 'SECRET=1\n');
+    const before = await core.detectProject(dir);
+    assert.equal(before.isRepo, false);
+
+    const after = await core.initRepo(dir);
+    assert.equal(after.isRepo, true);
+    const git = (...a: string[]) => execFileSync('git', a, { cwd: dir }).toString().trim();
+    assert.equal(git('branch', '--show-current'), 'main');
+    assert.deepEqual(git('ls-files').split('\n').sort(), ['.gitignore', 'index.js']);
+    const head = git('rev-parse', 'HEAD');
+    await core.initRepo(dir);
+    assert.equal(git('rev-parse', 'HEAD'), head);
+
+    // git init без коммитов: пустой репозиторий не годится, initRepo делает первый коммит в нём же.
+    const bare = path.join(root, 'empty');
+    fs.mkdirSync(bare);
+    execFileSync('git', ['init', '-q', '-b', 'dev'], { cwd: bare });
+    const e = await core.detectProject(bare);
+    assert.deepEqual([e.isRepo, e.empty], [false, true]);
+    assert.equal((await core.initRepo(bare)).isRepo, true);
+    assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd: bare }).toString().trim(), 'dev');
+
+    // Папка с репозиториями внутри — общий репозиторий поверх не делаем.
+    // app и empty уже репозитории внутри root.
+    await assert.rejects(core.initRepo(root), /другие репозитории/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -155,7 +155,10 @@ export async function runRole(
     images?: string[];
     outputSchema?: object;
     sessionId?: string;
+    /** Продолжить сессию: claude — по своему ID, opencode — по ID, который он выдал (onSession). */
     resume?: string;
+    /** opencode: ID сессии, которую он завёл, — чтобы продолжить её в следующей попытке. */
+    onSession?: (id: string) => void;
     /** Свой приёмник вывода (параллельное ревью копит вывод, чтобы не перемешать лог с проверками). */
     onOutput?: (text: string) => void;
   },
@@ -171,7 +174,17 @@ export async function runRole(
   const systemPrompt = o.resume ? o.systemPrompt : `${o.systemPrompt ?? ''}${knowledgeBlock(k, run)}` || undefined;
   if (agent === 'opencode') {
     // Схему ответа opencode не принимает: формат JSON задаёт промпт, ответ разбирает parse.ts.
-    return k.opencode({ ...base, prompt: o.prompt, systemPrompt, model, readOnly: o.readOnly, images: o.images });
+    return k.opencode({
+      ...base,
+      prompt: o.prompt,
+      // В продолжении системный промпт уже в начале сессии: opencode дописал бы его в сообщение ещё раз.
+      systemPrompt: o.resume ? undefined : systemPrompt,
+      model,
+      readOnly: o.readOnly,
+      images: o.images,
+      resumeSession: o.resume,
+      onSession: o.onSession,
+    });
   }
   if (agent === 'codex') {
     return k.codex({

@@ -127,6 +127,7 @@ export type CoreMethod = keyof CoreApi;
  */
 export const CORE_METHODS: Record<CoreMethod, true> = {
   dispatch: true,
+  initRepo: true,
   listRuns: true,
   getRun: true,
   getLog: true,
