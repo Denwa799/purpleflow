@@ -5,7 +5,7 @@ import { AssistantMessage } from './ChatAnswer';
 import { useMentions } from './ChatMentions';
 import { Button } from '../components/ui';
 import { Select } from '../components/Dropdown';
-import { ModelInput } from '../components/ModelInput';
+import { AgentModelPicker } from '../components/AgentModelPicker';
 import { useModelOptions } from '../lib/useModelOptions';
 import { onCoreEvent, useStore } from '../lib/store';
 import { shortPath } from '../lib/format';
@@ -154,9 +154,9 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
   const conf = enabled.includes(raw.agent) ? raw : { ...raw, agent: enabled[0], model: '' };
   const setConf = async (patch: Partial<Pick<ChatFile, 'agent' | 'model' | 'edits'>>) => {
     setError(null);
-    if (!chat) return setDraft((d) => ({ ...d, ...patch, ...(patch.agent ? { model: '' } : {}) }));
+    if (!chat) return setDraft((d) => ({ ...d, ...patch, ...(patch.agent && patch.model === undefined ? { model: '' } : {}) }));
     try {
-      setChat(await bridge.core.updateChat(chat.id, { ...patch, ...(patch.agent ? { model: '' } : {}) }));
+      setChat(await bridge.core.updateChat(chat.id, { ...patch, ...(patch.agent && patch.model === undefined ? { model: '' } : {}) }));
     } catch (e) {
       setError(cleanErr(e));
     }
@@ -480,31 +480,15 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
                     Правки
                   </button>
                 </div>
-                <div className="segmented chat-agent" role="radiogroup" aria-label="Агент">
-                  {enabled.map((a) => (
-                    <button
-                      key={a}
-                      type="button"
-                      role="radio"
-                      aria-checked={conf.agent === a}
-                      className={conf.agent === a ? 'is-on' : ''}
-                      disabled={busy}
-                      title={toolOk(a) ? undefined : `${a} не найден`}
-                      onClick={() => conf.agent !== a && void setConf({ agent: a })}
-                    >
-                      {a}
-                    </button>
-                  ))}
-                </div>
-                <ModelInput
-                  ariaLabel="Модель"
-                  className={`chat-model ${conf.model ? '' : 'is-default'}`}
-                  placeholder={fallbackModel || 'по умолчанию'}
-                  value={conf.model}
+                <AgentModelPicker
+                  agents={enabled}
+                  agent={conf.agent}
+                  model={conf.model}
+                  fallback={fallbackModel}
+                  options={modelOptions}
+                  missing={(a) => !toolOk(a)}
                   disabled={busy}
-                  options={modelOptions[conf.agent]}
-                  onChange={(val) => (chat ? setChat({ ...chat, model: val }) : setDraft((d) => ({ ...d, model: val })))}
-                  onCommit={(val) => chat && val !== (chat.model ?? '') && void setConf({ model: val })}
+                  onPick={(agent, model) => void setConf(agent === conf.agent ? { model } : { agent, model })}
                 />
                 <span className="chat-compose-end">
                   {busy && (

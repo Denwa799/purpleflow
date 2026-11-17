@@ -3,8 +3,8 @@ import type { AgentKind, ConnectionCheck, Models, Role, ToolName } from '@purple
 import { useEffect, useRef, useState } from 'react';
 import { bridge } from '../../lib/api';
 import { useStore } from '../../lib/store';
-import { restrictAgents } from '../../components/QuickSetup';
-import { enabledList, toolNeeded } from '../../lib/tools';
+import { restrictAgents } from '../../lib/presets';
+import { enabledList, TOOL_NAMES, toolNeeded } from '../../lib/tools';
 import { rebase } from './rebase';
 
 export type SettingsDraft = ReturnType<typeof useSettingsDraft>;
@@ -85,13 +85,15 @@ export function useSettingsDraft() {
   };
 
   const enabled = enabledList(s?.enabledAgents);
+  /** Агенты идут через AI-прокси: есть включённый ключ. */
+  const proxyOn = Boolean(s?.proxy.hasKey && s.proxy.enabled);
   /**
    * Включить или выключить CLI — сразу, вместе с ролями: роли выключенного переходят на оставшийся.
    * Пересчитываем черновик, а не сохранённое, чтобы не потерять несохранённые правки ролей.
    */
   const setEnabled = async (next: AgentKind[]) => {
     if (!next.length) return;
-    const moved = restrictAgents(next, agents, models);
+    const moved = restrictAgents(next, agents, models, proxyOn);
     setSavingEnabled(true);
     setError(null);
     try {
@@ -109,9 +111,10 @@ export function useSettingsDraft() {
 
   const tools = state.tools;
   const claudeFound = Boolean(tools?.claude.path && !tools.claude.error);
-  // Без явного выбора: визуальная проверка — claude; менеджер и сканирование — claude, если он есть, иначе codex.
-  const autoAgent: AgentKind = enabled.length === 1 ? enabled[0] : tools && !claudeFound ? 'codex' : 'claude';
-  const visualAgent = agents.visual ?? (enabled.includes('claude') ? 'claude' : 'codex');
+  const found = (a: AgentKind) => Boolean(tools?.[a].path && !tools[a].error);
+  // Без явного выбора: визуальная проверка — claude; менеджер и сканирование — первый включённый и найденный (claude, codex, opencode).
+  const autoAgent: AgentKind = (tools && enabled.find(found)) || enabled[0];
+  const visualAgent = agents.visual ?? (enabled.includes('claude') ? 'claude' : enabled[0]);
   const managerAgent = agents.manager ?? autoAgent;
   const scanAgent = agents.scan ?? autoAgent;
   const pickAgent = (id: Role | 'visual' | 'manager' | 'scan', a: AgentKind) => {
@@ -123,11 +126,7 @@ export function useSettingsDraft() {
     setModels({ ...models, [id]: '' });
   };
 
-  const allFound =
-    tools &&
-    (['git', 'claude', 'codex', 'openspec'] as ToolName[]).every(
-      (t) => (tools[t].path && !tools[t].error) || !toolNeeded(t, agents, enabled),
-    );
+  const allFound = tools && TOOL_NAMES.every((t) => (tools[t].path && !tools[t].error) || !toolNeeded(t, agents, enabled));
 
   return {
     models,
@@ -154,6 +153,7 @@ export function useSettingsDraft() {
     check,
     claudeFound,
     enabled,
+    proxyOn,
     setEnabled,
     savingEnabled,
     visualAgent,

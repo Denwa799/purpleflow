@@ -50,7 +50,7 @@ export function WelcomeScreen() {
               Пропустить
             </Button>
           </div>
-          <p className="onboard-skip-hint">Без входа claude и codex работают по вашим подпискам. Войти можно позже в настройках.</p>
+          <p className="onboard-skip-hint">Без входа агенты работают по вашим подпискам. Войти можно позже в настройках.</p>
           <ul className="onboard-benefits">
             {ACCOUNT_BENEFITS.map((b) => (
               <li key={b.title}>

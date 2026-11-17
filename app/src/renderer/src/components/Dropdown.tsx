@@ -39,7 +39,7 @@ type Popover = { style: CSSProperties; container: HTMLElement | null };
  * предка поля, с position: absolute: при прокрутке страницы браузер сдвигает его вместе с полем сам, без отставания в кадр,
  * как обычный select. Обрезает его только сам этот контейнер, а не промежуточные overflow: hidden.
  */
-function usePopover(open: boolean, anchor: React.RefObject<HTMLElement | null>, minWidth?: number): Popover {
+export function usePopover(open: boolean, anchor: React.RefObject<HTMLElement | null>, minWidth?: number, maxHeight = 320): Popover {
   const [pop, setPop] = useState<Popover>({ style: {}, container: null });
   useLayoutEffect(() => {
     if (!open) return;
@@ -63,18 +63,18 @@ function usePopover(open: boolean, anchor: React.RefObject<HTMLElement | null>, 
       setPop({
         container: sp,
         style: up
-          ? { left, width, bottom: boxH - (r.top - oy) + 6, maxHeight: Math.min(320, r.top - 12) }
-          : { left, width, top: r.bottom - oy + 6, maxHeight: Math.min(320, below) },
+          ? { left, width, bottom: boxH - (r.top - oy) + 6, maxHeight: Math.min(maxHeight, r.top - 12) }
+          : { left, width, top: r.bottom - oy + 6, maxHeight: Math.min(maxHeight, below) },
       });
     };
     place();
     window.addEventListener('resize', place);
     return () => window.removeEventListener('resize', place);
-  }, [open, anchor, minWidth]);
+  }, [open, anchor, minWidth, maxHeight]);
   return pop;
 }
 
-function useOutside(open: boolean, refs: React.RefObject<HTMLElement | null>[], close: () => void) {
+export function useOutside(open: boolean, refs: React.RefObject<HTMLElement | null>[], close: () => void) {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {

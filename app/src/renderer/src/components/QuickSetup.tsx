@@ -1,114 +1,51 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Gauge, Leaf, Sparkles, X } from 'lucide-react';
-import type { AgentKind, Models, Role } from '@purpleflow/core';
+import type { AgentKind, Models } from '@purpleflow/core';
+import { useModelOptions } from '../lib/useModelOptions';
+import { ModelInput } from './ModelInput';
 import { Button } from './ui';
+import {
+  buildPreset,
+  fillTiers,
+  opencodeTiers,
+  ROLE_TITLE,
+  saveOpencodeTiers,
+  TIER_ORDER,
+  TIER_TITLE,
+  type Agents,
+  type PresetId,
+  type Slot,
+  type Tiers,
+} from '../lib/presets';
 
-export type Agents = Record<Role, AgentKind> & { visual?: AgentKind; manager?: AgentKind; scan?: AgentKind };
-type PresetId = 'economy' | 'optimal' | 'max';
-type Tier = 'low' | 'mid' | 'high' | 'max';
-
-/**
- * Модели по уровням. Имена — те, что принимает и CLI, и AI-прокси PurpleSchool:
- * у claude алиасы CLI, у codex — линейка gpt-6 ступень в ступень: haiku → luna, sonnet → terra, opus → sol, Fable → astra.
- */
-const TIERS: Record<AgentKind, Record<Tier, string>> = {
-  claude: { low: 'haiku', mid: 'sonnet', high: 'opus', max: 'claude-fable-5-2' },
-  codex: { low: 'gpt-6-luna', mid: 'gpt-6.1-terra', high: 'gpt-6-sol', max: 'gpt-6-astra' },
-};
-
-type Slot = Role | 'visual' | 'manager' | 'scan';
-/**
- * Уровень модели по ролям. Все роли — на основном агенте, и от пресета к пресету все растут на ступень:
- * сильнее всех — планировщик и ревьюер (от плана и проверки зависит качество), за ними — исполнитель и менеджер,
- * ниже — визуальная проверка и сканирование.
- */
-const PRESETS: { id: PresetId; title: string; text: string; icon: ReactNode; tiers: Record<Slot, Tier> }[] = [
+/** Пресеты в окне: уровни моделей по ролям — в PRESET_TIERS (lib/presets). */
+const PRESETS: { id: PresetId; title: string; text: string; icon: ReactNode }[] = [
   {
     id: 'economy',
     title: 'Экономный',
     text: 'Рабочая модель планирует и проверяет, быстрая делает остальное. Для простых задач и правок.',
     icon: <Leaf size={18} />,
-    tiers: { planner: 'mid', executor: 'low', reviewer: 'mid', visual: 'low', manager: 'low', scan: 'low' },
   },
   {
     id: 'optimal',
     title: 'Оптимальный',
     text: 'Сильная модель планирует и проверяет, рабочая пишет код. Баланс цены и качества.',
     icon: <Gauge size={18} />,
-    tiers: { planner: 'high', executor: 'mid', reviewer: 'high', visual: 'low', manager: 'mid', scan: 'low' },
   },
   {
     id: 'max',
     title: 'Максимальное качество',
     text: 'Самая сильная модель планирует и проверяет, сильная пишет код. Дороже и медленнее.',
     icon: <Sparkles size={18} />,
-    tiers: { planner: 'max', executor: 'high', reviewer: 'max', visual: 'mid', manager: 'high', scan: 'mid' },
   },
 ];
-
-const ROLE_TITLE: Record<Slot, string> = {
-  planner: 'Планировщик',
-  executor: 'Исполнитель',
-  reviewer: 'Ревьюер',
-  visual: 'Визуальная проверка',
-  manager: 'Менеджер прогона',
-  scan: 'Сканирование проекта',
-};
-
-/** Все роли — на основном агенте: claude — только модели Anthropic, codex — только OpenAI. */
-export function buildPreset(main: AgentKind, preset: PresetId): { agents: Agents; models: Models } {
-  const p = PRESETS.find((x) => x.id === preset)!;
-  const t = TIERS[main];
-  // Ревью той же моделью находит меньше. Если уровни дали исполнителю модель ревьюера (две ступени на одной модели),
-  // на ступень ниже уходит исполнитель, а не ревьюер: проверять должна модель не слабее автора кода.
-  const order: Tier[] = ['max', 'high', 'mid', 'low'];
-  const reviewer = t[p.tiers.reviewer];
-  let executor = t[p.tiers.executor];
-  if (executor === reviewer)
-    executor =
-      order
-        .slice(order.indexOf(p.tiers.executor))
-        .map((x) => t[x])
-        .find((m) => m !== reviewer) ?? executor;
-  // Менеджер на одной ступени с исполнителем — и на той же модели.
-  const manager = p.tiers.manager === p.tiers.executor ? executor : t[p.tiers.manager];
-  return {
-    agents: { planner: main, executor: main, reviewer: main, visual: main, manager: main, scan: main },
-    models: {
-      planner: t[p.tiers.planner],
-      executor,
-      reviewer,
-      visual: t[p.tiers.visual],
-      manager,
-      scan: t[p.tiers.scan],
-    },
-  };
-}
-
-/**
- * Роли на выключенных CLI переводим на включённый: модель — ступени «Оптимального» пресета,
- * потому что имя модели одного CLI другому не подходит. Роли на включённых агентах не трогаем.
- */
-export function restrictAgents(enabled: AgentKind[], agents: Agents, models: Models): { agents: Agents; models: Models } {
-  const main = enabled[0];
-  const preset = buildPreset(main, 'optimal').models;
-  const nextAgents: Agents = { ...agents };
-  const nextModels: Models = { ...models };
-  for (const slot of Object.keys(ROLE_TITLE) as Slot[]) {
-    // Без явного выбора визуальная проверка — на claude, менеджер и сканирование ядро выберет само.
-    const current = agents[slot] ?? (slot === 'visual' ? 'claude' : undefined);
-    if (!current || enabled.includes(current)) continue;
-    nextAgents[slot] = main;
-    nextModels[slot] = preset[slot] ?? '';
-  }
-  return { agents: nextAgents, models: nextModels };
-}
 
 /** Поп-ап быстрой настройки: основной агент и пресет — роли и модели расставляются сами. */
 export function QuickSetup({
   installed,
   enabled,
+  proxy,
   initialMain,
   onApply,
   onClose,
@@ -116,18 +53,22 @@ export function QuickSetup({
   installed: Record<AgentKind, boolean>;
   /** Включённые в настройках CLI: выключенный основным агентом не предлагаем. */
   enabled: AgentKind[];
+  /** Включён AI-прокси: opencode получает модели прокси по ступеням. */
+  proxy: boolean;
   initialMain: AgentKind;
   onApply: (v: { agents: Agents; models: Models }) => Promise<void>;
   onClose: () => void;
 }) {
   const [main, setMain] = useState<AgentKind>(() => {
-    if (!enabled.includes(initialMain)) return enabled[0];
-    const other: AgentKind = initialMain === 'claude' ? 'codex' : 'claude';
-    return installed[initialMain] || !enabled.includes(other) || !installed[other] ? initialMain : other;
+    const start = enabled.includes(initialMain) ? initialMain : enabled[0];
+    // Основной агент по умолчанию — установленный: сначала тот, что у исполнителя, иначе первый найденный.
+    return installed[start] ? start : (enabled.find((a) => installed[a]) ?? start);
   });
   const [preset, setPreset] = useState<PresetId>('optimal');
   const [busy, setBusy] = useState(false);
-  const plan = buildPreset(main, preset);
+  const [tiers, setTiers] = useState<Tiers>(() => opencodeTiers(proxy));
+  const modelOptions = useModelOptions();
+  const plan = buildPreset(main, preset, proxy, tiers);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -138,6 +79,7 @@ export function QuickSetup({
   const apply = async () => {
     setBusy(true);
     try {
+      if (main === 'opencode') saveOpencodeTiers(tiers);
       await onApply(plan);
       onClose();
     } finally {
@@ -170,6 +112,31 @@ export function QuickSetup({
           </div>
         </div>
 
+        {main === 'opencode' && (
+          <div className="qs-tiers">
+            <span className="qs-label">Модели opencode по уровням</span>
+            <p>
+              {proxy
+                ? 'По умолчанию — модели AI-прокси PurpleSchool. Можно выбрать и модели своих провайдеров, «провайдер/модель».'
+                : 'Выберите модели своих провайдеров, «провайдер/модель». Хватит и одной: пустой уровень займёт ближайший заполненный.'}
+            </p>
+            <div className="qs-tiers-grid">
+              {TIER_ORDER.map((t) => (
+                <label key={t}>
+                  <span>{TIER_TITLE[t]}</span>
+                  <ModelInput
+                    ariaLabel={`Модель opencode: ${TIER_TITLE[t]}`}
+                    options={modelOptions.opencode}
+                    placeholder={fillTiers(tiers)[t] || 'из настроек opencode'}
+                    value={tiers[t]}
+                    onChange={(v) => setTiers({ ...tiers, [t]: v })}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="qs-presets" role="radiogroup" aria-label="Пресет">
           {PRESETS.map((p) => (
             <button
@@ -192,13 +159,14 @@ export function QuickSetup({
               <span>{ROLE_TITLE[r]}</span>
               <span className="grow" />
               <span className={`qs-agent qs-agent-${plan.agents[r] ?? main}`}>{plan.agents[r] ?? main}</span>
-              <code>{plan.models[r]}</code>
+              <code>{plan.models[r] || 'по умолчанию'}</code>
             </div>
           ))}
           <p className="qs-note">
             Все роли — на {main}
-            {main === 'claude' ? ', модели Anthropic' : ', модели OpenAI'}. Самые сильные модели — у планировщика и ревьюера: от плана и
-            проверки зависит качество. Ревьюер работает на другой модели, чем исполнитель: так он находит больше ошибок.
+            {main === 'claude' ? ', модели Anthropic' : main === 'codex' ? ', модели OpenAI' : ', модели по уровням выше'}. Самые сильные
+            модели — у планировщика и ревьюера: от плана и проверки зависит качество. Ревьюер работает на другой модели, чем исполнитель:
+            так он находит больше ошибок.
           </p>
         </div>
 

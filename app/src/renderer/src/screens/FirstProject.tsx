@@ -20,9 +20,7 @@ export function FirstProjectScreen() {
   // Выключенный в настройках агент сканировать не будет, даже если установлен.
   const found = (a: AgentKind) => enabled.includes(a) && Boolean(state.tools?.[a].path && !state.tools[a].error);
   // Как в настройках: не выбран — claude, если он установлен, иначе codex. Второй агент подстрахует, если первый не настроен.
-  const scanAgent: AgentKind = enabledAgentOf(
-    state.settings?.agents.scan ?? (enabled.length === 1 ? enabled[0] : state.tools && !found('claude') ? 'codex' : 'claude'),
-  );
+  const scanAgent: AgentKind = enabledAgentOf(state.settings?.agents.scan ?? ((state.tools && enabled.find(found)) || enabled[0]));
   const pickScanAgent = (a: AgentKind) => {
     if (a === scanAgent && state.settings?.agents.scan) return;
     // Имя модели одного CLI другому не подходит — сбрасываем на модель по умолчанию.
@@ -194,10 +192,10 @@ export function FirstProjectScreen() {
               <Button tone={scanned ? 'ghost' : 'primary'} icon={<ScanSearch size={16} />} disabled={!repo} busy={scanning} onClick={scan}>
                 {scanning ? 'Сканирую…' : scanned ? 'Сканировать заново' : 'Сканировать проект'}
               </Button>
-              {found('claude') && found('codex') ? (
+              {enabled.filter(found).length > 1 ? (
                 <span className="fp-agent">
                   <span className="muted">Агент</span>
-                  <AgentSwitch enabled={enabled} label="Сканирование проекта" value={scanAgent} onChange={pickScanAgent} />
+                  <AgentSwitch enabled={enabled.filter(found)} label="Сканирование проекта" value={scanAgent} onChange={pickScanAgent} />
                 </span>
               ) : (
                 state.tools && <span className="muted">Сканирует {scanAgent}</span>

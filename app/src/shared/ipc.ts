@@ -184,6 +184,7 @@ export const CORE_METHODS: Record<CoreMethod, true> = {
   listChatFiles: true,
   listChatSkills: true,
   chatDefaultModel: true,
+  listOpencodeModels: true,
   compactChat: true,
 };
 

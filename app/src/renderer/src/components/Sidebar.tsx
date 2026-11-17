@@ -1,13 +1,11 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, FolderGit2, MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Rocket, Settings, Workflow } from 'lucide-react';
-import type { ChatSummary, RunSummary, ToolName } from '@purpleflow/core';
+import type { ChatSummary, RunSummary } from '@purpleflow/core';
 import { useActions, useStore } from '../lib/store';
 import { shortPath } from '../lib/format';
 import { MODES } from '../lib/stages';
-import { enabledList, toolNeeded } from '../lib/tools';
+import { shownTools, toolNeeded } from '../lib/tools';
 import { bridge } from '../lib/api';
-
-const TOOLS: ToolName[] = ['git', 'claude', 'codex', 'openspec'];
 
 const STATUS_WORD: Record<RunSummary['status'], string> = {
   queued: 'в очереди',
@@ -186,7 +184,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           <Settings size={16} /> Настройки
         </button>
         <div className="side-tools" title="Найденные инструменты">
-          {TOOLS.filter((t) => (t !== 'claude' && t !== 'codex') || enabledList(state.settings?.enabledAgents).includes(t)).map((t) => {
+          {shownTools(state.settings?.enabledAgents).map((t) => {
             const info = state.tools?.[t];
             const ok = info?.path && !info.error;
             const needed = toolNeeded(t, state.settings?.agents, state.settings?.enabledAgents);

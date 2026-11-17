@@ -12,7 +12,7 @@ const MIN_PASSWORD = 8;
 export const ACCOUNT_BENEFITS = [
   { title: 'Без VPN', text: 'Claude и GPT работают из России напрямую, без средств обхода блокировок.' },
   { title: 'Оплата в рублях', text: 'Российские карты и СБП — зарубежная карта не нужна.' },
-  { title: 'Один ключ на всё', text: 'Общий баланс токенов для claude и codex во всех ролях.' },
+  { title: 'Один ключ на всё', text: 'Общий баланс токенов для всех агентов во всех ролях.' },
 ];
 
 type Mode = 'login' | 'register' | 'restore';

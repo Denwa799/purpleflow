@@ -2,13 +2,14 @@
 import type { AgentKind, ConnectionCheck, Role, ToolName } from '@purpleflow/core';
 import { CheckCircle2, PlugZap, XCircle } from 'lucide-react';
 import { Button } from '../../components/ui';
-import { AGENT_KINDS } from '../../lib/tools';
+import { AGENT_KINDS, agentList } from '../../lib/tools';
 import type { SettingsDraft } from './useSettingsDraft';
 
 export const TOOL_INFO: Record<ToolName, { title: string; install: string }> = {
   git: { title: 'Git', install: 'git-scm.com' },
   claude: { title: 'Claude Code', install: 'npm i -g @anthropic-ai/claude-code' },
   codex: { title: 'Codex CLI', install: 'npm i -g @openai/codex' },
+  opencode: { title: 'OpenCode', install: 'npm i -g opencode-ai' },
   openspec: { title: 'OpenSpec', install: 'npm i -g @fission-ai/openspec' },
 };
 export const ROLES: { id: Role; title: string; text: string }[] = [
@@ -16,7 +17,15 @@ export const ROLES: { id: Role; title: string; text: string }[] = [
   { id: 'executor', title: 'Исполнитель', text: 'Реализует tasks.md и пишет тесты' },
   { id: 'reviewer', title: 'Ревьюер', text: 'Сверяет дифф с планом — лучше другая модель, чем у исполнителя' },
 ];
-export const MODEL_PLACEHOLDER: Record<AgentKind, string> = { claude: 'opus, sonnet, haiku или полное имя', codex: 'по умолчанию codex' };
+/** Подсказка в пустом поле модели; opencode с AI-прокси без своей модели идёт в рабочую модель прокси (как в ядре). */
+export const modelPlaceholder = (agent: AgentKind, proxyOn: boolean) =>
+  agent === 'opencode' && proxyOn ? 'по умолчанию gpt-6.1-terra через AI-прокси' : MODEL_PLACEHOLDER[agent];
+
+export const MODEL_PLACEHOLDER: Record<AgentKind, string> = {
+  claude: 'opus, sonnet, haiku или полное имя',
+  codex: 'по умолчанию codex',
+  opencode: 'провайдер/модель, по умолчанию — из настроек opencode',
+};
 /** Выбор CLI-агента для роли. */
 export function AgentSwitch({
   label,
@@ -73,9 +82,11 @@ export function AgentToggles({ draft }: { draft: SettingsDraft }) {
         })}
       </div>
       <p>
+        OpenCode подключает любых провайдеров — OpenRouter, DeepSeek, локальные модели; их настраивают в самом opencode (
+        <code>opencode auth login</code>).{' '}
         {enabled.length === 1
-          ? `Все роли выполняет ${enabled[0]}, второй агент не нужен и не запускается. Включить его можно здесь же.`
-          : 'Роли можно делить между claude и codex — например, ревью другой моделью находит больше. Оставьте один, если пользуетесь только им.'}
+          ? `Все роли выполняет ${enabled[0]}, остальные агенты не нужны и не запускаются. Включить их можно здесь же.`
+          : `Роли можно делить между ${agentList(enabled)} — например, ревью другой моделью находит больше. Оставьте один, если пользуетесь только им.`}
       </p>
     </div>
   );

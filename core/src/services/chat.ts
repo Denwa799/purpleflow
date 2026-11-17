@@ -12,6 +12,7 @@ import { writeAtomic } from '../store.js';
 import { applyStep, partsText, settleParts, type ChatAnswer } from '../chatparts.js';
 import type { AgentKind, ChatFile, ChatMessage, ChatSkill, ChatSummary, DiffFile, NextPartDraft, PreviewState } from '../types.js';
 import { enabledAgent } from '../types.js';
+import { PROXY_DEFAULT_MODEL } from '../agents/opencode.js';
 import { agentModel, service, serviceAgent } from './agents.js';
 import { findMentions, listSkills, mentionsBlock, walkFiles } from './mentions.js';
 import { getPreview, launchPreview, stopPreview } from './preview.js';
@@ -223,7 +224,9 @@ export async function sendChat(k: Kernel, id: string, text: string, files: { nam
 export async function compactChat(k: Kernel, id: string): Promise<void> {
   const chat = must(k, id);
   if (chat.agent !== 'claude' || chat.session?.agent !== 'claude')
-    throw new Error(chat.agent === 'claude' ? 'Сжимать пока нечего — сессия начнётся с первым сообщением' : 'codex сжимает контекст сам');
+    throw new Error(
+      chat.agent === 'claude' ? 'Сжимать пока нечего — сессия начнётся с первым сообщением' : `${chat.agent} сжимает контекст сам`,
+    );
   if (k.chatBusy.has(id)) throw new Error('Агент отвечает — сожмите контекст после ответа');
   await drive(k, chat, true);
 }
@@ -345,7 +348,21 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
       userConfig: s.userConfig,
       addDirs: attachments.length ? [path.dirname(attachments[0])] : undefined,
     };
-    if (agent === 'codex') {
+    if (agent === 'opencode') {
+      let sid = session;
+      res = await k.opencode({
+        ...common,
+        prompt,
+        systemPrompt: session ? undefined : sys,
+        images,
+        readOnly: !chat.edits,
+        resumeSession: session,
+        onSession: (id) => {
+          sid = id;
+        },
+      });
+      if (sid) chat.session = { agent, id: sid };
+    } else if (agent === 'codex') {
       let thread = session;
       res = await k.codex({
         ...common,
@@ -474,7 +491,9 @@ export async function listChatFiles(k: Kernel, projectPath: string): Promise<str
 /** Модель чата по умолчанию для агента: та, что в настройках у роли конвейера с этим агентом. Пусто — решает сам CLI. */
 export function chatDefaultModel(k: Kernel, agent: AgentKind): string {
   const s = k.opts.getSettings();
-  return agentModel(k, agent, s.agents, s.models);
+  const model = agentModel(k, agent, s.agents, s.models);
+  // opencode с AI-прокси без своей модели идёт в модель прокси по умолчанию — её и показываем.
+  return model || (agent === 'opencode' && s.proxy.baseUrl ? PROXY_DEFAULT_MODEL : '');
 }
 
 export function listChatSkills(k: Kernel, projectPath?: string): ChatSkill[] {

@@ -177,7 +177,8 @@
   color: var(--text-3);
 }
 .role-claude .role-agent::before,
-.role-codex .role-agent::before {
+.role-codex .role-agent::before,
+.role-opencode .role-agent::before {
   content: '';
   display: inline-block;
   width: 5px;
@@ -189,6 +190,9 @@
 }
 .role-codex .role-agent::before {
   background: var(--text-2);
+}
+.role-opencode .role-agent::before {
+  background: var(--ok);
 }
 .role p {
   margin: 0 0 var(--s-3);

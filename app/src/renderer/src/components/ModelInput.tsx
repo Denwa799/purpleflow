@@ -39,7 +39,7 @@ export function ModelInput(props: ComponentProps<typeof ComboInput>) {
 }
 
 /** Модель доступна только по подписке PurpleSchool: включить её (ключ уже есть) или войти и получить ключ. */
-function SubscriptionGate({ model, onClose, onEnabled }: { model: string; onClose: () => void; onEnabled: () => void }) {
+export function SubscriptionGate({ model, onClose, onEnabled }: { model: string; onClose: () => void; onEnabled: () => void }) {
   const { state, saveSettings, go } = useStore();
   const s = state.settings;
   const [busy, setBusy] = useState(false);

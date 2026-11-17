@@ -6,7 +6,7 @@ import { addUsage, type AgentResult } from '../agents/common.js';
 import { prependPath } from '../env.js';
 import type { Kernel } from '../kernel.js';
 import type { AgentKind, Role, RunFile } from '../types.js';
-import { DEFAULT_AGENTS, enabledAgents } from '../types.js';
+import { AGENT_KINDS, DEFAULT_AGENTS, enabledAgents } from '../types.js';
 import { knowledgeBlock, relatedRepos } from './projects.js';
 
 type ServiceOptions = {
@@ -45,8 +45,8 @@ export async function service(k: Kernel, o: ServiceOptions): Promise<AgentResult
   const ownModel = !o.agent || o.agent === agent ? o.model : undefined;
   const res = await serviceOn(k, agent, ownModel, o);
   if (res.ok || res.stopped || res.timedOut || !o.fallback) return res;
-  const other: AgentKind = agent === 'claude' ? 'codex' : 'claude';
-  if (!(await k.hasTool(other))) return res;
+  const other = await otherAgent(k, agent);
+  if (!other) return res;
   o.onOutput?.(`\n${agent} не справился (${res.error ?? 'без ответа'}) — пробую ${other}…\n`);
   const second = await serviceOn(k, other, undefined, o);
   const usage = addUsage(res.usage, second.usage);
@@ -70,6 +70,15 @@ async function serviceOn(k: Kernel, agent: AgentKind, model: string | undefined,
     userConfig: o.userConfig,
   };
   const images = o.images?.filter((f) => fs.existsSync(f)) ?? [];
+  if (agent === 'opencode') {
+    // Служебное на opencode — без правки файлов; читать соседние каталоги ему можно и так.
+    return k.opencode({
+      ...common,
+      images: images.length ? images : undefined,
+      model: model || agentModel(k, 'opencode', s.agents, s.models) || undefined,
+      readOnly: !o.fullAccess,
+    });
+  }
   if (agent === 'codex') {
     // Служебное на codex — в песочнице только для чтения: соседние каталоги он читает и так, список инструментов не нужен.
     return k.codex({
@@ -94,14 +103,19 @@ async function serviceOn(k: Kernel, agent: AgentKind, model: string | undefined,
   });
 }
 
-/** Кто выполняет служебные вызовы (сводка, профиль, уроки, менеджер): claude, а если его нет — codex. */
+/** Кто выполняет служебные вызовы (сводка, профиль, уроки, менеджер): claude, за ним codex, затем opencode — первый включённый и найденный. */
 export async function serviceAgent(k: Kernel): Promise<AgentKind> {
-  if (await k.hasTool('claude')) return 'claude';
-  if (await k.hasTool('codex')) return 'codex';
+  for (const a of AGENT_KINDS) if (await k.hasTool(a)) return a;
   const on = enabledAgents(k.opts.getSettings());
   throw new Error(
-    on.length === 1 ? `Не найден ${on[0]}. Укажите путь в настройках.` : 'Не найдены ни claude, ни codex. Укажите пути в настройках.',
+    on.length === 1 ? `Не найден ${on[0]}. Укажите путь в настройках.` : `Не найдены ни ${on.join(', ни ')}. Укажите пути в настройках.`,
   );
+}
+
+/** Запасной агент, если этот не справился: следующий включённый и найденный. */
+async function otherAgent(k: Kernel, agent: AgentKind): Promise<AgentKind | null> {
+  for (const a of AGENT_KINDS) if (a !== agent && (await k.hasTool(a))) return a;
+  return null;
 }
 
 /** Модель первой роли, которую выполняет этот агент. */
@@ -154,6 +168,10 @@ export async function runRole(
   const model = run.models[role] || undefined;
   // Знания о проекте (профиль и уроки) — всем ролям; в продолжении сессии они уже в контексте.
   const systemPrompt = o.resume ? o.systemPrompt : `${o.systemPrompt ?? ''}${knowledgeBlock(k, run)}` || undefined;
+  if (agent === 'opencode') {
+    // Схему ответа opencode не принимает: формат JSON задаёт промпт, ответ разбирает parse.ts.
+    return k.opencode({ ...base, prompt: o.prompt, systemPrompt, model, readOnly: o.readOnly, images: o.images });
+  }
   if (agent === 'codex') {
     return k.codex({
       ...base,

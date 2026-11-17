@@ -9,6 +9,7 @@ import type { ToolInstallResult, ToolName } from '../types.js';
 const NPM_PACKAGES: Partial<Record<ToolName, string>> = {
   claude: '@anthropic-ai/claude-code',
   codex: '@openai/codex',
+  opencode: 'opencode-ai',
   openspec: '@fission-ai/openspec',
 };
 

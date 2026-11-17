@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { ModelInput } from '../../components/ModelInput';
 import { QuickSetup } from '../../components/QuickSetup';
 import { Button, Field, Input } from '../../components/ui';
+import { agentList } from '../../lib/tools';
 import { useModelOptions } from '../../lib/useModelOptions';
 import { useStore } from '../../lib/store';
-import { AgentSwitch, MODEL_PLACEHOLDER, ROLES } from './parts';
+import { AgentSwitch, modelPlaceholder, ROLES } from './parts';
 import type { SettingsDraft } from './useSettingsDraft';
 
 export function ModelsTab({ draft }: { draft: SettingsDraft }) {
@@ -26,6 +27,7 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
     scanAgent,
     claudeFound,
     enabled,
+    proxyOn,
     flashSaved,
     agentTimeout,
     setAgentTimeout,
@@ -41,11 +43,11 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
           <h2>Агенты и модели по ролям</h2>
           <p>
             {enabled.length > 1
-              ? 'Каждую роль может выполнять claude или codex.'
-              : `Все роли выполняет ${enabled[0]} — второй агент выключен на вкладке «Инструменты».`}{' '}
-            Имя модели передаётся выбранному CLI как есть, пусто — его модель по умолчанию.
-            {enabled.length > 1 ? 'Служебные вызовы (сводка, уроки) — на claude, а если его нет — на codex. ' : ''}Новые настройки действуют
-            на прогоны, запущенные после сохранения.
+              ? `Каждую роль может выполнять ${agentList(enabled, 'или')}.`
+              : `Все роли выполняет ${enabled[0]} — остальные агенты выключены на вкладке «Инструменты».`}{' '}
+            Имя модели передаётся выбранному CLI как есть, пусто — его модель по умолчанию.{' '}
+            {enabled.length > 1 ? `Служебные вызовы (сводка, уроки) — на первом найденном из ${agentList(enabled)}. ` : ''}Новые настройки
+            действуют на прогоны, запущенные после сохранения.
           </p>
         </div>
         <Button tone="primary" icon={<Wand2 size={15} />} onClick={() => setQuick(true)}>
@@ -54,8 +56,13 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
       </header>
       {quick && (
         <QuickSetup
-          installed={{ claude: claudeFound, codex: Boolean(tools?.codex.path && !tools.codex.error) }}
+          installed={{
+            claude: claudeFound,
+            codex: Boolean(tools?.codex.path && !tools.codex.error),
+            opencode: Boolean(tools?.opencode?.path && !tools.opencode.error),
+          }}
           enabled={enabled}
+          proxy={proxyOn}
           initialMain={agents.executor}
           onClose={() => setQuick(false)}
           onApply={async (v) => {
@@ -82,7 +89,7 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
                 className="role-model"
                 ariaLabel={`Модель: ${r.title}`}
                 options={modelOptions[agent]}
-                placeholder={MODEL_PLACEHOLDER[agent]}
+                placeholder={modelPlaceholder(agent, proxyOn)}
                 value={models[r.id]}
                 onChange={(v) => setModels({ ...models, [r.id]: v })}
               />
@@ -96,8 +103,8 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
           </div>
           <p>
             Запускает приложение и проверяет результат в браузере через pw.
-            {visualAgent === 'codex'
-              ? ' На codex — без песочницы: браузеру нужны сеть и запись вне проекта, код он не меняет по инструкции.'
+            {visualAgent !== 'claude'
+              ? ` На ${visualAgent} — без песочницы: браузеру нужны сеть и запись вне проекта, код он не меняет по инструкции.`
               : ''}{' '}
             Пусто — модель исполнителя, если он на том же агенте.
           </p>
@@ -106,7 +113,9 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
             ariaLabel="Модель: визуальная проверка"
             options={modelOptions[visualAgent]}
             placeholder={
-              agents.executor === visualAgent && models.executor ? `как у исполнителя: ${models.executor}` : MODEL_PLACEHOLDER[visualAgent]
+              agents.executor === visualAgent && models.executor
+                ? `как у исполнителя: ${models.executor}`
+                : modelPlaceholder(visualAgent, proxyOn)
             }
             value={models.visual ?? ''}
             onChange={(v) => setModels({ ...models, visual: v })}
@@ -119,14 +128,14 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
           </div>
           <p>
             Отвечает в чате прогона, как идут дела, и предлагает поправить ход работы. Хватит быстрой модели.
-            {agents.manager || enabled.length === 1 ? '' : ' Пока не выбран — claude, если он установлен, иначе codex.'} Пусто — модель
+            {agents.manager || enabled.length === 1 ? '' : ` Пока не выбран — первый найденный из ${agentList(enabled)}.`} Пусто — модель
             первой роли на том же агенте.
           </p>
           <ModelInput
             className="role-model"
             ariaLabel="Модель: менеджер прогона"
             options={modelOptions[managerAgent]}
-            placeholder={MODEL_PLACEHOLDER[managerAgent]}
+            placeholder={modelPlaceholder(managerAgent, proxyOn)}
             value={models.manager ?? ''}
             onChange={(v) => setModels({ ...models, manager: v })}
           />
@@ -138,7 +147,7 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
           </div>
           <p>
             Находит команды проекта и собирает профиль — стек, структуру, соглашения. Только читает код.
-            {agents.scan || enabled.length === 1 ? '' : ' Пока не выбран — claude, если он установлен, иначе codex.'}
+            {agents.scan || enabled.length === 1 ? '' : ` Пока не выбран — первый найденный из ${agentList(enabled)}.`}
             {enabled.length > 1 ? ' Если агент не вошёл в аккаунт или упал — сканирование повторит другой.' : ''} Пусто — модель первой роли
             на том же агенте.
           </p>
@@ -146,7 +155,7 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
             className="role-model"
             ariaLabel="Модель: сканирование проекта"
             options={modelOptions[scanAgent]}
-            placeholder={MODEL_PLACEHOLDER[scanAgent]}
+            placeholder={modelPlaceholder(scanAgent, proxyOn)}
             value={models.scan ?? ''}
             onChange={(v) => setModels({ ...models, scan: v })}
           />

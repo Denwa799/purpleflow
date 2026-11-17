@@ -691,10 +691,78 @@ input.chat-title:focus {
 .chat-compose-bar .segmented button:disabled {
   cursor: default;
 }
-.chat-compose-bar .chat-model {
-  width: 150px;
+.chat-compose-bar .amp {
+  max-width: 280px;
   height: 32px;
+  gap: 6px;
+  padding: 0 8px 0 12px;
   font-size: var(--fs-12);
+}
+.amp-agent {
+  color: var(--text-2);
+}
+.amp-sep {
+  color: var(--text-4);
+}
+.amp-model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-code);
+}
+/* Своей модели у чата нет — на кнопке модель по умолчанию, тем же цветом, что и выбранная. */
+.amp-model.is-default {
+  color: var(--text-1);
+}
+.amp-pop {
+  padding-top: 0;
+}
+.amp-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 -6px 4px;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--pop-bg);
+  color: var(--text-4);
+}
+.amp-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text-1);
+  font-family: var(--font-code);
+  font-size: var(--fs-12);
+}
+.amp-search input::placeholder {
+  color: var(--text-4);
+  font-family: var(--font-ui);
+}
+.amp-head {
+  padding: 10px 10px 4px;
+  color: var(--text-4);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.amp-head em {
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.amp-group + .amp-group {
+  margin-top: 2px;
+}
+.dd-pop.is-mono .dd-opt-label.is-ui {
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
 }
 .chat-compose-end {
   display: inline-flex;
@@ -1403,14 +1471,6 @@ body.is-side-resizing webview {
   color: var(--text-4);
   font-size: var(--fs-12);
   line-height: 1.5;
-}
-
-/* Своей модели у чата нет — в поле модель по умолчанию, тем же цветом, что и выбранная. */
-.chat-compose-bar .chat-model.is-default input::placeholder {
-  color: var(--text-1);
-  opacity: 1;
-  font-family: var(--font-code);
-  font-size: inherit;
 }
 
 /* ——— Вкладка «Сессия» ——— */

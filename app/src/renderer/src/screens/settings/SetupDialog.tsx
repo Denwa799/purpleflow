@@ -4,10 +4,10 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '../../components/ui';
 import { useStore } from '../../lib/store';
-import { toolNeeded } from '../../lib/tools';
+import { shownTools, toolNeeded } from '../../lib/tools';
 import { AgentToggles, CheckButton, ChecksList, TOOL_INFO } from './parts';
 import type { SettingsDraft } from './useSettingsDraft';
-import { TOOL_NAMES, type ToolSetup } from './useToolSetup';
+import type { ToolSetup } from './useToolSetup';
 
 function NodeRow({ setup }: { setup: ToolSetup }) {
   const { node, current, errors, needsNode } = setup;
@@ -79,7 +79,7 @@ export function SetupDialog({
 
         <div className="setup-rows">
           <NodeRow setup={setup} />
-          {TOOL_NAMES.filter((t) => (t !== 'claude' && t !== 'codex') || draft.enabled.includes(t)).map((t) => {
+          {shownTools(draft.enabled).map((t) => {
             const info = tools?.[t];
             const ok = info?.path && !info.error;
             const needed = toolNeeded(t, draft.agents, draft.enabled);

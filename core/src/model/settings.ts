@@ -1,6 +1,6 @@
 // Настройки ядра, инструменты и роли агентов.
 
-export type ToolName = 'git' | 'claude' | 'codex' | 'openspec';
+export type ToolName = 'git' | 'claude' | 'codex' | 'opencode' | 'openspec';
 
 export interface ToolInfo {
   name: ToolName;
@@ -30,7 +30,7 @@ export interface NodeInstallResult {
 export type Role = 'planner' | 'executor' | 'reviewer';
 
 /** CLI-агент, который выполняет роль. */
-export type AgentKind = 'claude' | 'codex';
+export type AgentKind = 'claude' | 'codex' | 'opencode';
 
 /**
  * Модели ролей; visual — модель claude для визуальной проверки (пусто — как у исполнителя-claude),
@@ -40,12 +40,15 @@ export type Models = Record<Role, string> & { visual?: string; manager?: string;
 
 export const DEFAULT_AGENTS: Record<Role, AgentKind> = { planner: 'claude', executor: 'claude', reviewer: 'codex' };
 
-export const AGENT_KINDS: AgentKind[] = ['claude', 'codex'];
+export const AGENT_KINDS: AgentKind[] = ['claude', 'codex', 'opencode'];
 
-/** Включённые в настройках CLI-агенты; пусто или не задано — оба. */
+/** Включены, пока человек не выбрал сам: opencode — по желанию, его провайдеры и модели настраивают отдельно. */
+export const DEFAULT_ENABLED: AgentKind[] = ['claude', 'codex'];
+
+/** Включённые в настройках CLI-агенты; пусто или не задано — claude и codex. */
 export function enabledAgents(s: { enabledAgents?: AgentKind[] }): AgentKind[] {
   const list = AGENT_KINDS.filter((a) => s.enabledAgents?.includes(a));
-  return list.length ? list : [...AGENT_KINDS];
+  return list.length ? list : [...DEFAULT_ENABLED];
 }
 
 /** Агент, если он включён, иначе — включённый другой: выключенный CLI роли не выполняет. */
@@ -73,7 +76,7 @@ export interface CoreSettings {
   models: Models;
   /** Агент на роль; по умолчанию планировщик и исполнитель — claude, ревьюер — codex. */
   agents?: Agents;
-  /** Какими CLI пользоваться: выключенный не запускается, даже если установлен. Пусто или не задано — оба. */
+  /** Какими CLI пользоваться: выключенный не запускается, даже если установлен. Пусто или не задано — claude и codex. */
   enabledAgents?: AgentKind[];
   /**
    * Как claude авторизуется без прокси: 'login' — собственный вход Claude Code
@@ -94,7 +97,7 @@ export interface CoreSettings {
 }
 
 export interface ConnectionCheck {
-  agent: 'claude' | 'codex';
+  agent: AgentKind;
   ok: boolean;
   model: string;
   durationMs: number;

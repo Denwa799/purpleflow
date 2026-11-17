@@ -3,10 +3,10 @@ import type { NodeInfo, ToolName } from '@purpleflow/core';
 import { useEffect, useState } from 'react';
 import { bridge } from '../../lib/api';
 import { useStore } from '../../lib/store';
-import { toolNeeded } from '../../lib/tools';
+import { TOOL_NAMES, toolNeeded } from '../../lib/tools';
 import type { SettingsDraft } from './useSettingsDraft';
 
-export const TOOL_NAMES: ToolName[] = ['git', 'claude', 'codex', 'openspec'];
+export { TOOL_NAMES } from '../../lib/tools';
 
 export type SetupStep = ToolName | 'node';
 

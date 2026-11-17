@@ -20,13 +20,20 @@ export const MODEL_OPTIONS: Record<AgentKind, DropOption<string>[]> = {
     { value: 'gpt-6.1-terra', label: 'gpt-6.1-terra', hint: 'Рабочая — баланс скорости и качества' },
     { value: 'gpt-6-luna', label: 'gpt-6-luna', hint: 'Быстрая и дешёвая — простые задачи' },
   ],
+  // Свои модели opencode — из его провайдеров (`opencode models`), подмешиваются в useModelOptions.
+  opencode: [],
 };
 
 /**
  * Своё семейство агента — модели самого вендора: работают и по подписке пользователя, без прокси.
  * Остальные (например, Gemini у codex) прокси PurpleSchool отдаёт через совместимый API — только через него.
  */
-const OWN_FAMILY: Record<AgentKind, RegExp> = { claude: /^claude-/, codex: /^(gpt-|o\d|codex-)/ };
+const OWN_FAMILY: Record<AgentKind, RegExp> = {
+  claude: /^claude-/,
+  codex: /^(gpt-|o\d|codex-)/,
+  // «провайдер/модель» — провайдер пользователя; имя без провайдера opencode отправит в AI-прокси.
+  opencode: /\//,
+};
 /** Модель из списка, которая работает только через AI-прокси PurpleSchool. */
 export function proxyOnly(options: DropOption<string>[], model: string): boolean {
   const v = model.trim();
@@ -43,8 +50,23 @@ export const PROXY_ONLY_TITLE =
  * Модели не своего семейства видны всегда, с пометкой «подписка PurpleSchool»: без прокси выбор такой модели
  * ведёт ко входу или включению PurpleSchool (ModelInput), а не молча ломает запуск.
  */
-export function mergeModelOptions(remote: ProxyModels | null): Record<AgentKind, DropOption<string>[]> {
-  if (!remote) return MODEL_OPTIONS;
+export function mergeModelOptions(remote: ProxyModels | null, opencode: string[] = []): Record<AgentKind, DropOption<string>[]> {
+  const own = withOpencode(MODEL_OPTIONS, opencode);
+  if (!remote) return own;
+  return withOpencode(mergeRemote(remote), opencode);
+}
+
+/** Модели opencode из его провайдеров — первыми: они работают без AI-прокси. */
+function withOpencode(base: Record<AgentKind, DropOption<string>[]>, list: string[]): Record<AgentKind, DropOption<string>[]> {
+  if (!list.length) return base;
+  const known = new Set(base.opencode.map((o) => o.value));
+  const local = list
+    .filter((m) => !known.has(m))
+    .map((m) => ({ value: m, label: m, hint: m.endsWith('-free') ? 'бесплатная' : undefined }));
+  return { ...base, opencode: [...local, ...base.opencode] };
+}
+
+function mergeRemote(remote: ProxyModels): Record<AgentKind, DropOption<string>[]> {
   const add = (agent: AgentKind, list: ProxyModels['anthropic']) => {
     const base = MODEL_OPTIONS[agent];
     const known = new Set(base.map((o) => o.value));
@@ -62,5 +84,5 @@ export function mergeModelOptions(remote: ProxyModels | null): Record<AgentKind,
     }
     return [...base, ...extra];
   };
-  return { claude: add('claude', remote.anthropic), codex: add('codex', remote.openai) };
+  return { claude: add('claude', remote.anthropic), codex: add('codex', remote.openai), opencode: add('opencode', remote.openai) };
 }

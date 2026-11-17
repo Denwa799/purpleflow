@@ -5,6 +5,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import path from 'node:path';
 import { runClaude } from './agents/claude.js';
 import { runCodex } from './agents/codex.js';
+import { runOpencode } from './agents/opencode.js';
 import { type AgentResult, addUsage, c, crlf, emptyUsage } from './agents/common.js';
 import { detectTools } from './env.js';
 import { run as runProc, setPidTracker } from './proc.js';
@@ -14,7 +15,7 @@ import { STAGE_TITLES, isGate } from './stage-info.js';
 import { RunStore } from './store.js';
 import { setTraceFile } from './trace.js';
 import type { CoreEvent, PreviewState, RunFile, StageAttempt, StageId } from './types.js';
-import { enabledAgents } from './types.js';
+import { AGENT_KINDS, enabledAgents, type AgentKind } from './types.js';
 
 /** Операции движка, которые нужны стадиям и сервисам; связываются в Orchestrator, чтобы модули не зависели от движка. */
 export interface EngineHooks {
@@ -200,12 +201,18 @@ export class Kernel {
     if (missing.length) {
       throw new Error(`Не найдены: ${missing.join(', ')}. Укажите пути в настройках.`);
     }
-    return { git: found.git.path!, claude: found.claude.path!, codex: found.codex.path!, openspec: found.openspec.path! };
+    return {
+      git: found.git.path!,
+      claude: found.claude.path!,
+      codex: found.codex.path!,
+      opencode: found.opencode.path!,
+      openspec: found.openspec.path!,
+    };
   }
 
   /** Инструмент найден; claude и codex — ещё и включены в настройках. */
   async hasTool(name: keyof Tools): Promise<boolean> {
-    if ((name === 'claude' || name === 'codex') && !enabledAgents(this.opts.getSettings()).includes(name)) return false;
+    if ((AGENT_KINDS as string[]).includes(name) && !enabledAgents(this.opts.getSettings()).includes(name as AgentKind)) return false;
     const t = (await this.detect())[name];
     return Boolean(t.path && !t.error);
   }
@@ -217,6 +224,10 @@ export class Kernel {
 
   codex(o: Parameters<typeof runCodex>[0]) {
     return (this.opts.runners?.codex ?? runCodex)(o);
+  }
+
+  opencode(o: Parameters<typeof runOpencode>[0]) {
+    return (this.opts.runners?.opencode ?? runOpencode)(o);
   }
 
   shell(run: RunFile, command: string, timeoutMin: number) {

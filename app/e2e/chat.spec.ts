@@ -18,10 +18,30 @@ test('чат: панель под полем ввода, таблица и бл�
     await expect(bar.getByRole('radio', { name: 'Правки' })).toHaveAttribute('aria-checked', 'true');
     await bar.getByRole('radio', { name: 'Вопросы' }).click();
     await expect(bar.getByRole('radio', { name: 'Вопросы' })).toHaveAttribute('aria-checked', 'true');
-    await expect(bar.getByRole('radiogroup', { name: 'Агент' })).toBeVisible();
-    // Своей модели у чата нет — в поле модель по умолчанию из настроек, а не пустота.
-    await expect(bar.getByLabel('Модель')).toHaveAttribute('placeholder', 'sonnet');
-    await expect(bar.locator('.chat-model')).toHaveClass(/is-default/);
+    // Агент и модель — одна кнопка; своей модели у чата нет — на ней модель по умолчанию из настроек, а не пустота.
+    const picker = bar.getByRole('button', { name: 'Агент и модель' });
+    await expect(picker).toHaveText(/claude\s*·\s*sonnet/);
+    await expect(picker.locator('.amp-model')).toHaveClass(/is-default/);
+    // Список разбит на разделы по включённым агентам; выбор модели выбирает и агента.
+    await picker.click();
+    const pop = page.locator('.amp-pop');
+    await expect(pop.getByRole('group', { name: 'claude' })).toBeVisible();
+    await expect(pop.getByRole('group', { name: 'codex' })).toBeVisible();
+    if (process.env.PURPLEFLOW_SHOTS) {
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-picker.png') });
+    }
+    await pop.getByRole('group', { name: 'codex' }).getByRole('option').nth(1).click();
+    await expect(picker).toHaveText(/codex\s*·\s*gpt/);
+    // Поиск: своё имя модели у текущего агента.
+    await picker.click();
+    await pop.getByLabel('Найти модель').fill('my-model');
+    await pop.getByLabel('Найти модель').press('Enter');
+    await expect(picker).toHaveText(/codex\s*·\s*my-model/);
+    // Назад на claude по умолчанию.
+    await picker.click();
+    await pop.getByRole('group', { name: 'claude' }).getByRole('option', { name: 'по умолчанию' }).click();
+    await expect(picker).toHaveText(/claude\s*·\s*sonnet/);
 
     await page.locator('.chat-compose textarea').fill('Как устроены контейнеры?');
     await page.keyboard.press('Enter');

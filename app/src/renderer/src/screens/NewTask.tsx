@@ -8,6 +8,7 @@ import { FileDrop, type PickedFile } from '../components/FileDrop';
 import { MODES, stagesFor, type Mode } from '../lib/stages';
 import { MODE_ICON } from '../components/ModeIcon';
 import { NotRepoNote, ProjectPicker, WORKSPACES, loadProject, saveLoaded, type LoadedProject } from './projects/common';
+import { enabledList } from '../lib/tools';
 import { bridge, cleanErr } from '../lib/api';
 
 const LAST_PROJECT = 'purpleflow.lastProject';
@@ -172,7 +173,10 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
   const canStart = Boolean(project?.isRepo && task.trim().length > 5);
   const hasRunCmd = Boolean(cmds.run.trim() && cmds.url.trim());
   // Агент визуальной проверки из настроек должен быть на этой машине.
-  const visualAgent = state.settings?.agents.visual ?? 'claude';
+  // Не выбран — claude; выключен в настройках — первый включённый (так же решает ядро при старте прогона).
+  const enabledAgents = enabledList(state.settings?.enabledAgents);
+  const wantVisual = state.settings?.agents.visual ?? 'claude';
+  const visualAgent = enabledAgents.includes(wantVisual) ? wantVisual : enabledAgents[0];
   const visualInfo = state.tools?.[visualAgent];
   const noVisualAgent = Boolean(visualInfo && (!visualInfo.path || visualInfo.error));
   const canVisual = hasRunCmd && !noVisualAgent;
