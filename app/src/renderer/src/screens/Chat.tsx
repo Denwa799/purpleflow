@@ -7,6 +7,7 @@ import { Button } from '../components/ui';
 import { Select } from '../components/Dropdown';
 import { AgentModelPicker } from '../components/AgentModelPicker';
 import { useModelOptions } from '../lib/useModelOptions';
+import { trialModelOf, trialOptions, useTrialLock } from '../lib/trial';
 import { onCoreEvent, useStore } from '../lib/store';
 import { shortPath } from '../lib/format';
 import { enabledList } from '../lib/tools';
@@ -163,6 +164,16 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
   };
 
   const queued = Boolean(chat?.messages.some((m) => m.queued));
+
+  // Пробный режим PurpleSchool: прокси пускает только модели программы — у чата с другой моделью ставим пробную.
+  const trial = useTrialLock();
+  const trialPinned = trial ? (trialModelOf(conf.agent, trial)?.modelName ?? '') : '';
+  const offTrial = Boolean(trial && conf.model && conf.model !== trialPinned);
+  useEffect(() => {
+    if (offTrial) void setConf({ model: trialPinned });
+    // setConf пересоздаётся на каждый рендер; достаточно реагировать на смену модели и режима.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offTrial, trialPinned]);
 
   // Модель по умолчанию — из настроек ролей; поле показывает её, даже когда у чата своей модели нет.
   const [defaultModel, setDefaultModel] = useState<{ agent: AgentKind; model: string } | null>(null);
@@ -485,7 +496,8 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
                   agent={conf.agent}
                   model={conf.model}
                   fallback={fallbackModel}
-                  options={modelOptions}
+                  options={trial ? trialOptions(enabled, trial) : modelOptions}
+                  noCustom={Boolean(trial)}
                   missing={(a) => !toolOk(a)}
                   disabled={busy}
                   onPick={(agent, model) => void setConf(agent === conf.agent ? { model } : { agent, model })}

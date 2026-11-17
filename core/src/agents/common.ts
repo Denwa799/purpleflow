@@ -115,6 +115,9 @@ export function cleanEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 
 /** Понятное сообщение для типовых сбоев агента. */
 export function explainError(agent: string, raw: string, auth: 'proxy' | 'login' | 'env' = 'proxy'): string {
+  // Пробный баланс PurpleSchool: прокси объясняет сам, какая модель доступна и где оформить подписку.
+  const trial = /Модель «[^»]+» недоступна на пробном балансе[^"\n]*/.exec(raw);
+  if (trial) return `${agent}: ${trial[0].replace(/\\n/g, ' ').trim()}`;
   const t = raw.toLowerCase();
   if (
     /invalid api key|invalid x-api-key|authentication_error|unauthorized|\b401\b|not logged in|please run \/login|login required/.test(t)

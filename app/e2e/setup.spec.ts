@@ -143,3 +143,14 @@ test('«Сообщить о проблеме» рядом с настройка�
   // Ни путей, ни папки профиля в отчёте.
   expect(body).not.toContain(box.root);
 });
+
+test('без входа слева от формы — баннер стартового баланса, его кнопка переключает форму на регистрацию', async () => {
+  await start({ onboarded: true });
+  await l.page.getByRole('button', { name: 'Настройки' }).click();
+  await expect(l.page.getByRole('heading', { name: 'Вход в PurpleSchool' })).toBeVisible();
+  const banner = l.page.getByRole('region', { name: 'Стартовый баланс' });
+  await expect(banner).toContainText('500 000');
+  if (process.env.PF_SHOT) await l.page.locator('.acc-signin').screenshot({ path: process.env.PF_SHOT });
+  await banner.getByRole('button', { name: 'Зарегистрироваться' }).click();
+  await expect(l.page.getByRole('heading', { name: 'Регистрация в PurpleSchool' })).toBeVisible();
+});

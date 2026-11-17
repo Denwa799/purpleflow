@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildPreset, fillTiers, opencodeTiers, restrictAgents } from '../lib/presets';
+import { buildPreset, fillTiers, isTrialSetup, opencodeTiers, restrictAgents, trialSetup } from '../lib/presets';
 
 const row = (m: ReturnType<typeof buildPreset>['models']) => [m.planner, m.reviewer, m.executor, m.manager, m.visual, m.scan];
 
@@ -104,4 +104,34 @@ test('buildPreset: opencode — свои уровни человека; ревь
   assert.deepEqual(opencodeTiers(false, null), { low: '', mid: '', high: '', max: '' });
   assert.equal(opencodeTiers(true, null).mid, 'gpt-6.1-terra');
   assert.equal(opencodeTiers(true, t).mid, 'ds/flash');
+});
+
+const OFFER = [
+  { provider: 'ANTHROPIC', modelName: 'claude-haiku-5-5' },
+  { provider: 'OPENAI', modelName: 'gpt-6-luna' },
+];
+
+test('trialSetup: claude — модель Anthropic, codex и opencode — OpenAI; ревьюер на другом семействе, чем исполнитель', () => {
+  const both = trialSetup(['claude', 'codex'], { planner: 'claude', executor: 'claude', reviewer: 'claude' }, OFFER)!;
+  assert.equal(both.models.executor, 'claude-haiku-5-5');
+  assert.equal(both.agents.reviewer, 'codex');
+  assert.equal(both.models.reviewer, 'gpt-6-luna');
+  assert.equal(both.agents.visual, 'claude');
+  assert.ok(isTrialSetup(both.models, OFFER));
+
+  // Только codex: всё на luna; роль на выключенном claude переходит на codex.
+  const codex = trialSetup(['codex'], { planner: 'claude', executor: 'codex', reviewer: 'codex' }, OFFER)!;
+  assert.deepEqual([codex.agents.planner, codex.models.planner, codex.models.reviewer], ['codex', 'gpt-6-luna', 'gpt-6-luna']);
+
+  // opencode через прокси — тоже OpenAI.
+  const oc = trialSetup(['opencode'], { planner: 'opencode', executor: 'opencode', reviewer: 'opencode' }, OFFER)!;
+  assert.equal(oc.models.executor, 'gpt-6-luna');
+
+  // Нет модели ни для одного включённого — null; в программе только Anthropic — codex-роли уходят на claude.
+  assert.equal(trialSetup(['codex'], { planner: 'codex', executor: 'codex', reviewer: 'codex' }, [OFFER[0]]), null);
+  assert.equal(
+    trialSetup(['claude', 'codex'], { planner: 'codex', executor: 'codex', reviewer: 'codex' }, [OFFER[0]])!.agents.planner,
+    'claude',
+  );
+  assert.equal(isTrialSetup(buildPreset('claude', 'optimal').models, OFFER), false);
 });

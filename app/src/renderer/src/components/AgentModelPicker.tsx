@@ -17,6 +17,7 @@ export function AgentModelPicker({
   options,
   missing,
   disabled,
+  noCustom,
   onPick,
 }: {
   /** Включённые агенты — разделы списка. */
@@ -29,6 +30,8 @@ export function AgentModelPicker({
   options: Record<AgentKind, DropOption<string>[]>;
   missing: (a: AgentKind) => boolean;
   disabled?: boolean;
+  /** Только модели из списка — своё имя ввести нельзя (пробный режим PurpleSchool). */
+  noCustom?: boolean;
   onPick: (agent: AgentKind, model: string) => void;
 }) {
   const { state } = useStore();
@@ -45,7 +48,9 @@ export function AgentModelPicker({
   const pop = usePopover(open, btn, 320, 480);
   useOutside(open, [btn, list], close);
 
-  const sections = pickerSections(agents, options, agent, query);
+  const sections = pickerSections(agents, options, agent, query)
+    .map((s) => (noCustom ? { ...s, items: s.items.filter((i) => !i.custom) } : s))
+    .filter((s) => s.items.length);
   const flat = sections.flatMap((s) => s.items);
   const isOn = (i: PickItem) => i.agent === agent && i.model === model && !i.custom;
 

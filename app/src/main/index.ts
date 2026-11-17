@@ -343,10 +343,16 @@ handle('settings:set', (_e, patch: SettingsPatch) => {
 // Аккаунт PurpleSchool. После смены ключа прокси ядро получает новые настройки.
 const pushSettings = () => host?.postMessage({ kind: 'settings', settings: coreSettings() } satisfies HostRequest);
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
-handle('account:login', (_e, email: unknown, password: unknown) => account.login(str(email), str(password)));
-handle('account:register', (_e, p: { name?: unknown; email?: unknown; password?: unknown; mailing?: unknown }) =>
-  account.register({ name: str(p?.name), email: str(p?.email), password: str(p?.password), mailing: p?.mailing === true }),
-);
+handle('account:login', async (_e, email: unknown, password: unknown) => {
+  const r = await account.login(str(email), str(password));
+  if (r.ok) pushSettings();
+  return r;
+});
+handle('account:register', async (_e, p: { name?: unknown; email?: unknown; password?: unknown; mailing?: unknown }) => {
+  const r = await account.register({ name: str(p?.name), email: str(p?.email), password: str(p?.password), mailing: p?.mailing === true });
+  if (r.ok) pushSettings();
+  return r;
+});
 handle('account:restore', (_e, email: unknown) => account.restore(str(email)));
 handle('account:logout', () => account.logout());
 handle('account:profile', () => account.profile());
@@ -368,6 +374,11 @@ handle('account:autoKey', async () => {
   return r;
 });
 handle('account:overview', () => account.overview());
+handle('account:initialBalance', () => account.initialBalance());
+handle('account:requestEmailCode', () => account.requestEmailCode());
+handle('account:confirmEmailCode', (_e, code: unknown) => account.confirmEmailCode(str(code).trim()));
+handle('account:claimInitialBalance', () => account.claimInitialBalance());
+handle('account:trialModels', () => account.trialModels());
 handle('account:usage', (_e, q: { from?: unknown; to?: unknown; bucket?: unknown; keyIds?: unknown }) =>
   account.usage({
     from: str(q?.from),

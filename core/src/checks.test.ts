@@ -201,3 +201,13 @@ test('startNextPhase: этапы большой задачи идут по по�
   assert.equal(startNextPhase(fakeKernel, r), false);
   assert.equal(startNextPhase(fakeKernel, { mode: 'task' } as RunFile), false);
 });
+
+test('explainError: отказ пробного баланса PurpleSchool — текстом прокси, без JSON вокруг', async () => {
+  const { explainError } = await import('./agents/common.js');
+  const raw =
+    'API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Модель «opus» недоступна на пробном балансе. Доступная модель: Claude Haiku 5.5 (claude-haiku-5-5). Для использования других моделей оформите подписку или купите пакет: https://purpleschool.ru/ai-for-code#ai-proxy-plans"}}';
+  assert.equal(
+    explainError('claude', raw),
+    'claude: Модель «opus» недоступна на пробном балансе. Доступная модель: Claude Haiku 5.5 (claude-haiku-5-5). Для использования других моделей оформите подписку или купите пакет: https://purpleschool.ru/ai-for-code#ai-proxy-plans',
+  );
+});

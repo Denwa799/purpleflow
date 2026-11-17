@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, LogIn, UserPlus } from 'lucide-react';
 import { ACCOUNT_BENEFITS, AccountKeys, AuthForms } from '../components/Account';
+import { EmailBonus } from '../components/EmailBonus';
 import { Button } from '../components/ui';
 import { Mark } from '../components/Sidebar';
 import { useStore } from '../lib/store';
@@ -89,6 +90,7 @@ export function WelcomeScreen() {
                   ) : null}
                   . Агенты ходят в модели по ключу AI-прокси вашего аккаунта.
                 </p>
+                <EmailBonus />
                 <AccountKeys onUnauthorized={() => setStep('login')} />
                 <Button tone="primary" icon={<ArrowRight size={15} />} busy={leaving} onClick={() => void next()}>
                   {state.settings?.proxy.hasKey ? 'Продолжить' : 'Продолжить без ключа'}

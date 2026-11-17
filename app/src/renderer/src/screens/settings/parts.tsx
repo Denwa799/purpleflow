@@ -32,9 +32,11 @@ export function AgentSwitch({
   value,
   enabled,
   onChange,
+  disabled,
 }: {
   label: string;
   value: AgentKind;
+  disabled?: boolean;
   /** Включённые CLI: выключенный не предлагаем. */
   enabled: AgentKind[];
   onChange: (a: AgentKind) => void;
@@ -42,7 +44,14 @@ export function AgentSwitch({
   return (
     <div className="segmented small" role="radiogroup" aria-label={`Агент: ${label}`}>
       {enabled.map((a) => (
-        <button key={a} role="radio" aria-checked={value === a} className={value === a ? 'is-on' : ''} onClick={() => onChange(a)}>
+        <button
+          key={a}
+          role="radio"
+          aria-checked={value === a}
+          className={value === a ? 'is-on' : ''}
+          disabled={disabled}
+          onClick={() => onChange(a)}
+        >
           {a}
         </button>
       ))}

@@ -1,10 +1,12 @@
 // Вкладка «Модели»: агент и модель для каждой роли, таймауты и параллельные прогоны.
-import { Wand2 } from 'lucide-react';
+import { ExternalLink, Wand2 } from 'lucide-react';
 import { useState } from 'react';
 import { ModelInput } from '../../components/ModelInput';
 import { QuickSetup } from '../../components/QuickSetup';
 import { Button, Field, Input } from '../../components/ui';
+import { isTrialSetup, trialSetup } from '../../lib/presets';
 import { agentList } from '../../lib/tools';
+import { PLANS_URL, trialOptions, useTrialLock } from '../../lib/trial';
 import { useModelOptions } from '../../lib/useModelOptions';
 import { useStore } from '../../lib/store';
 import { AgentSwitch, modelPlaceholder, ROLES } from './parts';
@@ -16,6 +18,10 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
   const s = state.settings!;
   const tools = state.tools;
   const [quick, setQuick] = useState(false);
+  // Пробный режим: роли только на моделях программы — пресеты и свои модели закрыты до подписки или пакета.
+  const trial = useTrialLock();
+  const lockedOptions = trial ? trialOptions(['claude', 'codex', 'opencode'], trial) : null;
+  const options = lockedOptions ?? modelOptions;
   const {
     models,
     setModels,
@@ -50,10 +56,17 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
             действуют на прогоны, запущенные после сохранения.
           </p>
         </div>
-        <Button tone="primary" icon={<Wand2 size={15} />} onClick={() => setQuick(true)}>
+        <Button
+          tone="primary"
+          icon={<Wand2 size={15} />}
+          disabled={Boolean(trial)}
+          title={trial ? 'На пробном балансе пресеты недоступны' : undefined}
+          onClick={() => setQuick(true)}
+        >
           Быстрая настройка
         </Button>
       </header>
+      {trial && <TrialNotice trial={trial} draft={draft} />}
       {quick && (
         <QuickSetup
           installed={{
@@ -81,14 +94,21 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
             <div key={r.id} className={`role bezel role-${agent}`}>
               <div className="role-head">
                 <strong>{r.title}</strong>
-                <AgentSwitch enabled={enabled} label={r.title} value={agent} onChange={(a) => pickAgent(r.id, a)} />
+                <AgentSwitch
+                  disabled={Boolean(trial)}
+                  enabled={enabled}
+                  label={r.title}
+                  value={agent}
+                  onChange={(a) => pickAgent(r.id, a)}
+                />
               </div>
               <p>{r.text}</p>
               {sameAsExecutor && <p className="role-warn">Совпадает с исполнителем — ревью той же моделью находит меньше.</p>}
               <ModelInput
+                disabled={Boolean(trial)}
                 className="role-model"
                 ariaLabel={`Модель: ${r.title}`}
-                options={modelOptions[agent]}
+                options={options[agent]}
                 placeholder={modelPlaceholder(agent, proxyOn)}
                 value={models[r.id]}
                 onChange={(v) => setModels({ ...models, [r.id]: v })}
@@ -99,7 +119,13 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
         <div className={`role bezel role-${visualAgent}`}>
           <div className="role-head">
             <strong>Визуальная проверка</strong>
-            <AgentSwitch enabled={enabled} label="Визуальная проверка" value={visualAgent} onChange={(a) => pickAgent('visual', a)} />
+            <AgentSwitch
+              disabled={Boolean(trial)}
+              enabled={enabled}
+              label="Визуальная проверка"
+              value={visualAgent}
+              onChange={(a) => pickAgent('visual', a)}
+            />
           </div>
           <p>
             Запускает приложение и проверяет результат в браузере через pw.
@@ -109,9 +135,10 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
             Пусто — модель исполнителя, если он на том же агенте.
           </p>
           <ModelInput
+            disabled={Boolean(trial)}
             className="role-model"
             ariaLabel="Модель: визуальная проверка"
-            options={modelOptions[visualAgent]}
+            options={options[visualAgent]}
             placeholder={
               agents.executor === visualAgent && models.executor
                 ? `как у исполнителя: ${models.executor}`
@@ -124,7 +151,13 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
         <div className={`role bezel role-${managerAgent}`}>
           <div className="role-head">
             <strong>Менеджер прогона</strong>
-            <AgentSwitch enabled={enabled} label="Менеджер прогона" value={managerAgent} onChange={(a) => pickAgent('manager', a)} />
+            <AgentSwitch
+              disabled={Boolean(trial)}
+              enabled={enabled}
+              label="Менеджер прогона"
+              value={managerAgent}
+              onChange={(a) => pickAgent('manager', a)}
+            />
           </div>
           <p>
             Отвечает в чате прогона, как идут дела, и предлагает поправить ход работы. Хватит быстрой модели.
@@ -132,9 +165,10 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
             первой роли на том же агенте.
           </p>
           <ModelInput
+            disabled={Boolean(trial)}
             className="role-model"
             ariaLabel="Модель: менеджер прогона"
-            options={modelOptions[managerAgent]}
+            options={options[managerAgent]}
             placeholder={modelPlaceholder(managerAgent, proxyOn)}
             value={models.manager ?? ''}
             onChange={(v) => setModels({ ...models, manager: v })}
@@ -143,7 +177,13 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
         <div className={`role bezel role-${scanAgent}`}>
           <div className="role-head">
             <strong>Сканирование проекта</strong>
-            <AgentSwitch enabled={enabled} label="Сканирование проекта" value={scanAgent} onChange={(a) => pickAgent('scan', a)} />
+            <AgentSwitch
+              disabled={Boolean(trial)}
+              enabled={enabled}
+              label="Сканирование проекта"
+              value={scanAgent}
+              onChange={(a) => pickAgent('scan', a)}
+            />
           </div>
           <p>
             Находит команды проекта и собирает профиль — стек, структуру, соглашения. Только читает код.
@@ -152,9 +192,10 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
             на том же агенте.
           </p>
           <ModelInput
+            disabled={Boolean(trial)}
             className="role-model"
             ariaLabel="Модель: сканирование проекта"
-            options={modelOptions[scanAgent]}
+            options={options[scanAgent]}
             placeholder={modelPlaceholder(scanAgent, proxyOn)}
             value={models.scan ?? ''}
             onChange={(v) => setModels({ ...models, scan: v })}
@@ -198,5 +239,49 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
         </Field>
       </div>
     </section>
+  );
+}
+
+/** Плашка пробного режима: какие модели доступны, перевод ролей на них и ссылка на тарифы. */
+function TrialNotice({ trial, draft }: { trial: NonNullable<ReturnType<typeof useTrialLock>>; draft: SettingsDraft }) {
+  const { state, saveSettings } = useStore();
+  const s = state.settings!;
+  const [busy, setBusy] = useState(false);
+  const plan = trialSetup(draft.enabled, s.agents, trial);
+  const onTrial = isTrialSetup(s.models, trial);
+  const apply = async () => {
+    if (!plan) return;
+    setBusy(true);
+    try {
+      draft.setAgents(plan.agents);
+      draft.setModels(plan.models);
+      await saveSettings({ agents: plan.agents, models: plan.models });
+      draft.flashSaved();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="trial-lock" role="status">
+      <div className="trial-lock-text">
+        <span className="trial-banner-kicker">Пробный режим</span>
+        <strong>Все роли — на {trial.map((m) => m.displayName).join(' и ')}</strong>
+        <span>
+          На стартовом балансе прокси PurpleSchool пускает только эти модели, поэтому пресеты и выбор моделей закрыты. Оформите подписку или
+          купите пакет — откроются все.
+        </span>
+      </div>
+      <div className="trial-lock-actions">
+        {!onTrial && plan && (
+          <Button tone="primary" busy={busy} onClick={() => void apply()}>
+            Перевести роли на пробные модели
+          </Button>
+        )}
+        <a className="btn btn-ghost" href={PLANS_URL} target="_blank" rel="noreferrer">
+          <ExternalLink size={14} />
+          <span>Тарифы</span>
+        </a>
+      </div>
+    </div>
   );
 }

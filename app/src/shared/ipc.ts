@@ -86,6 +86,32 @@ export interface AccountOverview {
   currentPlan: { title: string; priceMinor: number; unitsPerMonth: string; nextPaymentAt: string; isAutoPaymentEnabled: boolean } | null;
 }
 
+/** Подтверждение почты кодом (POST /email-verification/request|confirm). Даты — ISO или null. */
+export interface EmailVerification {
+  email: string;
+  isVerified: boolean;
+  expiredAt: string | null;
+  resendAvailableAt: string | null;
+  attemptsRemaining: number;
+}
+
+/** Стартовый баланс за подтверждение почты (GET /public/ai-proxy/info-v2 → initialBalance). Объёмы — строки. */
+export interface InitialBalance {
+  status: 'NOT_ELIGIBLE' | 'AVAILABLE' | 'ACTIVE' | 'FINISHED';
+  email: string;
+  isEmailVerified: boolean;
+  offer: { initialUnits: string; validityDays: number; models: { provider: string; modelName: string; displayName: string }[] };
+  grant: InitialBalanceGrant | null;
+}
+export type TrialModel = InitialBalance['offer']['models'][number];
+export interface InitialBalanceGrant {
+  grantId: number;
+  initialUnits: string;
+  remainingUnits: string;
+  startsAt: string;
+  expiresAt: string;
+}
+
 export type UsageBucket = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 export interface UsageModelSpend {
   modelName: string;
@@ -117,6 +143,15 @@ export interface AccountApi {
   overview(): Promise<AccountResult<AccountOverview>>;
   /** from/to — даты YYYY-MM-DD (UTC); keyIds пусто — все ключи. */
   usage(q: { from: string; to: string; bucket: UsageBucket; keyIds: number[] }): Promise<AccountResult<AccountUsage>>;
+  /** Стартовый баланс; null — сервер программу не отдаёт. */
+  initialBalance(): Promise<AccountResult<InitialBalance | null>>;
+  /** Отправить код подтверждения на почту аккаунта. */
+  requestEmailCode(): Promise<AccountResult<EmailVerification>>;
+  confirmEmailCode(code: string): Promise<AccountResult<EmailVerification>>;
+  /** Начислить стартовый баланс — после подтверждения почты. */
+  claimInitialBalance(): Promise<AccountResult<InitialBalanceGrant>>;
+  /** На балансе только пробные токены и нет подписки — модели программы; иначе null. */
+  trialModels(): Promise<AccountResult<TrialModel[] | null>>;
 }
 
 export type CoreMethod = keyof CoreApi;

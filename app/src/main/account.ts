@@ -1,6 +1,16 @@
-import type { AccountKey, AccountOverview, AccountResult, AccountUsage, UsageBucket } from '../shared/ipc';
+import type {
+  AccountKey,
+  AccountOverview,
+  AccountResult,
+  AccountUsage,
+  EmailVerification,
+  InitialBalance,
+  InitialBalanceGrant,
+  TrialModel,
+  UsageBucket,
+} from '../shared/ipc';
 import { ACCOUNT_API, ACCOUNT_ENABLED } from './provider';
-import { accountToken, proxyKey, setAccount, setAccountProfile, setProxyKey } from './settings';
+import { accountToken, proxyKey, setAccount, setAccountProfile, setProxyKey, updateSettings } from './settings';
 
 /**
  * Аккаунт PurpleSchool: вход, регистрация и ключи AI-прокси.
@@ -74,6 +84,8 @@ async function signedIn(token: string | undefined, email: string, name?: string)
   }
   // Имя и аватар — не повод проваливать вход: не загрузились сейчас, подтянутся при открытии аккаунта.
   await profile();
+  // Ключ — тоже: не вышло сейчас, его можно выбрать или создать на вкладке «Аккаунт».
+  await connectProxy().catch(() => {});
   return { ok: true, data: null };
 }
 
@@ -247,4 +259,65 @@ export function usage(q: { from: string; to: string; bucket: UsageBucket; keyIds
   const p = new URLSearchParams({ from: q.from, to: q.to, bucketType: q.bucket });
   for (const id of q.keyIds) if (Number.isInteger(id) && id > 0) p.append('aiProxyApiKeyIds', String(id));
   return authed<AccountUsage>('GET', `/public/ai-proxy/usage?${p}`);
+}
+
+/** Стартовый баланс из info-v2; блока нет (старый сервер) — null, окно ничего не показывает. */
+export async function initialBalance(): Promise<AccountResult<InitialBalance | null>> {
+  const r = await authed<{ initialBalance?: InitialBalance }>('GET', '/public/ai-proxy/info-v2');
+  if (!r.ok) return r;
+  return { ok: true, data: r.data?.initialBalance ?? null };
+}
+
+/** Код уходит на почту из токена аккаунта: адрес не передаём, сервер берёт его сам. */
+export function requestEmailCode(): Promise<AccountResult<EmailVerification>> {
+  return authed<EmailVerification>('POST', '/email-verification/request');
+}
+
+export function confirmEmailCode(code: string): Promise<AccountResult<EmailVerification>> {
+  if (!/^\d{6}$/.test(code)) return Promise.resolve({ ok: false, error: 'Код — шесть цифр из письма' });
+  return authed<EmailVerification>('POST', '/email-verification/confirm', { code });
+}
+
+/** Начисление стартового баланса; повторный вызов вернёт уже выданный грант. Лимит сервера — три вызова в сутки с IP. */
+export function claimInitialBalance(): Promise<AccountResult<InitialBalanceGrant>> {
+  return authed<InitialBalanceGrant>('POST', '/public/ai-proxy/initial-balance/claim');
+}
+
+const big = (v: string | undefined) => {
+  try {
+    return BigInt(v ?? '');
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Пробный режим: бонус действует, подписки нет и весь остаток кошелька — это бонус. Тогда прокси пускает только модели
+ * программы, и окно не даёт выбрать другие. Купил пакет или подписку — остаток больше бонуса, ограничения нет.
+ */
+export async function trialModels(): Promise<AccountResult<TrialModel[] | null>> {
+  const [ib, ov] = await Promise.all([
+    initialBalance(),
+    authed<{ balance?: { remainingUnits?: string; initialBalanceGrant?: { remainingUnits?: string } | null }; currentPlan?: unknown }>(
+      'GET',
+      '/public/ai-proxy/overview',
+    ),
+  ]);
+  if (!ib.ok) return ib;
+  if (!ov.ok) return ov;
+  const bonus = big(ov.data?.balance?.initialBalanceGrant?.remainingUnits ?? undefined);
+  const total = big(ov.data?.balance?.remainingUnits);
+  const only = ib.data?.status === 'ACTIVE' && !ov.data?.currentPlan && bonus !== null && total !== null && total <= bonus;
+  return { ok: true, data: only && ib.data?.offer.models.length ? ib.data.offer.models : null };
+}
+
+/**
+ * После входа и регистрации агенты сразу работают через PurpleSchool: свой ключ уже есть — включаем его, нет — подставляем
+ * активный ключ аккаунта, нет и такого — создаём новый.
+ */
+async function connectProxy() {
+  const a = await autoKey();
+  if (!a.ok) return;
+  if (a.data === 'none') await createKey();
+  else if (a.data === 'kept') updateSettings({ proxy: { enabled: true } });
 }

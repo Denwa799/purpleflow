@@ -5,7 +5,12 @@ import { Button, Field, Input } from './ui';
 import { useActions, useStore } from '../lib/store';
 import { bridge } from '../lib/api';
 
-export const PRIVACY_URL = 'https://purpleschool.ru/privacy-policy.pdf';
+/** Документы для согласия при регистрации — те же, что в форме на app.purpleschool.ru. */
+const LEGAL = {
+  agreement: 'https://purpleschool.ru/user_agreement.pdf',
+  oferta: 'https://purpleschool.ru/oferta.pdf',
+  data: 'https://purpleschool.ru/data_consent.pdf',
+};
 const MIN_PASSWORD = 8;
 
 /** Чем вход через PurpleSchool лучше своих подписок — по странице purpleschool.ru/ai-for-code. */
@@ -24,6 +29,7 @@ export function AuthForms({ onDone, initial = 'login' }: { onDone: () => void | 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [agreed, setAgreed] = useState(false);
   const [mailing, setMailing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; toLogin?: boolean } | null>(null);
@@ -45,6 +51,7 @@ export function AuthForms({ onDone, initial = 'login' }: { onDone: () => void | 
     if (mode === 'register') {
       if (!name.trim()) return setError({ text: 'Как к вам обращаться? Введите имя' });
       if (password.length < MIN_PASSWORD) return setError({ text: `Пароль — не короче ${MIN_PASSWORD} символов` });
+      if (!agreed) return setError({ text: 'Отметьте согласие с пользовательским соглашением' });
     }
     if (mode === 'login' && !password) return setError({ text: 'Введите пароль' });
     setBusy(true);
@@ -112,10 +119,29 @@ export function AuthForms({ onDone, initial = 'login' }: { onDone: () => void | 
         </Field>
       )}
       {mode === 'register' && (
-        <label className="auth-check">
-          <input type="checkbox" checked={mailing} onChange={(e) => setMailing(e.target.checked)} />
-          <span>Получать новости и рекламные рассылки</span>
-        </label>
+        <div className="auth-checks">
+          <label className="auth-check">
+            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+            <span>
+              Согласен с{' '}
+              <a className="link" href={LEGAL.agreement} target="_blank" rel="noreferrer">
+                Пользовательским соглашением
+              </a>{' '}
+              и ознакомлен с{' '}
+              <a className="link" href={LEGAL.oferta} target="_blank" rel="noreferrer">
+                Правилом оказания услуг
+              </a>{' '}
+              и{' '}
+              <a className="link" href={LEGAL.data} target="_blank" rel="noreferrer">
+                Обработкой данных
+              </a>
+            </span>
+          </label>
+          <label className="auth-check">
+            <input type="checkbox" checked={mailing} onChange={(e) => setMailing(e.target.checked)} />
+            <span>Согласен на получение рекламных рассылок</span>
+          </label>
+        </div>
       )}
       {error && (
         <p className="auth-error" role="alert">
@@ -139,15 +165,6 @@ export function AuthForms({ onDone, initial = 'login' }: { onDone: () => void | 
       <Button tone="primary" type="submit" busy={busy} className="auth-submit">
         {mode === 'login' ? 'Войти' : mode === 'register' ? 'Зарегистрироваться' : 'Отправить ссылку'}
       </Button>
-      {mode === 'register' && (
-        <p className="auth-legal">
-          Регистрируясь, вы соглашаетесь с{' '}
-          <a className="link" href={PRIVACY_URL} target="_blank" rel="noreferrer">
-            политикой конфиденциальности
-          </a>{' '}
-          PurpleSchool.
-        </p>
-      )}
       <p className="auth-switch">
         {mode === 'login' ? (
           <>

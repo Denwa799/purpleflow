@@ -139,3 +139,48 @@ export function restrictAgents(enabled: AgentKind[], agents: Agents, models: Mod
   }
   return { agents: nextAgents, models: nextModels };
 }
+
+/** Модель программы пробного баланса: provider — ANTHROPIC или OPENAI, как в info-v2. */
+export interface TrialModel {
+  provider: string;
+  modelName: string;
+}
+
+/**
+ * Пробный режим: на пробном балансе прокси пускает только модели программы — по одной на Anthropic и OpenAI.
+ * claude получает модель Anthropic, codex и opencode — модель OpenAI. Роль на агенте без своей пробной модели
+ * переходит на включённый агент, у которого она есть. Ревьюер по возможности — на другом семействе, чем исполнитель:
+ * так он находит больше. null — ни одному включённому агенту пробная модель не подходит.
+ */
+export function trialSetup(enabled: AgentKind[], agents: Agents, offer: TrialModel[]): { agents: Agents; models: Models } | null {
+  const anthropic = offer.find((m) => m.provider === 'ANTHROPIC')?.modelName;
+  const openai = offer.find((m) => m.provider === 'OPENAI')?.modelName;
+  const modelOf = (a: AgentKind) => (a === 'claude' ? anthropic : openai);
+  const usable = enabled.filter((a) => modelOf(a));
+  if (!usable.length) return null;
+  const pick = (a: AgentKind | undefined) => (a && usable.includes(a) ? a : usable[0]);
+  const nextAgents: Agents = { ...agents };
+  const nextModels = {} as Models;
+  for (const slot of Object.keys(ROLE_TITLE) as Slot[]) {
+    const a = pick(agents[slot] ?? (slot === 'visual' ? 'claude' : undefined));
+    nextAgents[slot] = a;
+    nextModels[slot] = modelOf(a) ?? '';
+  }
+  if (nextModels.reviewer === nextModels.executor) {
+    const other = usable.find((a) => modelOf(a) !== nextModels.executor);
+    if (other) {
+      nextAgents.reviewer = other;
+      nextModels.reviewer = modelOf(other) ?? '';
+    }
+  }
+  return { agents: nextAgents, models: nextModels };
+}
+
+/** Роли уже стоят на пробных моделях — предлагать перевод незачем. */
+export function isTrialSetup(models: Models, offer: TrialModel[]): boolean {
+  const names = new Set(offer.map((m) => m.modelName));
+  return (Object.keys(ROLE_TITLE) as Slot[]).every((slot) => {
+    const m = models[slot] ?? '';
+    return names.has(m.replace(/^purpleflow\//, ''));
+  });
+}

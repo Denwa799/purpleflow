@@ -6,6 +6,9 @@ import type { AddressInfo } from 'node:net';
 import { expect, test } from '@playwright/test';
 import { launch, makeSandbox, quit, type Launched, type Sandbox } from './harness';
 
+/** Заголовок окна берёт версию приложения — не держим её в тесте, иначе он ломается на каждом выпуске. */
+const APP_VERSION = (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')) as { version: string }).version;
+
 let box: Sandbox;
 let l: Launched;
 let feed: http.Server;
@@ -132,7 +135,7 @@ test.describe('после обновления', () => {
 
   test('окно открывается само, новые выпуски отмечены; закрыли — больше само не откроется', async () => {
     await expect(dialog()).toBeVisible();
-    await expect(dialog().getByRole('heading', { level: 2 })).toContainText('Обновились до 0.3.4');
+    await expect(dialog().getByRole('heading', { level: 2 })).toContainText(`Обновились до ${APP_VERSION}`);
     await expect(dialog().getByRole('article', { name: 'Версия 0.3.3' })).toContainText('новое');
     await expect(dialog().getByRole('article', { name: 'Версия 0.3.0' })).not.toContainText('новое');
     if (process.env.PF_SHOT) await l.page.screenshot({ path: process.env.PF_SHOT });

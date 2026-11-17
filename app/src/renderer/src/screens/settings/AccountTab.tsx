@@ -1,6 +1,9 @@
 // Вкладка «Аккаунт»: вход в PurpleSchool, ключи AI-прокси и переключатель «Работать через PurpleSchool».
+import { useState } from 'react';
 import { Check, KeyRound, LogOut } from 'lucide-react';
 import { ACCOUNT_BENEFITS, AccountKeys, AuthForms } from '../../components/Account';
+import { EmailBonus } from '../../components/EmailBonus';
+import { TrialBanner } from '../../components/TrialPromo';
 import { Button } from '../../components/ui';
 import { bridge } from '../../lib/api';
 import { useStore } from '../../lib/store';
@@ -12,6 +15,8 @@ export function AccountTab({ draft }: { draft: SettingsDraft }) {
   const s = state.settings!;
   const { checks, setChecks } = draft;
   const proxyOn = s.proxy.hasKey && s.proxy.enabled;
+  // Кнопка баннера переключает форму на регистрацию: новый key пересоздаёт форму с нужным режимом.
+  const [authMode, setAuthMode] = useState<{ mode: 'login' | 'register'; n: number }>({ mode: 'login', n: 0 });
   /** Выход удаляет токен аккаунта; ключ прокси остаётся — его можно удалить отдельно. */
   const logout = async () => {
     await bridge.account.logout();
@@ -50,6 +55,7 @@ export function AccountTab({ draft }: { draft: SettingsDraft }) {
                 Выйти
               </Button>
             </div>
+            <EmailBonus />
             {s.proxy.hasKey && (
               <div className={`acc-proxy ${s.proxy.enabled ? 'is-on' : ''}`}>
                 <div className="acc-proxy-text">
@@ -83,26 +89,21 @@ export function AccountTab({ draft }: { draft: SettingsDraft }) {
             <header className="panel-head">
               <div>
                 <h2>Аккаунт PurpleSchool</h2>
-                <p>
-                  Войдите или зарегистрируйтесь, чтобы агенты работали через AI-прокси PurpleSchool — без VPN, с оплатой в рублях. Без этого
-                  они работают по вашим обычным подпискам.
-                </p>
+                <p>Агенты работают через AI-прокси PurpleSchool. Без входа — по вашим подпискам.</p>
               </div>
             </header>
+            <TrialBanner onRegister={() => setAuthMode((a) => ({ mode: 'register', n: a.n + 1 }))} />
             <ul className="acc-benefits">
               {ACCOUNT_BENEFITS.map((b) => (
                 <li key={b.title}>
                   <Check size={13} />
-                  <div>
-                    <strong>{b.title}</strong>
-                    <span>{b.text}</span>
-                  </div>
+                  {b.title}
                 </li>
               ))}
             </ul>
           </div>
           <div className="acc-form bezel">
-            <AuthForms onDone={() => undefined} />
+            <AuthForms key={authMode.n} initial={authMode.mode} onDone={() => undefined} />
           </div>
         </div>
       )}
