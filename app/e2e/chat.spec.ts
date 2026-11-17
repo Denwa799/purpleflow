@@ -127,6 +127,25 @@ test('чат: «@» подставляет файл проекта, «/» — с
     await expect(page.locator('.chat-msg.is-user')).toContainText('/review @src/math.js что тут?');
     await expect.poll(() => box.calls().at(-1)?.prompt ?? '').toContain(`- /review: ${skill}`);
     expect(box.calls().at(-1)!.prompt).toContain(`- ${path.join(box.repo, 'src', 'math.js')}`);
+
+    // «Сессия»: скиллы рядом с MCP; незакоммиченный помечен — прогон в отдельной копии его не увидит.
+    await page.getByRole('button', { name: 'Сессия' }).click();
+    const ses = page.locator('.ses-skills');
+    await expect(ses.locator('li').filter({ has: page.locator('.skill-name', { hasText: /^review$/ }) })).toContainText('не в git');
+
+    // Экран проекта: те же скиллы и какие агенты найдут их сами.
+    await page.getByRole('button', { name: 'Проекты' }).click();
+    await page.getByRole('button', { name: 'Открыть папку…' }).click();
+    await page.getByRole('tab', { name: 'Обзор' }).click();
+    const panel = page.locator('.overview-skills');
+    await expect(panel.locator('li').filter({ has: page.locator('.skill-name', { hasText: /^review$/ }) })).toContainText(
+      'Ревью по чек-листу',
+    );
+    await expect(panel.locator('li').filter({ has: page.locator('.skill-name', { hasText: /^review$/ }) })).toContainText('claude');
+    if (process.env.PF_SHOT) {
+      await panel.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: process.env.PF_SHOT });
+    }
     expect(l.errors).toEqual([]);
   } finally {
     await quit(l);

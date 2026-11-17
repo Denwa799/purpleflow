@@ -361,10 +361,13 @@ test('чат: @файл и /скилл уходят агенту блоком п
   };
   const core = makeCore({ claude });
   assert.deepEqual((await core.listChatFiles(repo)).sort(), ['.claude/skills/review/SKILL.md', '.gitignore', 'src/a.ts']);
+  // Скилл не закоммичен — в отдельной рабочей копии прогона его не будет.
   assert.deepEqual(
-    (await core.listChatSkills(repo)).map((s) => s.name),
-    ['review'],
+    (await core.listChatSkills(repo)).map((s) => [s.name, s.untracked]),
+    [['review', true]],
   );
+  git('add', '.claude');
+  assert.equal((await core.listChatSkills(repo))[0].untracked, undefined);
   const chat = await core.createChat({ agent: 'claude', projectPath: repo });
   await core.sendChat(chat.id, '/review посмотри @src/a.ts');
   await untilIdle(core, chat.id);

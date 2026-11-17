@@ -67,6 +67,13 @@ test('listSkills: скиллы и команды проекта и пользо�
     ],
   );
   assert.equal(all.find((s) => s.name === 'review')!.path, path.join(project, '.claude/skills/review/SKILL.md'));
+  // Кто найдёт сам: .claude/skills — claude и opencode, .agents — codex и opencode, ~/.codex/prompts — codex, плагин — claude.
+  const who = (n: string) => all.find((s) => s.name === n)!.agents;
+  assert.deepEqual(who('review'), ['claude', 'opencode']);
+  assert.deepEqual(who('shared'), ['codex', 'opencode']);
+  assert.deepEqual(who('explain'), ['codex']);
+  assert.deepEqual([who('tools:lint'), all.find((s) => s.name === 'tools:lint')!.plugin], [['claude'], 'tools']);
+  assert.equal(all.find((s) => s.name === 'deploy')!.kind, 'command');
   // Без настроек пользователя агент не видит ~/.claude — и подсказка тоже.
   assert.deepEqual(
     listSkills({ projectPath: project, userConfig: false, home }).map((s) => s.name),
@@ -95,4 +102,14 @@ test('findMentions: существующие файлы внутри папки 
       '\n\nЧеловек вызвал скилл — прочитай инструкции и следуй им:\n- /review: /s/review/SKILL.md',
   );
   assert.equal(mentionsBlock(findMentions('без упоминаний', cwd, skills)), '');
+});
+
+test('listSkills: экранированные кавычки в описании и длинное описание с многоточием', (t) => {
+  const project = tree(t, {
+    '.claude/skills/a/SKILL.md': `---\ndescription: "Use \\"your own\\" browser. ${'x'.repeat(300)}"\n---`,
+  });
+  const d = listSkills({ projectPath: project, userConfig: false })[0].description!;
+  assert.ok(d.startsWith('Use "your own" browser.'));
+  assert.equal(d.length, 200);
+  assert.ok(d.endsWith('…'));
 });

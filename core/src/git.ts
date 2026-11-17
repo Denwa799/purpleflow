@@ -172,6 +172,12 @@ export class Git {
 
   /** Незакоммиченные изменения рабочей копии, включая неотслеживаемые файлы. */
   /** Файлы рабочей копии: отслеживаемые и новые, без игнорируемых. */
+  /** Отслеживаемые git файлы в этих каталогах (пути от корня). */
+  async trackedIn(dir: string, paths: string[]): Promise<string[]> {
+    const out = await this.git(dir, ['--no-optional-locks', 'ls-files', '-z', '--', ...paths]);
+    return out.split('\0').filter(Boolean);
+  }
+
   async listFiles(dir: string): Promise<string[]> {
     const out = await this.git(dir, ['--no-optional-locks', 'ls-files', '--cached', '--others', '--exclude-standard', '-z']);
     return [...new Set(out.split('\0').filter(Boolean))];

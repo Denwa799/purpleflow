@@ -105,6 +105,13 @@ export interface ChatSkill {
   path: string;
   /** project — из папки проекта, user — из ~/.claude или ~/.codex. */
   source: 'project' | 'user';
+  kind?: 'skill' | 'command';
+  /** Какие агенты найдут его сами (без вызова через «/» в чате). */
+  agents?: AgentKind[];
+  /** Из плагина claude. */
+  plugin?: string;
+  /** Проектный, но не в git: в отдельной рабочей копии прогона его не будет. */
+  untracked?: boolean;
 }
 
 export interface ChatFile {

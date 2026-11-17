@@ -6,6 +6,7 @@ import { Button } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
 import { chatSession, mcpStatus, type ChatSessionSummary } from '../lib/chatSession';
 import { shortPath, tokens, when } from '../lib/format';
+import { SkillList, useSkills } from '../components/SkillList';
 
 /** Кольцо заполнения контекста: свёрнутая панель и заголовок карточки. */
 export function ContextRing({ pct, size = 22 }: { pct?: number; size?: number }) {
@@ -136,6 +137,35 @@ function ContextCard({ s, chat, busy }: { s: ChatSessionSummary; chat: ChatFile;
   );
 }
 
+/** Скиллы, которые видит агент чата, — рядом с MCP-серверами. */
+function ChatSkills({ chat }: { chat: ChatFile }) {
+  const skills = useSkills(chat.projectPath);
+  const [all, setAll] = useState(false);
+  if (!skills) return null;
+  if (!skills.length)
+    return (
+      <Row label="Скиллы">
+        <span className="ses-hint">нет</span>
+      </Row>
+    );
+  // Сначала те, что агент найдёт сам.
+  // Сначала проектные, затем те, что агент найдёт сам.
+  const rank = (x: (typeof skills)[number]) => (x.source === 'project' ? 0 : 2) + (x.agents?.includes(chat.agent) ? 0 : 1);
+  const sorted = [...skills].sort((a, b) => rank(a) - rank(b));
+  const shown = all ? sorted : sorted.slice(0, 8);
+  return (
+    <div className="ses-skills">
+      <span className="ses-label">Скиллы · {skills.length}</span>
+      <SkillList skills={shown} agent={chat.agent} compact />
+      {sorted.length > shown.length && (
+        <button className="link ses-more" onClick={() => setAll(true)}>
+          Показать все ({sorted.length})
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Вкладка «Сессия»: контекст, агент и окружение. */
 export function ChatSessionPane({ chat, model, busy }: { chat: ChatFile; model: string; busy: boolean }) {
   const s = chatSession(chat);
@@ -189,6 +219,7 @@ export function ChatSessionPane({ chat, model, busy }: { chat: ChatFile; model: 
             <span className="ses-hint">{s.answers ? 'нет' : 'станут известны после ответа'}</span>
           </Row>
         )}
+        <ChatSkills chat={chat} />
         <Row label="Создан">{when(chat.createdAt)}</Row>
         <Row label="Обновлён">{when(chat.updatedAt)}</Row>
       </section>

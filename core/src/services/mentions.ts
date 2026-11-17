@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ChatSkill } from '../types.js';
+import type { AgentKind, ChatSkill } from '../types.js';
 
 /** Больше файлов в подсказке не нужно: человек всё равно сужает список, набирая имя. */
 const MAX_FILES = 20_000;
@@ -60,16 +60,20 @@ function describe(file: string): string | undefined {
     const d = /^description:\s*(.+)$/m
       .exec(fm[1])?.[1]
       ?.trim()
-      .replace(/^["']|["']$/g, '');
-    if (d) return d.slice(0, 200);
+      .replace(/^["']|["']$/g, '')
+      .replace(/\\(["'\\])/g, '$1');
+    if (d) return clip(d);
   }
   const body = fm ? text.slice(fm[0].length) : text;
   const line = body
     .split('\n')
     .map((l) => l.replace(/^#+\s*/, '').trim())
     .find(Boolean);
-  return line?.slice(0, 200);
+  return line ? clip(line) : undefined;
 }
+
+/** До 200 знаков, обрезанное — с многоточием. */
+const clip = (s: string) => (s.length > 200 ? `${s.slice(0, 199).trimEnd()}…` : s);
 
 const isDir = (p: string) => {
   try {
@@ -85,17 +89,19 @@ const subdirs = (dir: string) =>
     .filter((e) => e.isDirectory() || e.isSymbolicLink())
     .map((e) => path.join(dir, e.name));
 
+type Who = AgentKind[];
+
 /**
  * Скиллы: каталоги с SKILL.md. Каталог без SKILL.md смотрим глубже (до трёх уровней) —
  * так лежат скиллы, синхронизированные с claude.ai: ~/.claude/skills/synced/<id>/<скилл>/SKILL.md.
  */
-function skillsIn(dir: string, source: ChatSkill['source'], prefix = '', depth = 3): ChatSkill[] {
+function skillsIn(dir: string, source: ChatSkill['source'], agents: Who, prefix = '', depth = 3): ChatSkill[] {
   if (!isDir(dir)) return [];
   const out: ChatSkill[] = [];
   for (const d of subdirs(dir)) {
     const f = path.join(d, 'SKILL.md');
-    if (fs.existsSync(f)) out.push({ name: prefix + path.basename(d), description: describe(f), path: f, source });
-    else if (depth > 1) out.push(...skillsIn(d, source, prefix, depth - 1));
+    if (fs.existsSync(f)) out.push({ name: prefix + path.basename(d), description: describe(f), path: f, source, kind: 'skill', agents });
+    else if (depth > 1) out.push(...skillsIn(d, source, agents, prefix, depth - 1));
   }
   return out;
 }
@@ -114,14 +120,15 @@ function pluginSkills(home: string): ChatSkill[] {
     const installs = (Array.isArray(val) ? val : [val]) as { installPath?: unknown }[];
     const dir = installs.map((i) => i?.installPath).find((p): p is string => typeof p === 'string');
     if (!dir) continue;
-    out.push(...skillsIn(path.join(dir, 'skills'), 'user', `${name}:`));
-    out.push(...commandsIn(path.join(dir, 'commands'), 'user').map((c) => ({ ...c, name: `${name}:${c.name}` })));
+    const plugin = (x: ChatSkill) => ({ ...x, plugin: name });
+    out.push(...skillsIn(path.join(dir, 'skills'), 'user', ['claude'], `${name}:`).map(plugin));
+    out.push(...commandsIn(path.join(dir, 'commands'), 'user', ['claude']).map((c) => plugin({ ...c, name: `${name}:${c.name}` })));
   }
   return out;
 }
 
 /** Команды: .md-файлы, вложенные каталоги — через двоеточие (frontend/test.md → frontend:test), как в claude. */
-function commandsIn(dir: string, source: ChatSkill['source']): ChatSkill[] {
+function commandsIn(dir: string, source: ChatSkill['source'], agents: Who): ChatSkill[] {
   if (!isDir(dir)) return [];
   const out: ChatSkill[] = [];
   const walk = (rel: string) => {
@@ -130,7 +137,7 @@ function commandsIn(dir: string, source: ChatSkill['source']): ChatSkill[] {
       if (e.isDirectory()) walk(p);
       else if (e.name.endsWith('.md')) {
         const f = path.join(dir, p);
-        out.push({ name: p.slice(0, -3).replace(/\//g, ':'), description: describe(f), path: f, source });
+        out.push({ name: p.slice(0, -3).replace(/\//g, ':'), description: describe(f), path: f, source, kind: 'command', agents });
       }
     }
   };
@@ -139,33 +146,52 @@ function commandsIn(dir: string, source: ChatSkill['source']): ChatSkill[] {
 }
 
 /**
- * Скиллы и команды для «/» в чате. Проектные — всегда; пользовательские (~/.claude, ~/.codex) — только если агенты
- * запускаются с настройками пользователя, иначе агент их не видит. При совпадении имён проектный важнее.
+ * Где агенты сами ищут скиллы и команды. opencode читает и скиллы в формате claude (.claude/skills), и .agents/skills.
+ * Для «/» в чате это не важно: вызванный скилл уходит агенту блоком промпта, — но на экране проекта видно, кто найдёт его сам.
+ */
+const PROJECT_DIRS: [string, 'skill' | 'command', Who][] = [
+  ['.claude/skills', 'skill', ['claude', 'opencode']],
+  ['.codex/skills', 'skill', ['codex']],
+  ['.agents/skills', 'skill', ['codex', 'opencode']],
+  ['.opencode/skill', 'skill', ['opencode']],
+  ['.opencode/skills', 'skill', ['opencode']],
+  ['.claude/commands', 'command', ['claude']],
+  ['.opencode/command', 'command', ['opencode']],
+];
+const USER_DIRS: [string, 'skill' | 'command', Who][] = [
+  ['.claude/skills', 'skill', ['claude', 'opencode']],
+  ['.codex/skills', 'skill', ['codex']],
+  ['.agents/skills', 'skill', ['codex', 'opencode']],
+  ['.config/opencode/skill', 'skill', ['opencode']],
+  ['.config/opencode/skills', 'skill', ['opencode']],
+  ['.claude/commands', 'command', ['claude']],
+  ['.codex/prompts', 'command', ['codex']],
+  ['.config/opencode/command', 'command', ['opencode']],
+];
+
+const scan = (root: string, dirs: typeof PROJECT_DIRS, source: ChatSkill['source']) =>
+  dirs.flatMap(([rel, kind, agents]) =>
+    kind === 'skill' ? skillsIn(path.join(root, rel), source, agents) : commandsIn(path.join(root, rel), source, agents),
+  );
+
+/**
+ * Скиллы и команды для «/» в чате и экрана проекта. Проектные — всегда; пользовательские (~/.claude, ~/.codex…) — только если
+ * агенты запускаются с настройками пользователя, иначе агент их не видит. При совпадении имён проектный важнее,
+ * а агенты, которые найдут скилл, складываются.
  */
 export function listSkills(o: { projectPath?: string; userConfig: boolean; home?: string }): ChatSkill[] {
   const home = o.home ?? os.homedir();
-  const all: ChatSkill[] = [];
-  if (o.projectPath) {
-    const p = o.projectPath;
-    all.push(
-      ...skillsIn(path.join(p, '.claude', 'skills'), 'project'),
-      ...skillsIn(path.join(p, '.codex', 'skills'), 'project'),
-      ...skillsIn(path.join(p, '.agents', 'skills'), 'project'),
-      ...commandsIn(path.join(p, '.claude', 'commands'), 'project'),
-    );
+  const all: ChatSkill[] = [
+    ...(o.projectPath ? scan(o.projectPath, PROJECT_DIRS, 'project') : []),
+    ...(o.userConfig ? [...scan(home, USER_DIRS, 'user'), ...pluginSkills(home)] : []),
+  ];
+  const byName = new Map<string, ChatSkill>();
+  for (const s of all) {
+    const had = byName.get(s.name);
+    if (!had) byName.set(s.name, { ...s, agents: [...(s.agents ?? [])] });
+    else if (had.kind === s.kind) had.agents = [...new Set([...(had.agents ?? []), ...(s.agents ?? [])])];
   }
-  if (o.userConfig) {
-    all.push(
-      ...skillsIn(path.join(home, '.claude', 'skills'), 'user'),
-      ...skillsIn(path.join(home, '.codex', 'skills'), 'user'),
-      ...skillsIn(path.join(home, '.agents', 'skills'), 'user'),
-      ...commandsIn(path.join(home, '.claude', 'commands'), 'user'),
-      ...commandsIn(path.join(home, '.codex', 'prompts'), 'user'),
-      ...pluginSkills(home),
-    );
-  }
-  const seen = new Set<string>();
-  return all.filter((s) => !seen.has(s.name) && seen.add(s.name)).sort((a, b) => a.name.localeCompare(b.name));
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** @путь в тексте: в начале или после пробела, путь — до пробела; знаки препинания в конце не входят. */

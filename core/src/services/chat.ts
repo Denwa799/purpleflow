@@ -496,6 +496,22 @@ export function chatDefaultModel(k: Kernel, agent: AgentKind): string {
   return model || (agent === 'opencode' && s.proxy.baseUrl ? PROXY_DEFAULT_MODEL : '');
 }
 
-export function listChatSkills(k: Kernel, projectPath?: string): ChatSkill[] {
-  return listSkills({ projectPath, userConfig: Boolean(k.opts.getSettings().userConfig) });
+/**
+ * Скиллы и команды для «/» в чате и экрана проекта. Проектный скилл, которого нет в git, помечаем:
+ * прогон в отдельной рабочей копии его не увидит.
+ */
+export async function listChatSkills(k: Kernel, projectPath?: string): Promise<ChatSkill[]> {
+  const skills = listSkills({ projectPath, userConfig: Boolean(k.opts.getSettings().userConfig) });
+  const own = projectPath ? skills.filter((s) => s.source === 'project') : [];
+  if (!own.length || !projectPath) return skills;
+  const tools = await k.tools(['git']).catch(() => null);
+  const git = tools && new Git(tools.git, k.opts.env);
+  if (!git || !(await git.isRepo(projectPath))) return skills;
+  const root = fs.realpathSync(projectPath);
+  const tracked = new Set(await git.trackedIn(projectPath, ['.claude', '.codex', '.agents', '.opencode']).catch(() => [] as string[]));
+  for (const s of own) {
+    const rel = path.relative(root, fs.realpathSync(s.path)).split(path.sep).join('/');
+    if (!tracked.has(rel)) s.untracked = true;
+  }
+  return skills;
 }

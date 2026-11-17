@@ -7,6 +7,7 @@ import { shortPath, tokens, when } from '../../lib/format';
 import { MODES, stageTitle } from '../../lib/stages';
 import { useStore, type ProjectTab } from '../../lib/store';
 import { CmdChips, InitRepoButton, type LoadedProject, plural } from './common';
+import { SkillList, useSkills } from '../../components/SkillList';
 import { bridge } from '../../lib/api';
 
 export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: ProjectTab) => void; onReload: () => void }) {
@@ -140,6 +141,8 @@ export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: 
         </section>
       </div>
 
+      <SkillsPanel repo={repo} />
+
       <StatsPanel repo={repo} runsKey={runs.map((r) => r.status + r.updatedAt).join()} />
 
       <section className="panel overview-runs">
@@ -187,6 +190,49 @@ export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: 
     </>
   );
 }
+// ——— Скиллы ———
+function SkillsPanel({ repo }: { repo: string }) {
+  const skills = useSkills(repo);
+  const [all, setAll] = useState(false);
+  const { state, go } = useStore();
+  const userConfig = state.settings?.userConfig ?? true;
+  const own = skills?.filter((s) => s.source === 'project').length ?? 0;
+  return (
+    <section className="panel overview-skills">
+      <header className="overview-runs-head">
+        <h3>Скиллы и команды</h3>
+        <span className="muted">{skills?.length || ''}</span>
+      </header>
+      <p className="muted skill-intro">
+        Агенты подключают их сами, когда задача подходит под описание; в чате любой можно вызвать через «/».
+        {skills && !own && ' Свои скиллы проекта кладите в .claude/skills/<имя>/SKILL.md и коммитьте — их увидят все агенты прогона.'}
+      </p>
+      {!userConfig && (
+        <p className="muted skill-intro">
+          Ваши скиллы из ~/.claude, ~/.codex и плагины агенты сейчас не видят: выключено «Подключать мои настройки».{' '}
+          <button className="link" onClick={() => go({ name: 'settings' })}>
+            Настройки
+          </button>
+        </p>
+      )}
+      {!skills ? (
+        <p className="muted">…</p>
+      ) : skills.length ? (
+        <>
+          <SkillList skills={skills} limit={all ? undefined : 8} />
+          {!all && skills.length > 8 && (
+            <button className="link ses-more" onClick={() => setAll(true)}>
+              Показать все ({skills.length})
+            </button>
+          )}
+        </>
+      ) : (
+        <p className="muted">Скиллов пока нет.</p>
+      )}
+    </section>
+  );
+}
+
 // ——— Статистика ———
 function ms(n: number | null): string {
   if (n == null) return '—';
