@@ -22,6 +22,7 @@ import type {
   NextPartDraft,
   ProjectBranches,
   ProjectConfig,
+  ProjectConfigInput,
   ProjectKnowledge,
   ProjectListItem,
   ProjectOverview,
@@ -36,6 +37,7 @@ import { service } from './agents.js';
 import { ghBin } from './pr.js';
 import { getChangeDocs } from './runs.js';
 import { prepareApp } from './workspace.js';
+import { realPath, reposBlock } from './repos.js';
 export function knowledgeOf(k: Kernel, repo: string): ProjectKnowledge {
   return getProjectConfig(k, repo)?.knowledge ?? {};
 }
@@ -57,7 +59,7 @@ export function updateKnowledge(k: Kernel, repo: string, fn: (kn: ProjectKnowled
 export function knowledgeBlock(k: Kernel, run: RunFile): string {
   const kn = knowledgeOf(k, run.projectPath);
   const lessons = kn.lessons?.map((l) => `- ${l.text}`).join('\n');
-  const related = relatedBlock(k, run.projectPath);
+  const related = reposBlock(run) + relatedBlock(k, run.projectPath);
   if (!kn.profile && !lessons) return related;
   return (
     related +
@@ -213,7 +215,16 @@ export async function learn(k: Kernel, run: RunFile) {
 export function listProjects(k: Kernel): ProjectListItem[] {
   const map = new Map<string, ProjectListItem>();
   for (const [p, cfg] of Object.entries(k.store.readProjects())) {
-    map.set(p, { path: p, configured: true, exists: fs.existsSync(p), updatedAt: cfg.updatedAt, runs: 0, active: 0, lastRunAt: null });
+    map.set(p, {
+      path: p,
+      root: cfg.multiRepo?.repos.length ? cfg.multiRepo.root : undefined,
+      configured: true,
+      exists: fs.existsSync(p),
+      updatedAt: cfg.updatedAt,
+      runs: 0,
+      active: 0,
+      lastRunAt: null,
+    });
   }
   for (const r of k.store.list()) {
     const p = path.resolve(r.projectPath);
@@ -476,7 +487,18 @@ export function getProjectConfig(k: Kernel, repo: string): ProjectConfig | null 
   return k.store.readProjects()[path.resolve(repo)] ?? null;
 }
 
-export function saveProjectConfig(k: Kernel, repo: string, cfg: Omit<ProjectConfig, 'updatedAt'>): ProjectConfig {
+/** Проект из нескольких репозиториев, собранный из этой верхней папки: путь его основного репозитория. */
+export function projectOfRoot(k: Kernel, dir: string): string | null {
+  const want = realPath(dir);
+  const hit = Object.entries(k.store.readProjects()).find(([, cfg]) => cfg.multiRepo && realPath(cfg.multiRepo.root) === want);
+  return hit?.[0] ?? null;
+}
+
+export function saveProjectConfig(k: Kernel, repo: string, cfg: ProjectConfigInput): ProjectConfig {
+  const prev = getProjectConfig(k, repo);
+  const multi = cfg.multiRepo === undefined ? prev?.multiRepo : cfg.multiRepo;
+  const root = multi ? path.resolve(multi.root) : '';
+  const mainRel = multi ? path.relative(realPath(root), realPath(repo)).split(path.sep).join('/') : '';
   const full: ProjectConfig = {
     setupCommand: cfg.setupCommand.trim(),
     lintCommand: cfg.lintCommand.trim(),
@@ -490,10 +512,14 @@ export function saveProjectConfig(k: Kernel, repo: string, cfg: Omit<ProjectConf
     relatedRepos: cfg.relatedRepos
       ?.map((r) => ({ path: path.resolve(r.path.trim()), note: r.note?.trim() || undefined }))
       .filter((r) => r.path && r.path !== path.resolve(repo)),
-    workspace: cfg.workspace,
+    // Несколько репозиториев работают только в отдельных копиях: ветку в проекте пришлось бы переключать в каждом.
+    workspace: multi?.repos.length ? 'worktree' : cfg.workspace,
+    multiRepo: multi
+      ? { root, repos: [...new Set(multi.repos.map((r) => r.trim().replace(/\/+$/, '')))].filter((r) => r && r !== mainRel) }
+      : undefined,
     notes: cfg.notes,
     // Знания собираются отдельно — сохранение команд их не трогает.
-    knowledge: cfg.knowledge ?? getProjectConfig(k, repo)?.knowledge,
+    knowledge: cfg.knowledge ?? prev?.knowledge,
     updatedAt: new Date().toISOString(),
   };
   k.store.writeProject(path.resolve(repo), full);

@@ -7,7 +7,7 @@ import { useStore } from '../lib/store';
 import { FileDrop, type PickedFile } from '../components/FileDrop';
 import { MODES, stagesFor, type Mode } from '../lib/stages';
 import { MODE_ICON } from '../components/ModeIcon';
-import { NotRepoNote, ProjectPicker, WORKSPACES, loadProject, saveLoaded, type LoadedProject } from './projects/common';
+import { NotRepoNote, ProjectPicker, WORKSPACES, loadProject, projectName, saveLoaded, type LoadedProject } from './projects/common';
 import { enabledList } from '../lib/tools';
 import { bridge, cleanErr } from '../lib/api';
 
@@ -61,7 +61,7 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
     const x = await loadProject(dir);
     if (chosen.current !== dir) return;
     setP(x);
-    setWorkspace(x.workspace);
+    setWorkspace(x.multi ? 'worktree' : x.workspace);
     setBranches(null);
     setBaseBranch('');
     if (x.info.isRepo) void loadBranches(dir, false);
@@ -92,7 +92,10 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
       if (chosen.current !== dir) return;
       setBranches(b);
       const preferred = draft?.baseBranch && b.branches.some((x) => x.name === draft.baseBranch) ? draft.baseBranch : null;
-      setBaseBranch((cur) => (cur && b.branches.some((x) => x.name === cur) ? cur : (preferred ?? b.current ?? b.branches[0]?.name ?? '')));
+      // Проект стоит на ветке прошлого прогона (режим «Ветка»): по умолчанию — main/master, а не цепочка от неё.
+      const main = ['main', 'master'].find((n) => b.branches.some((x) => x.name === n));
+      const current = b.current && /^purpleflow\//.test(b.current) && main ? main : b.current;
+      setBaseBranch((cur) => (cur && b.branches.some((x) => x.name === cur) ? cur : (preferred ?? current ?? b.branches[0]?.name ?? '')));
     } catch {
       if (chosen.current === dir) setBranches({ branches: [], current: null });
     } finally {
@@ -355,23 +358,29 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
             <div className="workspace">
               <div className="workspace-head">
                 <strong>Где работать</strong>
-                <div className="segmented small" role="radiogroup">
-                  {WORKSPACES.map((w) => (
-                    <button
-                      key={w.id}
-                      role="radio"
-                      aria-checked={workspace === w.id}
-                      className={workspace === w.id ? 'is-on' : ''}
-                      onClick={() => setWorkspace(w.id)}
-                    >
-                      {w.title}
-                    </button>
-                  ))}
-                </div>
+                {!p?.multi && (
+                  <div className="segmented small" role="radiogroup">
+                    {WORKSPACES.map((w) => (
+                      <button
+                        key={w.id}
+                        role="radio"
+                        aria-checked={workspace === w.id}
+                        className={workspace === w.id ? 'is-on' : ''}
+                        onClick={() => setWorkspace(w.id)}
+                      >
+                        {w.title}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <p className="route-note">
                 <GitBranch size={14} />
-                <span>{WORKSPACES.find((w) => w.id === workspace)!.hint}</span>
+                <span>
+                  {p?.multi
+                    ? `Отдельные копии всех репозиториев проекта на одной ветке задачи — ваши рабочие папки не меняются. «От ветки» — для основного (${projectName(p.info.path)}), остальные начнут от своих текущих веток.`
+                    : WORKSPACES.find((w) => w.id === workspace)!.hint}
+                </span>
               </p>
               {project?.isRepo && (
                 <div className="base-branch">

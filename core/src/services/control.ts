@@ -8,6 +8,7 @@ import { isGate, STAGE_TITLES } from '../stage-info.js';
 import type { ControlAction, RunFile } from '../types.js';
 import { stopPreview } from './preview.js';
 import { diffBase, envFilesOf } from './workspace.js';
+import { repoSlots, slotPath } from './repos.js';
 
 const ACTION_TITLE: Record<ControlAction['kind'], string> = {
   note: 'заметка агенту',
@@ -87,19 +88,26 @@ async function replan(k: Kernel, r: RunFile, reason: string, keepCode: boolean) 
   const ref = `refs/purpleflow/${r.id}/replan-${n}`;
   let snapshot: string | undefined;
   try {
-    await git.snapshot(r.worktreePath, ref, `PurpleFlow: работа до возврата к плану №${n}`);
+    // Снимок — в каждом репозитории прогона под одним ref; в окне и промпте — ref основного.
+    for (const slot of repoSlots(r)) await git.snapshot(slot.worktreePath, ref, `PurpleFlow: работа до возврата к плану №${n}`);
     snapshot = ref;
   } catch (e) {
     k.warn(r, `Не удалось сохранить снимок работы перед возвратом к плану: ${(e as Error).message}`);
   }
   // Файлы плана (openspec/) правит планировщик — их не откатываем.
-  const code = (await git.changedFiles(r.worktreePath, base).catch(() => [] as string[])).filter(
-    (f) => !f.startsWith('openspec/') && !envFilesOf(k, r).includes(f),
+  const perSlot = await Promise.all(
+    repoSlots(r).map(async (slot) => ({
+      slot,
+      files: (await git.changedFiles(slot.worktreePath, slot.extra ? slot.base : base).catch(() => [] as string[])).filter((f) =>
+        slot.extra ? !slot.extra.envFiles?.includes(f) : !f.startsWith('openspec/') && !envFilesOf(k, r).includes(f),
+      ),
+    })),
   );
+  const code = perSlot.flatMap((x) => x.files.map((f) => slotPath(x.slot, f)));
   if (!keepCode && code.length) {
     if (!snapshot)
       throw new Error('Снимок работы не сохранился — откатывать код без него не буду. Попробуйте вернуться к плану с сохранением кода.');
-    await git.restoreFromBase(r.worktreePath, base, code);
+    for (const x of perSlot) if (x.files.length) await git.restoreFromBase(x.slot.worktreePath, x.slot.extra ? x.slot.base : base, x.files);
     r.executorSession = undefined;
   }
   const impl = [...r.attempts].reverse().find((a) => a.stage === 'implement' && (a.output || a.summary));

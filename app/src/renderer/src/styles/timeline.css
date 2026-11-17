@@ -1155,3 +1155,8 @@
   padding-top: 0;
   padding-bottom: 0;
 }
+.merge-note {
+  font-size: var(--fs-12);
+  color: var(--wait);
+  white-space: nowrap;
+}

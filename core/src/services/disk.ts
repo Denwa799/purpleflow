@@ -8,18 +8,21 @@ import { browserLeftovers, screenshots, sizeOfAll, subdirs } from '../storage.js
 import { traced } from '../trace.js';
 import type { RunFile, StorageItem } from '../types.js';
 import { stopPreview } from './preview.js';
+import { removeRepoWorktrees } from './repos.js';
 import { runsWithFiles } from './runs.js';
+
+/** Папка прогона в данных приложения: общая у проекта из нескольких репозиториев. */
+const runDir = (r: RunFile) => r.root?.dir ?? r.worktreePath;
 
 /** Копии известных прогонов. С резервными копиями: при битом индексе идущие прогоны иначе выглядели бы брошенными и удалялись. */
 function knownWorktrees(k: Kernel): Set<string> {
-  return new Set([...runsWithFiles(k), ...k.store.allBackups()].map((r) => path.resolve(r.worktreePath)));
+  return new Set([...runsWithFiles(k), ...k.store.allBackups()].map((r) => path.resolve(runDir(r))));
 }
 
 export async function getStorage(k: Kernel): Promise<StorageItem[]> {
   const runs = runsWithFiles(k);
   const wtRoot = k.store.worktreesDir();
-  const own = (r: RunFile) =>
-    r.workspace !== 'branch' && !r.worktreeRemoved && fs.existsSync(r.worktreePath) && isInside(wtRoot, r.worktreePath);
+  const own = (r: RunFile) => r.workspace !== 'branch' && !r.worktreeRemoved && fs.existsSync(runDir(r)) && isInside(wtRoot, runDir(r));
   const ended = (r: RunFile) => r.status === 'finished' || r.status === 'cancelled';
   const done = runs.filter((r) => own(r) && ended(r));
   const active = runs.filter((r) => own(r) && !ended(r));
@@ -34,7 +37,7 @@ export async function getStorage(k: Kernel): Promise<StorageItem[]> {
       id: 'worktrees-done',
       title: 'Рабочие копии завершённых прогонов',
       hint: 'Worktree с зависимостями. Ветки с результатом, история, дифф и план остаются — пропадёт только ручной запуск во вкладке «Браузер».',
-      bytes: await sizeOfAll(done.map((r) => r.worktreePath)),
+      bytes: await sizeOfAll(done.map(runDir)),
       count: done.length,
       clean: 'Удалить',
     },
@@ -42,7 +45,7 @@ export async function getStorage(k: Kernel): Promise<StorageItem[]> {
       id: 'worktrees-active',
       title: 'Рабочие копии незавершённых прогонов',
       hint: 'Нужны, чтобы продолжить прогон. Удаляются вместе с прогоном.',
-      bytes: await sizeOfAll(active.map((r) => r.worktreePath)),
+      bytes: await sizeOfAll(active.map(runDir)),
       count: active.length,
     },
     {
@@ -94,6 +97,7 @@ export async function cleanStorage(k: Kernel, id: StorageItem['id']): Promise<nu
       r.worktreeRemoved = true;
       k.save(r);
       await git.removeWorktree(r.projectPath, r.worktreePath).catch(() => fs.rmSync(r.worktreePath, { recursive: true, force: true }));
+      if (r.root) await removeRepoWorktrees(git, r, false);
     }
   } else if (id === 'worktrees-orphan') {
     const known = knownWorktrees(k);

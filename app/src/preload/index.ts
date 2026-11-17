@@ -68,6 +68,11 @@ const bridge: PurpleFlowBridge = {
     download: () => ipcRenderer.invoke('update:download'),
     install: () => ipcRenderer.invoke('update:install'),
   },
+  whatsNew: {
+    releases: () => ipcRenderer.invoke('whatsNew:releases'),
+    versions: () => ipcRenderer.invoke('whatsNew:versions'),
+    seen: () => ipcRenderer.invoke('whatsNew:seen'),
+  },
   platform: process.platform,
   material: ipcRenderer.sendSync('app:material:get'),
   onMaterial(fn) {

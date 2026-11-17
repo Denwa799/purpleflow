@@ -1,11 +1,24 @@
 import { memo, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, FolderGit2, MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Rocket, Settings, Workflow } from 'lucide-react';
+import {
+  ChevronDown,
+  FolderGit2,
+  Gift,
+  MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Rocket,
+  Settings,
+  Workflow,
+} from 'lucide-react';
 import type { ChatSummary, RunSummary } from '@purpleflow/core';
 import { useActions, useStore } from '../lib/store';
 import { shortPath } from '../lib/format';
 import { MODES } from '../lib/stages';
 import { shownTools, toolNeeded } from '../lib/tools';
 import { bridge } from '../lib/api';
+import { openWhatsNew, useUpdateState } from '../lib/update';
+import { UpdateButton, updatePending } from './WhatsNew';
 
 const STATUS_WORD: Record<RunSummary['status'], string> = {
   queued: 'в очереди',
@@ -55,6 +68,7 @@ const projectName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { state, go } = useStore();
   const v = state.view;
+  const update = useUpdateState();
   const groups = useMemo(() => groupItems(state.runs, state.chats), [state.runs, state.chats]);
   // Пока не подключён ни один проект — кнопка «Как начать?» открывает онбординг первого проекта.
   const [noProjects, setNoProjects] = useState(false);
@@ -180,6 +194,19 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             <Rocket size={16} /> Как начать?
           </button>
         )}
+        <div className="side-whatsnew">
+          <button className="side-link" onClick={openWhatsNew}>
+            <Gift size={16} /> Что нового
+            {(updatePending(update) || update.kind === 'failed') && (
+              <i className={`side-dot ${update.kind === 'failed' ? 'is-err' : ''}`} aria-label="Есть обновление" />
+            )}
+          </button>
+          {(updatePending(update) || update.kind === 'failed') && (
+            <span title={'version' in update ? `Версия ${update.version}` : undefined}>
+              <UpdateButton s={update} compact />
+            </span>
+          )}
+        </div>
         <button className={`side-link ${v.name === 'settings' ? 'is-on' : ''}`} onClick={() => go({ name: 'settings' })}>
           <Settings size={16} /> Настройки
         </button>

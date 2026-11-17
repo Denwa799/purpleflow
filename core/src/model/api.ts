@@ -8,8 +8,9 @@ import type {
   EnvCheck,
   NextPartDraft,
   ProjectBranches,
-  ProjectCommands,
   ProjectConfig,
+  ProjectConfigInput,
+  DetectedProject,
   ProjectKnowledge,
   ProjectListItem,
   ProjectOverview,
@@ -52,7 +53,7 @@ export interface CoreApi {
   installNode(): Promise<NodeInstallResult>;
   testConnection(): Promise<ConnectionCheck[]>;
   /** repoRoot — папка лежит внутри другого репозитория (не его корень); тогда isRepo = false. */
-  detectProject(dir: string): Promise<ProjectCommands & { envFiles: string[]; isRepo: boolean; name: string; repoRoot?: string }>;
+  detectProject(dir: string): Promise<DetectedProject>;
   isDriving(id: string): Promise<boolean>;
   listBranches(id: string): Promise<{ branches: string[]; current: string | null; suggested: string | null }>;
   getAttachment(id: string, index: number): Promise<string | null>;
@@ -73,7 +74,7 @@ export interface CoreApi {
   startPreview(id: string): Promise<PreviewState>;
   stopPreview(id: string): Promise<void>;
   getPreview(id: string): Promise<PreviewState>;
-  saveProjectConfig(dir: string, cfg: Omit<ProjectConfig, 'updatedAt'>): Promise<ProjectConfig>;
+  saveProjectConfig(dir: string, cfg: ProjectConfigInput): Promise<ProjectConfig>;
   listProjects(): Promise<ProjectListItem[]>;
   projectOverview(dir: string): Promise<ProjectOverview>;
   forgetProject(dir: string): Promise<void>;

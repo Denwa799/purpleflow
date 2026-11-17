@@ -2,6 +2,7 @@
 import type { CoreApi, AgentKind, Models, CoreEvent, Role, ToolName } from '@purpleflow/core';
 import type { UpdateState } from './update';
 import type { ProxyModels } from './models';
+import type { Release } from './releases';
 
 export type { ChangeDocs, CoreApi } from '@purpleflow/core';
 
@@ -224,6 +225,13 @@ export interface PurpleFlowBridge {
     check(): Promise<void>;
     download(): Promise<void>;
     install(): Promise<void>;
+  };
+  /** «Что нового»: выпуски с GitHub и какая версия уже показана. */
+  whatsNew: {
+    releases(): Promise<{ releases: Release[]; error?: string }>;
+    versions(): Promise<{ current: string; seen: string }>;
+    /** Текущая версия показана — после следующего обновления покажем то, что новее. */
+    seen(): Promise<void>;
   };
   platform: string;
   /** Материал окна при запуске: нативное стекло ОС или непрозрачный фон. */

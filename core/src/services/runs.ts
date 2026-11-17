@@ -4,7 +4,8 @@ import path from 'node:path';
 import { Git } from '../git.js';
 import type { Kernel } from '../kernel.js';
 import type { DiffFile, RunFile } from '../types.js';
-import { diffBase, envFilesOf } from './workspace.js';
+import { repoChangedFiles, repoDiff, type RepoSlot } from './repos.js';
+import { envFilesOf } from './workspace.js';
 
 export function runsWithFiles(k: Kernel): RunFile[] {
   return k.store
@@ -20,15 +21,20 @@ export async function getDiff(k: Kernel, id: string): Promise<DiffFile[]> {
   const skip = diffSkip(k, r);
   if (r.worktreeRemoved && r.status !== 'finished') return [];
   // Завершённый прогон — дифф ветки прогона: рабочая копия могла уйти на другую ветку.
-  if (r.status === 'finished') return git.diffCommits(r.projectPath, r.diffFrom ?? r.baseCommit, r.branch, skip);
-  return git.diff(r.worktreePath, diffBase(k, r), skip);
+  return repoDiff(git, r, skip);
 }
 
-/** Какие файлы не показывать в диффе: run.json, файлы окружения; в круге конфликтов — всё, кроме разрешённых. */
-export function diffSkip(k: Kernel, r: RunFile): (p: string) => boolean {
+/**
+ * Какие файлы не показывать в диффе: run.json, файлы окружения; в круге конфликтов — всё, кроме разрешённых.
+ * Путь — внутри своего репозитория; у участника проекта из нескольких — только его файлы окружения.
+ */
+export function diffSkip(k: Kernel, r: RunFile): (slot: RepoSlot, p: string) => boolean {
   const env = new Set(envFilesOf(k, r));
   const only = r.status !== 'finished' && r.roundFiles?.length ? new Set(r.roundFiles) : null;
-  return (p: string) => (p.startsWith('openspec/') && p.endsWith('/run.json')) || env.has(p) || Boolean(only && !only.has(p));
+  return (slot, p) =>
+    slot.extra
+      ? Boolean(slot.extra.envFiles?.includes(p))
+      : (p.startsWith('openspec/') && p.endsWith('/run.json')) || env.has(p) || Boolean(only && !only.has(p));
 }
 
 /** Изменённые файлы без содержимого — для счётчика на вкладке «Код». */
@@ -36,12 +42,7 @@ export async function getChangedFiles(k: Kernel, id: string): Promise<string[]> 
   const r = k.mustLoad(id);
   if (r.workspacePending || (r.worktreeRemoved && r.status !== 'finished')) return [];
   const git = new Git((await k.tools(['git'])).git, k.opts.env);
-  const skip = diffSkip(k, r);
-  const files =
-    r.status === 'finished'
-      ? await git.namesBetween(r.projectPath, r.diffFrom ?? r.baseCommit, r.branch)
-      : await git.changedFiles(r.worktreePath, diffBase(k, r));
-  return files.filter((f) => !skip(f));
+  return repoChangedFiles(git, r, { finished: r.status === 'finished', skip: diffSkip(k, r) });
 }
 
 /** proposal.md, tasks.md и дельты спецификаций — для гейта 1 и ревью. */

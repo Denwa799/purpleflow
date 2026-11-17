@@ -14,9 +14,11 @@ import { service } from './agents.js';
 import { attachmentsDir, imageDataUrl, writeFiles } from './attachments.js';
 import { control } from './control.js';
 import { relatedBlock, relatedRepos } from './projects.js';
+import { workDir } from './repos.js';
 import { taskText } from './prompting.js';
 import { getChangeDocs } from './runs.js';
-import { diffBase } from './workspace.js';
+
+import { repoChangedFiles } from './repos.js';
 
 /** Сколько последних сообщений переписки менеджер видит. */
 const HISTORY = 20;
@@ -82,8 +84,8 @@ export async function askManager(
     const prompt = k.prompts.render('manager.md', {
       state: (await managerSnapshot(k, run)) + relatedBlock(k, run.projectPath),
       actions: [...availableActions(run), 'command' as const].map((a) => `- ${ACTIONS[a]}`).join('\n'),
-      project: run.projectPath,
-      worktree: hasWorktree(run) ? run.worktreePath : '(нет — удалена или ещё не создана)',
+      project: run.root?.path ?? run.projectPath,
+      worktree: hasWorktree(run) ? workDir(run) : '(нет — удалена или ещё не создана)',
       chat: messages
         .slice(-HISTORY)
         .map(
@@ -93,7 +95,7 @@ export async function askManager(
         .join('\n\n'),
     });
     // Только чтение: файлы проекта и прогона. Всё, что меняет состояние, — через предложенное действие и кнопку человека.
-    const cwd = hasWorktree(run) ? run.worktreePath : run.projectPath;
+    const cwd = hasWorktree(run) ? workDir(run) : (run.root?.path ?? run.projectPath);
     const res = await service(k, {
       prompt,
       group: `${id}:manager`,
@@ -103,6 +105,7 @@ export async function askManager(
       cwd,
       addDirs: [
         run.projectPath,
+        ...(run.root ? [run.root.path] : []),
         ...relatedRepos(k, run.projectPath).map((r) => r.path),
         ...(fs.existsSync(imagesDir(k, id)) ? [imagesDir(k, id)] : []),
       ],
@@ -161,7 +164,7 @@ async function runCommand(
 ): Promise<ManagerMessage[]> {
   if (k.managerBusy.has(id)) throw new Error('Менеджер ещё занят — дождитесь ответа');
   const run = k.mustLoad(id);
-  const cwd = a.cwd === 'worktree' && hasWorktree(run) ? run.worktreePath : run.projectPath;
+  const cwd = a.cwd === 'worktree' && hasWorktree(run) ? workDir(run) : (run.root?.path ?? run.projectPath);
   m.actionState = 'applied';
   k.managerBusy.add(id);
   publish(k, id, messages);
@@ -290,7 +293,7 @@ export async function managerSnapshot(k: Kernel, run: RunFile): Promise<string> 
 
   const tools = await k.tools(['git']).catch(() => null);
   if (tools && !run.workspacePending && !run.worktreeRemoved) {
-    const files = await new Git(tools.git, k.opts.env).changedFiles(run.worktreePath, diffBase(k, run)).catch(() => [] as string[]);
+    const files = await repoChangedFiles(new Git(tools.git, k.opts.env), run).catch(() => [] as string[]);
     const code = files.filter((f) => !f.startsWith('openspec/'));
     out.push(
       `\n## Изменённые файлы (${code.length})\n${

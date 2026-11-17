@@ -14,7 +14,8 @@ import { runRole, service } from '../services/agents.js';
 import { filesBlock } from '../services/attachments.js';
 import { taskText } from '../services/prompting.js';
 import { getChangeDocs } from '../services/runs.js';
-import { diffBase, envFilesOf } from '../services/workspace.js';
+import { envFilesOf } from '../services/workspace.js';
+import { repoDiffText } from '../services/repos.js';
 import { STAGE_TITLES } from '../stage-info.js';
 import type { ReviewItem, ReviewResult, RunFile, StageAttempt } from '../types.js';
 /** После прогона: уроки из правок человека, ревью, визуальной проверки и сбоев проверок. В фоне, не задерживает коммит. */
@@ -39,11 +40,7 @@ export async function summarizeChanges(k: Kernel, id: string) {
   const tools = await k.tools(['git']).catch(() => null);
   if (!tools) return;
   const files = run.roundFiles;
-  let diff = await new Git(tools.git, k.opts.env).diffText(run.worktreePath, diffBase(k, run), [
-    RUN_JSON_GLOB,
-    ...envFilesOf(k, run),
-    ...GENERATED_GLOBS,
-  ]);
+  let diff = await repoDiffText(new Git(tools.git, k.opts.env), run, [RUN_JSON_GLOB, ...GENERATED_GLOBS], envFilesOf(k, run));
   if (files?.length)
     diff = diff
       .split(/^(?=diff --git )/m)
@@ -77,11 +74,7 @@ export async function mapFilesToPlan(k: Kernel, id: string) {
   if (!docs?.tasks.trim()) return;
   const tools = await k.tools(['git']).catch(() => null);
   if (!tools) return;
-  const diff = await new Git(tools.git, k.opts.env).diffText(run.worktreePath, diffBase(k, run), [
-    RUN_JSON_GLOB,
-    ...envFilesOf(k, run),
-    ...GENERATED_GLOBS,
-  ]);
+  const diff = await repoDiffText(new Git(tools.git, k.opts.env), run, [RUN_JSON_GLOB, ...GENERATED_GLOBS], envFilesOf(k, run));
   const files = splitDiff(diff)
     .map((f) => ({ path: f.path, ...lineStats(f.text) }))
     .filter((f) => !f.path.startsWith('openspec/'));
@@ -170,7 +163,7 @@ export async function reviewPass(k: Kernel, run: RunFile, quiet = false): Promis
   const attempt = k.begin(run, 'review', run.models.reviewer, quiet);
   const git = new Git(tools.git, k.opts.env);
   // Генерируемое (tsbuildinfo, lock-файлы, сборки) не ревьюим; код — первым; крупный дифф — нескольким ревьюерам.
-  const diff = await git.diffText(run.worktreePath, diffBase(k, run), [RUN_JSON_GLOB, ...envFilesOf(k, run), ...GENERATED_GLOBS]);
+  const diff = await repoDiffText(git, run, [RUN_JSON_GLOB, ...GENERATED_GLOBS], envFilesOf(k, run));
   // Один ревьюер на весь дифф: он видит стыки модулей, где чаще всего ошибки. Небольшой дифф — в промпт,
   // большой — списком файлов по важности, ревьюер читает их сам (packReview умеет делить на части — пока не делим).
   const packed = packReview(diff, Number.MAX_SAFE_INTEGER, 1);

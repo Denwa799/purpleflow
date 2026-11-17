@@ -10,6 +10,8 @@ import { run as runProc } from '../proc.js';
 import { traced } from '../trace.js';
 import type { RunFile } from '../types.js';
 import { getProjectConfig } from './projects.js';
+import { addRepoWorktrees, inRepo, linkOpenspec, removeRepoWorktrees, repoSlots } from './repos.js';
+import { findEnvFiles } from '../detect.js';
 /** От какого коммита считать дифф: в круге доработки по PR — только правки этого круга. */
 export function diffBase(k: Kernel, run: RunFile): string {
   return run.prRound && run.roundBase ? run.roundBase : run.baseCommit;
@@ -31,12 +33,17 @@ export async function prepareWorkspace(k: Kernel, run: RunFile) {
     await git.checkoutNewBranch(run.projectPath, run.branch, run.baseCommit);
   } else {
     await git.addWorktree(run.projectPath, run.worktreePath, run.branch, run.baseCommit);
+    await addRepoWorktrees(git, run).catch(async (e) => {
+      await undoWorkspace(git, run).catch(traced('prepareWorkspace: откат'));
+      throw e;
+    });
   }
   if (run.mode !== 'quick') {
     await new OpenSpec(tools.openspec, k.opts.env).ensureInit(run.worktreePath, 'init').catch(async (e) => {
       await undoWorkspace(git, run).catch(traced('prepareWorkspace: откат'));
       throw e;
     });
+    linkOpenspec(run);
   }
   run.workspacePending = undefined;
   k.save(run);
@@ -48,7 +55,15 @@ export async function prepareWorkspace(k: Kernel, run: RunFile) {
   k.log(
     run,
     c.dim(
-      `PurpleFlow · ${run.changeId}\nветка ${run.branch} от ${run.baseBranch ? `${run.baseBranch} (${run.baseCommit.slice(0, 8)})` : run.baseCommit.slice(0, 8)}\n${run.workspace === 'branch' ? `рабочая копия проекта ${run.projectPath} (была ветка ${run.originalBranch ?? 'detached HEAD'})` : `worktree ${run.worktreePath}`}\n`,
+      `PurpleFlow · ${run.changeId}\nветка ${run.branch} от ${run.baseBranch ? `${run.baseBranch} (${run.baseCommit.slice(0, 8)})` : run.baseCommit.slice(0, 8)}\n${
+        run.workspace === 'branch'
+          ? `рабочая копия проекта ${run.projectPath} (была ветка ${run.originalBranch ?? 'detached HEAD'})`
+          : run.root
+            ? `папка прогона ${run.root.dir}: ${repoSlots(run)
+                .map((x) => x.rel)
+                .join(', ')}`
+            : `worktree ${run.worktreePath}`
+      }\n`,
     ),
   );
 }
@@ -63,6 +78,7 @@ async function undoWorkspace(git: Git, run: RunFile) {
     await git.checkout(run.projectPath, run.originalBranch ?? run.baseCommit);
   } else {
     await git.removeWorktree(run.projectPath, run.worktreePath);
+    await removeRepoWorktrees(git, run, true);
   }
   await git.deleteBranch(run.projectPath, run.branch);
 }
@@ -75,22 +91,28 @@ export function envFilesOf(k: Kernel, run: RunFile): string[] {
 
 /** Скопировать .env-файлы проекта в worktree прогона (только недостающие; в режиме «ветка» они и так на месте). */
 export function copyEnvFiles(k: Kernel, run: RunFile) {
-  const files = envFilesOf(k, run);
+  if (run.workspace === 'branch') return;
   const copied: string[] = [];
-  for (const rel of files) {
-    const from = path.join(run.projectPath, rel);
-    const to = path.join(run.worktreePath, rel);
-    if (path.relative(run.projectPath, from).startsWith('..') || !fs.existsSync(from) || fs.existsSync(to)) continue;
-    try {
-      fs.mkdirSync(path.dirname(to), { recursive: true });
-      fs.copyFileSync(from, to);
-      copied.push(rel);
-    } catch {
-      /* нет доступа — проверки покажут, чего не хватает */
+  for (const slot of repoSlots(run)) {
+    // У участников проекта из нескольких репозиториев файлы окружения находим сами — список в настройках про основной.
+    const files = slot.extra ? (slot.extra.envFiles ??= findEnvFiles(slot.path)) : envFilesOf(k, run);
+    for (const rel of files) {
+      const from = path.join(slot.path, rel);
+      const to = path.join(slot.worktreePath, rel);
+      if (path.relative(slot.path, from).startsWith('..') || !fs.existsSync(from) || fs.existsSync(to)) continue;
+      try {
+        fs.mkdirSync(path.dirname(to), { recursive: true });
+        fs.copyFileSync(from, to);
+        copied.push(inRepo(slot.rel, rel));
+      } catch {
+        /* нет доступа — проверки покажут, чего не хватает */
+      }
     }
   }
   if (copied.length) k.log(run, c.dim(`файлы окружения скопированы в worktree: ${copied.join(', ')}`) + '\n');
 }
+
+const LOCKS = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb', 'bun.lock'];
 
 /**
  * Зависимости в worktree — копией node_modules из проекта через copy-on-write (APFS `cp -c`, Linux `--reflink`):
@@ -99,11 +121,34 @@ export function copyEnvFiles(k: Kernel, run: RunFile) {
  */
 export async function cloneDeps(k: Kernel, run: RunFile) {
   if (run.workspace === 'branch' || process.platform === 'win32') return;
+  const t0 = Date.now();
+  const cloned: string[] = [];
+  let same = true;
+  for (const slot of repoSlots(run)) {
+    const r = await cloneDepsIn(k, run, slot.path, slot.worktreePath);
+    cloned.push(...r.cloned.map((x) => inRepo(slot.rel, x)));
+    // Репозиторий без node_modules не мешает пропустить установку: ставить в нём нечего.
+    if (r.cloned.length && !r.same) same = false;
+  }
+  if (!cloned.length) return;
+  const sec = Math.round((Date.now() - t0) / 1000);
+  if (same) {
+    run.prepared = true;
+    k.log(
+      run,
+      c.dim(`зависимости скопированы из проекта (${cloned.join(', ')}, ${sec} с) — lock-файлы совпадают, установка пропущена`) + '\n',
+    );
+  } else {
+    k.log(run, c.dim(`зависимости скопированы из проекта (${sec} с); lock-файлы отличаются — команда подготовки доустановит`) + '\n');
+  }
+}
+
+async function cloneDepsIn(k: Kernel, run: RunFile, from: string, into: string): Promise<{ cloned: string[]; same: boolean }> {
   const found: string[] = [];
   const walk = (rel: string, depth: number) => {
     let entries: fs.Dirent[];
     try {
-      entries = fs.readdirSync(path.join(run.projectPath, rel), { withFileTypes: true });
+      entries = fs.readdirSync(path.join(from, rel), { withFileTypes: true });
     } catch {
       return;
     }
@@ -115,26 +160,19 @@ export async function cloneDeps(k: Kernel, run: RunFile) {
     }
   };
   walk('', 0);
-  if (!found.length) return;
-  const t0 = Date.now();
   const cloned: string[] = [];
   for (const rel of found) {
-    const to = path.join(run.worktreePath, rel);
+    const to = path.join(into, rel);
     if (fs.existsSync(to) || !fs.existsSync(path.dirname(to))) continue;
-    const args =
-      process.platform === 'darwin'
-        ? ['-cR', path.join(run.projectPath, rel), to]
-        : ['-R', '--reflink=auto', path.join(run.projectPath, rel), to];
-    const r = await runProc('cp', args, { cwd: run.worktreePath, env: k.opts.env, timeoutMs: 5 * 60_000, group: run.id });
+    const args = process.platform === 'darwin' ? ['-cR', path.join(from, rel), to] : ['-R', '--reflink=auto', path.join(from, rel), to];
+    const r = await runProc('cp', args, { cwd: into, env: k.opts.env, timeoutMs: 5 * 60_000, group: run.id });
     k.checkStop(run);
     if (r.code === 0) cloned.push(rel);
     else fs.rmSync(to, { recursive: true, force: true });
   }
-  if (!cloned.length) return;
-  const locks = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb', 'bun.lock'];
-  const same = locks.every((f) => {
-    const a = path.join(run.projectPath, f);
-    const b = path.join(run.worktreePath, f);
+  const same = LOCKS.every((f) => {
+    const a = path.join(from, f);
+    const b = path.join(into, f);
     if (!fs.existsSync(a) && !fs.existsSync(b)) return true;
     try {
       return fs.readFileSync(a).equals(fs.readFileSync(b));
@@ -142,16 +180,7 @@ export async function cloneDeps(k: Kernel, run: RunFile) {
       return false;
     }
   });
-  const sec = Math.round((Date.now() - t0) / 1000);
-  if (same) {
-    run.prepared = true;
-    k.log(
-      run,
-      c.dim(`зависимости скопированы из проекта (${cloned.join(', ')}, ${sec} с) — lock-файлы совпадают, установка пропущена`) + '\n',
-    );
-  } else {
-    k.log(run, c.dim(`зависимости скопированы из проекта (${sec} с); lock-файлы отличаются — команда подготовки доустановит`) + '\n');
-  }
+  return { cloned, same };
 }
 
 /**

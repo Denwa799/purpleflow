@@ -290,3 +290,22 @@ test('merge и listBranches: своя ветка не предлагается, 
   assert.equal(k.mustLoad('run-1').merged?.commit, g('rev-parse', 'main'));
   assert.ok(fs.existsSync(path.join(repo, 'b.txt')));
 });
+
+test('merge в режиме «Ветка»: проект уходит с ветки прогона на ту, куда влили; с правками — остаётся', unix, async (t) => {
+  const { k, g, repo } = setup(t);
+  // Режим «Ветка»: проект сам стоит на ветке прогона (копию убираем, ветку открываем в проекте).
+  g('worktree', 'remove', '--force', path.join(path.dirname(repo), 'wt'));
+  g('checkout', '-q', 'purpleflow/x');
+  k.store.save({ ...k.mustLoad('run-1'), workspace: 'branch', worktreePath: repo });
+  await merge(k, 'run-1', 'main');
+  assert.equal(g('branch', '--show-current'), 'main');
+  assert.ok(fs.existsSync(path.join(repo, 'b.txt')));
+
+  // Правки в рабочей копии — не переключаем.
+  g('checkout', '-q', 'purpleflow/x');
+  fs.appendFileSync(path.join(repo, 'a.txt'), 'правка\n');
+  g('branch', 'dev', 'main');
+  k.store.save({ ...k.mustLoad('run-1'), merged: undefined });
+  await merge(k, 'run-1', 'dev');
+  assert.equal(g('branch', '--show-current'), 'purpleflow/x');
+});

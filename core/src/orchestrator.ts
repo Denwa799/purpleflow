@@ -17,6 +17,7 @@ import { askManager, getManagerChat, getManagerImage, resolveManagerAction } fro
 import * as pr from './services/pr.js';
 import { getPreview, startPreview, stopPreview } from './services/preview.js';
 import * as projects from './services/projects.js';
+import { nestedRepos } from './services/repos.js';
 import { getChangeDocs, getChangedFiles, getDiff } from './services/runs.js';
 import { detectNode, installNode } from './services/node.js';
 import { installTool } from './services/setup.js';
@@ -30,8 +31,8 @@ import type {
   CoreApi,
   CoreCommand,
   ManagerMessage,
-  ProjectCommands,
-  ProjectConfig,
+  ProjectConfigInput,
+  DetectedProject,
   ProjectKnowledge,
   StorageItem,
   ToolName,
@@ -217,14 +218,24 @@ export class Orchestrator implements CoreApi {
 
   // ——— Проекты ———
 
-  async detectProject(dir: string): Promise<ProjectCommands & { envFiles: string[]; isRepo: boolean; name: string; repoRoot?: string }> {
+  async detectProject(dir: string): Promise<DetectedProject> {
     const { env, getSettings } = this.kernel.opts;
     const gitBin = getSettings().toolPaths.git || which('git', env) || 'git';
     const git = new Git(gitBin, env);
     const inside = await git.isRepo(dir).catch(() => false);
     // Подпапка чужого репозитория — не проект: прогон ушёл бы в корень того репозитория.
     const repoRoot = inside ? ((await git.enclosingRoot(dir).catch(() => null)) ?? undefined) : undefined;
-    return { ...detectProjectCommands(dir), envFiles: findEnvFiles(dir), isRepo: inside && !repoRoot, repoRoot, name: path.basename(dir) };
+    const base = {
+      ...detectProjectCommands(dir),
+      envFiles: findEnvFiles(dir),
+      isRepo: inside && !repoRoot,
+      repoRoot,
+      name: path.basename(dir),
+    };
+    if (inside) return base;
+    const projectOf = projects.projectOfRoot(this.kernel, dir) ?? undefined;
+    const nested = nestedRepos(dir);
+    return { ...base, nested: nested.length ? nested : undefined, projectOf };
   }
   async checkCommands(dir: string, cmds: Record<string, string>): Promise<Record<string, CommandIssue[]>> {
     return Object.fromEntries(Object.entries(cmds).map(([key, cmd]) => [key, cmd.trim() ? checkCommand(dir, cmd) : []]));
@@ -253,7 +264,7 @@ export class Orchestrator implements CoreApi {
   async getProjectConfig(dir: string) {
     return projects.getProjectConfig(this.kernel, dir);
   }
-  async saveProjectConfig(dir: string, cfg: Omit<ProjectConfig, 'updatedAt'>) {
+  async saveProjectConfig(dir: string, cfg: ProjectConfigInput) {
     return projects.saveProjectConfig(this.kernel, dir, cfg);
   }
   async getKnowledge(dir: string) {

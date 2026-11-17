@@ -775,3 +775,90 @@ a.btn {
 .screen > .scroll > .newtask {
   padding-right: calc(var(--page-x) - 10px);
 }
+
+/* Проект из нескольких репозиториев: галочки участников и основной. */
+.repo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.repo-row {
+  display: flex;
+  gap: var(--s-3);
+  align-items: center;
+  min-height: 34px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-s);
+  color: var(--text-3);
+}
+.repo-row.is-on {
+  color: var(--text-1);
+}
+.repo-row:hover {
+  background: var(--bg-2);
+}
+.repo-check {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+  cursor: pointer;
+}
+.repo-check .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-13);
+}
+.repo-check input {
+  accent-color: var(--accent);
+}
+.repo-main {
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-wash);
+  color: var(--accent-hi);
+  font-size: 11px;
+}
+.repo-make-main {
+  color: var(--text-4);
+  font-size: var(--fs-12);
+}
+.repo-row:not(:hover) .repo-make-main {
+  opacity: 0;
+}
+.multi-setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin: 0 var(--s-6);
+  padding: var(--s-5);
+  border-radius: var(--r-l);
+  background: var(--bg-1);
+  box-shadow: 0 0 0 1px var(--line-2);
+}
+.multi-setup p {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  line-height: 1.55;
+}
+.multi-setup .inline-error {
+  padding: 0;
+}
+.multi-setup-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  align-items: center;
+}
+.multi-setup-foot .muted {
+  color: var(--text-4);
+  font-size: var(--fs-12);
+}
+@media (hover: none) {
+  .repo-row:not(:hover) .repo-make-main {
+    opacity: 1;
+  }
+}

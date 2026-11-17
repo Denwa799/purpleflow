@@ -233,7 +233,8 @@ export class Kernel {
   shell(run: RunFile, command: string, timeoutMin: number) {
     this.checkStop(run);
     return runProc(command, [], {
-      cwd: run.worktreePath,
+      // Проект из нескольких репозиториев: команды — из общей папки прогона.
+      cwd: run.root?.dir ?? run.worktreePath,
       env: { ...this.opts.env, CI: '1', FORCE_COLOR: '1' },
       shell: true,
       timeoutMs: Math.max(1, timeoutMin) * 60_000,

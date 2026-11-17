@@ -39,6 +39,8 @@ interface StoredSettings {
   diagnostics: boolean;
   /** Случайный идентификатор установки для статистики, с аккаунтом не связан. */
   usageInstallId: string;
+  /** Версия, чьё «Что нового» пользователь уже видел: выросла — после обновления показываем новое сами. */
+  seenVersion: string;
 }
 
 const DEFAULTS: StoredSettings = {
@@ -60,6 +62,7 @@ const DEFAULTS: StoredSettings = {
   authPrompted: false,
   diagnostics: true,
   usageInstallId: '',
+  seenVersion: '',
 };
 
 const AGENT_SLOTS = ['planner', 'executor', 'reviewer', 'visual', 'manager', 'scan'] as const;
@@ -125,6 +128,17 @@ function encryptKey(value: string): string {
   if (!value) return '';
   if (!safeStorage.isEncryptionAvailable()) throw new Error('Шифрование хранилища недоступно в этой системе — ключ не сохранён');
   return safeStorage.encryptString(value).toString('base64');
+}
+
+/** Версия, чьё «Что нового» уже показано. Первый запуск запоминает текущую: новичку показывать «новое» нечего. */
+export function seenVersion(current: string): string {
+  const s = load();
+  if (!s.seenVersion) persist({ ...structuredClone(s), seenVersion: current });
+  return s.seenVersion || current;
+}
+
+export function setSeenVersion(v: string) {
+  persist({ ...structuredClone(load()), seenVersion: v });
 }
 
 /** Токен аккаунта PurpleSchool — только для main: в окно он не уходит. */

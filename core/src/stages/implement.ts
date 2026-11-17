@@ -10,7 +10,8 @@ import { runRole } from '../services/agents.js';
 import { attachmentsBlock } from '../services/attachments.js';
 import { checkRelatedUntouched, relatedState } from '../services/projects.js';
 import { feedbackBlock, modeRules, phaseBlock, taskText, tpl } from '../services/prompting.js';
-import { diffBase } from '../services/workspace.js';
+
+import { repoSlots, slotPath } from '../services/repos.js';
 import type { RunFile } from '../types.js';
 import { captureBaseChecks, settleBaseChecks } from './checks.js';
 import { startFilesBlock } from './plan.js';
@@ -92,13 +93,14 @@ export async function dropArtifacts(k: Kernel, run: RunFile) {
   const tools = await k.tools(['git']).catch(() => null);
   if (!tools) return;
   const git = new Git(tools.git, k.opts.env);
-  const changed = await git.changedFiles(run.worktreePath, diffBase(k, run)).catch(() => [] as string[]);
-  const junk = changed.filter((f) => ARTIFACT_RE.test(f));
-  if (!junk.length) return;
-  await git
-    .restoreFromBase(run.worktreePath, diffBase(k, run), junk)
-    .catch((e) =>
-      k.warn(run, `Не удалось откатить сборочные артефакты (${junk.join(', ')}) — они попадут в дифф: ${(e as Error).message}`),
-    );
-  k.log(run, c.dim(`Откатил сборочные артефакты, которые попали в изменения: ${junk.join(', ')}`) + '\n');
+  for (const slot of repoSlots(run)) {
+    const changed = await git.changedFiles(slot.worktreePath, slot.base).catch(() => [] as string[]);
+    const junk = changed.filter((f) => ARTIFACT_RE.test(f));
+    if (!junk.length) continue;
+    const shown = junk.map((f) => slotPath(slot, f)).join(', ');
+    await git
+      .restoreFromBase(slot.worktreePath, slot.base, junk)
+      .catch((e) => k.warn(run, `Не удалось откатить сборочные артефакты (${shown}) — они попадут в дифф: ${(e as Error).message}`));
+    k.log(run, c.dim(`Откатил сборочные артефакты, которые попали в изменения: ${shown}`) + '\n');
+  }
 }

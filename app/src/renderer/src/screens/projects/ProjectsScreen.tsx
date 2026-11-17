@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Button, Topbar } from '../../components/ui';
 import { shortPath, when } from '../../lib/format';
 import { useStore } from '../../lib/store';
-import { plural, projectName } from './common';
+import { listName, plural } from './common';
 import { bridge } from '../../lib/api';
 
 // ——— Список проектов ———
@@ -64,7 +64,7 @@ export function ProjectsScreen() {
                       <FolderGit2 size={16} />
                     </span>
                     <span className="project-card-name">
-                      <strong>{projectName(p.path)}</strong>
+                      <strong>{listName(p)}</strong>
                       <span className="mono">{shortPath(p.path)}</span>
                     </span>
                     {p.active > 0 && (

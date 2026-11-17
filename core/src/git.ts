@@ -155,6 +155,11 @@ export class Git {
     return [...new Set(out.split('\0').filter(Boolean))];
   }
 
+  /** Есть правки отслеживаемых файлов (новые файлы не в счёт: checkout их не трогает). */
+  async hasTrackedChanges(dir: string): Promise<boolean> {
+    return Boolean((await this.git(dir, ['status', '--porcelain', '--untracked-files=no'])).trim());
+  }
+
   async dirtyFiles(dir: string): Promise<string[]> {
     return parseStatusZ(await this.git(dir, ['status', '--porcelain', '-z', '--untracked-files=all']));
   }
@@ -372,11 +377,13 @@ export class Git {
   }
 
   /** Унифицированный дифф текстом — для промпта ревьюера. */
-  diffText(worktree: string, base: string, excludeGlobs: string[] = []): Promise<string> {
+  diffText(worktree: string, base: string, excludeGlobs: string[] = [], prefix?: string): Promise<string> {
     return serialized(worktree, async () => {
       await this.git(worktree, ['add', '-A', '-N']);
+      // prefix — папка репозитория в проекте из нескольких: пути в диффе от общей рабочей папки.
+      const pre = prefix ? [`--src-prefix=a/${prefix}/`, `--dst-prefix=b/${prefix}/`] : [];
       // quotepath: иначе кириллица в путях приходит восьмеричными кодами в кавычках, и splitDiff не узнаёт файл.
-      const args = ['-c', 'core.quotepath=off', 'diff', '-M', base, '--', '.', ...excludeGlobs.map((p) => `:(exclude,glob)${p}`)];
+      const args = ['-c', 'core.quotepath=off', 'diff', '-M', ...pre, base, '--', '.', ...excludeGlobs.map((p) => `:(exclude,glob)${p}`)];
       return this.git(worktree, args, 60_000);
     });
   }

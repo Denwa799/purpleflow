@@ -9,9 +9,11 @@ import { createPr, failedJobLog, mergePr, prComments, prReadiness, prStatus, pus
 import { isRunBranch } from '../ids.js';
 import type { Kernel } from '../kernel.js';
 
-import type { PrDetails, PrFollowupItem, PrStatus, RunFile } from '../types.js';
+import type { PrDetails, PrFollowupItem, PrStatus, RunFile, RunRepo } from '../types.js';
 import { getChangeDocs } from './runs.js';
 import { copyEnvFiles } from './workspace.js';
+const MULTI_ROUND = 'В проекте из нескольких репозиториев новый круг по PR пока не поддерживается — поставьте доработку новой задачей.';
+
 export function ghBin(k: Kernel): string | null {
   return which('gh', k.opts.env);
 }
@@ -41,8 +43,42 @@ export async function openPr(k: Kernel, id: string, base: string) {
     r.pr = { ...pr, base, createdAt: new Date().toISOString() };
     k.save(r);
     k.log(r, c.mint(`✓ PR #${pr.number}: ${pr.url}`) + '\n');
+    await openRepoPrs(k, r, gh, base, bodyFile);
   } finally {
     fs.rmSync(bodyFile, { force: true });
+  }
+}
+
+/** Изменённые участники проекта из нескольких репозиториев (у основного свой учёт). */
+const changedExtras = (r: RunFile) => (r.repos ?? []).filter((x) => x.commit && x.commit !== x.baseCommit);
+
+/** Ветка участника, куда вливать: та же, что у основного, если есть, иначе та, на которой он был при старте. */
+async function extraTarget(git: Git, x: RunRepo, target: string): Promise<string> {
+  const { branches } = await git.branches(x.path);
+  const t = branches.includes(target) ? target : x.baseBranch && branches.includes(x.baseBranch) ? x.baseBranch : null;
+  if (!t) throw new Error(`В репозитории ${x.rel} нет ни ветки ${target}, ни ${x.baseBranch ?? 'исходной'} — влейте ${x.rel} вручную`);
+  return t;
+}
+
+/** PR в остальных изменённых репозиториях — с тем же описанием; не вышло в одном — предупреждаем и идём дальше. */
+async function openRepoPrs(k: Kernel, r: RunFile, gh: string, base: string, bodyFile: string) {
+  const tools = await k.tools(['git']);
+  const git = new Git(tools.git, k.opts.env);
+  for (const x of changedExtras(r)) {
+    if (x.pr) continue;
+    try {
+      const why = await prReadiness(gh, tools.git, x.path, k.opts.env);
+      if (why) throw new Error(why);
+      const into = await extraTarget(git, x, base);
+      k.log(r, c.sky(`$ git push -u origin ${r.branch}  # ${x.rel}`) + '\n');
+      await pushBranch(tools.git, x.path, r.branch, k.opts.env);
+      const pr = await createPr(gh, x.path, k.opts.env, { base: into, head: r.branch, title: r.title, bodyFile });
+      x.pr = { url: pr.url, number: pr.number, base: into };
+      k.save(r);
+      k.log(r, c.mint(`✓ ${x.rel}: PR #${pr.number}: ${pr.url}`) + '\n');
+    } catch (e) {
+      k.warn(r, `PR в ${x.rel} не открыт: ${(e as Error).message}`);
+    }
   }
 }
 
@@ -117,6 +153,7 @@ export async function prFollowup(k: Kernel, id: string, items: PrFollowupItem[],
   if (r.status !== 'finished') throw new Error('Доработку можно начать, когда прогон завершён');
   if (r.merged) throw new Error('PR уже влит — для новых правок создайте новую задачу');
   if (!items.length && !note?.trim()) throw new Error('Выберите замечания или опишите, что доработать');
+  if (r.repos?.length) throw new Error(MULTI_ROUND);
   const { git, pulled } = await reopenWorkspace(k, r);
 
   // Логи упавших проверок CI — исполнителю, чтобы не гадать, что сломалось.
@@ -202,6 +239,7 @@ export async function updateBranch(k: Kernel, id: string) {
   if (!r.pr) throw new Error('У прогона нет PR');
   if (r.status !== 'finished') throw new Error('Обновить ветку можно, когда прогон завершён');
   if (r.merged) throw new Error('PR уже влит');
+  if (r.repos?.length) throw new Error(MULTI_ROUND);
   const { git } = await reopenWorkspace(k, r);
   const base = r.pr.base;
   await git.fetchRef(r.worktreePath, base);
@@ -279,6 +317,24 @@ export async function listBranches(
   return { branches, current: b.current, suggested };
 }
 
+/**
+ * Режим «Ветка»: после завершения проект остаётся на ветке прогона, и следующая задача начиналась бы от неё.
+ * Влили — переключаем проект на ветку, куда влили (в ней уже вся работа). С правками в рабочей копии не трогаем.
+ */
+async function leaveRunBranch(k: Kernel, git: Git, r: RunFile, target: string) {
+  if (r.workspace !== 'branch') return;
+  const cur = await git.currentBranch(r.projectPath).catch(() => null);
+  if (cur !== r.branch) return;
+  if (await git.hasTrackedChanges(r.projectPath).catch(() => true)) {
+    k.log(r, c.amber(`! проект остался на ${r.branch}: в рабочей копии есть правки. Переключитесь сами: git checkout ${target}`) + '\n');
+    return;
+  }
+  await git
+    .checkout(r.projectPath, target)
+    .then(() => k.log(r, c.dim(`проект переключён на ${target}`) + '\n'))
+    .catch((e) => k.log(r, c.amber(`! не удалось переключить проект на ${target}: ${(e as Error).message}`) + '\n'));
+}
+
 /** Влить ветку прогона в выбранную ветку репозитория пользователя (решение человека). */
 export async function merge(k: Kernel, id: string, target: string) {
   const r = k.mustLoad(id);
@@ -286,8 +342,26 @@ export async function merge(k: Kernel, id: string, target: string) {
   if (!target.trim()) throw new Error('Выберите ветку');
   const tools = await k.tools(['git']);
   const git = new Git(tools.git, k.opts.env);
-  const sha = await git.merge(r.projectPath, r.branch, target, `Merge ${r.branch}: ${r.title}`, k.store.worktreesDir());
-  r.merged = { into: target, commit: sha, at: new Date().toISOString() };
-  k.save(r);
-  k.log(r, c.mint(`✓ ${r.branch} влита в ${target} (${sha.slice(0, 8)})`) + '\n');
+  // Повтор после сбоя в одном из участников: основной уже влит — вливаем только оставшиеся.
+  if (!r.merged) {
+    const sha = await git.merge(r.projectPath, r.branch, target, `Merge ${r.branch}: ${r.title}`, k.store.worktreesDir());
+    r.merged = { into: target, commit: sha, at: new Date().toISOString() };
+    k.save(r);
+    k.log(r, c.mint(`✓ ${r.root ? `${r.root.main}: ` : ''}${r.branch} влита в ${target} (${sha.slice(0, 8)})`) + '\n');
+    await leaveRunBranch(k, git, r, target);
+  }
+  const failed: string[] = [];
+  for (const x of changedExtras(r)) {
+    if (x.merged) continue;
+    try {
+      const into = await extraTarget(git, x, target);
+      const sha = await git.merge(x.path, r.branch, into, `Merge ${r.branch}: ${r.title}`, k.store.worktreesDir());
+      x.merged = { into, commit: sha, at: new Date().toISOString() };
+      k.save(r);
+      k.log(r, c.mint(`✓ ${x.rel}: ${r.branch} влита в ${into} (${sha.slice(0, 8)})`) + '\n');
+    } catch (e) {
+      failed.push(`${x.rel}: ${(e as Error).message}`);
+    }
+  }
+  if (failed.length) throw new Error(`Не влиты:\n${failed.join('\n')}\nИсправьте и нажмите «Влить» ещё раз — уже влитые не тронем.`);
 }

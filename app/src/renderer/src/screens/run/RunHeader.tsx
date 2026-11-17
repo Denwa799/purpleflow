@@ -197,11 +197,18 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
     };
   }, [runId, run.pr?.url]);
 
+  // Проект из нескольких репозиториев: изменённые участники; слияние и PR идут в каждом из них.
+  const changed = (run.repos ?? []).filter((x) => x.commit && x.commit !== x.baseCommit);
+  const notMerged = changed.filter((x) => !x.merged);
+  // Цель — не основная ветка (задачу начинали от другой): подсказать, чтобы не влить мимо main по невнимательности.
+  const mainBranch = ['main', 'master'].find((b) => branches.includes(b));
+  const offMain = mainBranch && target && target !== mainBranch ? mainBranch : null;
+  const extraPrs = changed.filter((x) => x.pr);
   const act = async (kind: 'merge' | 'pr' | 'prMerge') => {
     setBusy(kind);
     setError(null);
     try {
-      if (kind === 'merge') await bridge.core.dispatch({ type: 'run.merge', runId, target });
+      if (kind === 'merge') await bridge.core.dispatch({ type: 'run.merge', runId, target: target || run.merged?.into || '' });
       else if (kind === 'pr') await bridge.core.dispatch({ type: 'run.pr', runId, base: target });
       else {
         await bridge.core.dispatch({ type: 'run.prMerge', runId });
@@ -230,9 +237,14 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
     return (
       <span className="merge-inline">
         <a className={`chip pr-chip ci-${ciState}`} href={run.pr.url} target="_blank" rel="noreferrer" title="Открыть PR на GitHub">
-          <GitPullRequest size={12} /> PR #{run.pr.number} → {run.pr.base}
+          <GitPullRequest size={12} /> {run.root ? `${run.root.main} ` : ''}PR #{run.pr.number} → {run.pr.base}
           {!merged && <span className="pr-ci">· {ciText}</span>}
         </a>
+        {extraPrs.map((x) => (
+          <a key={x.rel} className="chip pr-chip" href={x.pr!.url} target="_blank" rel="noreferrer" title={`PR в ${x.rel} — на GitHub`}>
+            <GitPullRequest size={12} /> {x.rel} #{x.pr!.number}
+          </a>
+        ))}
         {merged ? (
           <span className="chip merged">
             <GitMerge size={12} /> PR влит
@@ -272,9 +284,39 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
   }
 
   if (run.merged) {
-    return (
-      <span className="chip merged" title={`Коммит слияния ${run.merged.commit} · ${when(run.merged.at)}`}>
+    const chip = (
+      <span
+        className="chip merged"
+        title={[
+          `Коммит слияния ${run.merged.commit} · ${when(run.merged.at)}`,
+          ...changed.filter((x) => x.merged).map((x) => `${x.rel}: в ${x.merged!.into} · ${x.merged!.commit.slice(0, 7)}`),
+        ].join('\n')}
+      >
         <GitMerge size={12} /> влито в {run.merged.into} · <span className="mono">{run.merged.commit.slice(0, 7)}</span>
+        {changed.length > 0 && ` · репозиториев: ${changed.length - notMerged.length + 1}`}
+      </span>
+    );
+    if (!notMerged.length) return chip;
+    // Основной влит, а кто-то из участников — нет (конфликт, грязная копия): повторить только для них.
+    return (
+      <span className="merge-inline">
+        {chip}
+        <Button
+          tone="approve"
+          className="merge-btn"
+          icon={<GitMerge size={14} />}
+          busy={busy === 'merge'}
+          disabled={busy !== null}
+          title={`Не влиты: ${notMerged.map((x) => x.rel).join(', ')}`}
+          onClick={() => void act('merge')}
+        >
+          Влить остальные ({notMerged.length})
+        </Button>
+        {error && (
+          <span className="merge-error" title={error}>
+            {error}
+          </span>
+        )}
       </span>
     );
   }
@@ -300,7 +342,12 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
         icon={<GitPullRequest size={14} />}
         busy={busy === 'pr'}
         disabled={!target || prWhy !== null || busy !== null}
-        title={prWhy ?? 'Отправить ветку на GitHub и открыть Pull Request с описанием из прогона'}
+        title={
+          prWhy ??
+          (changed.length
+            ? `Отправить ветку и открыть PR в каждом изменённом репозитории: ${[run.root?.main, ...changed.map((x) => x.rel)].join(', ')}`
+            : 'Отправить ветку на GitHub и открыть Pull Request с описанием из прогона')
+        }
         onClick={() => void act('pr')}
       >
         Создать PR
@@ -312,10 +359,19 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
         busy={busy === 'merge'}
         disabled={!target || busy !== null}
         onClick={() => void act('merge')}
-        title="Влить локально, без GitHub"
+        title={
+          changed.length
+            ? `Влить локально в ${target} во всех изменённых репозиториях: ${[run.root?.main, ...changed.map((x) => x.rel)].join(', ')}`
+            : `Влить локально в ${target}, без GitHub`
+        }
       >
-        Влить
+        {target ? `Влить в ${target}` : 'Влить'}
       </Button>
+      {offMain && (
+        <span className="merge-note" title={`Задача начата от ветки ${run.baseBranch}, поэтому она выбрана по умолчанию`}>
+          не {offMain}
+        </span>
+      )}
       {error && (
         <span className="merge-error" title={error}>
           {error}

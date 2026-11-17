@@ -182,6 +182,25 @@ export interface ManagerMessage {
   error?: boolean;
 }
 
+/** Ещё один репозиторий прогона в проекте из нескольких: своя рабочая копия на той же ветке. */
+export interface RunRepo {
+  /** Путь от верхней папки проекта: «web», «services/api». */
+  rel: string;
+  /** Репозиторий пользователя. */
+  path: string;
+  /** Рабочая копия прогона внутри общей папки. */
+  worktreePath: string;
+  baseCommit: string;
+  /** Ветка, на которой был репозиторий при старте, — по умолчанию в неё и вливаем. */
+  baseBranch?: string;
+  /** Скопированные файлы окружения — в дифф и коммит не идут. */
+  envFiles?: string[];
+  /** Коммит прогона; равен baseCommit — изменений в репозитории нет. */
+  commit?: string;
+  merged?: { into: string; commit: string; at: string };
+  pr?: { url: string; number: number; base: string };
+}
+
 export interface RunFile {
   /** Версия схемы; старые файлы приводятся к текущей в migrate.ts. */
   version: 2;
@@ -191,6 +210,13 @@ export interface RunFile {
   task: string;
   projectPath: string;
   worktreePath: string;
+  /**
+   * Проект из нескольких репозиториев: верхняя папка пользователя, общая папка прогона (в ней рабочие копии всех
+   * репозиториев) и путь основного от верхней. Агенты и команды работают из dir; worktreePath — основной внутри неё.
+   */
+  root?: { path: string; dir: string; main: string };
+  /** Остальные репозитории прогона (без основного). */
+  repos?: RunRepo[];
   branch: string;
   baseCommit: string;
   /** Ветка, от которой начата задача (её последний коммит — baseCommit). */

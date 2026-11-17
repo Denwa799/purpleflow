@@ -8,7 +8,8 @@ import { afterChecks, afterReview, epicHasMore, reviewInParallel } from '../rout
 import type { BasePrep } from '../runtime.js';
 import { CHECK_NAME, MAX_TEST_OUTPUT, RUN_JSON_GLOB, StopSignal } from '../runtime.js';
 import { getProjectConfig } from '../services/projects.js';
-import { diffBase, envFilesOf } from '../services/workspace.js';
+import { envFilesOf } from '../services/workspace.js';
+import { repoChangedFiles, repoDiffText } from '../services/repos.js';
 import type { CheckResult, ReviewResult, RunFile, TestResult } from '../types.js';
 import { reviewFeedback, reviewPass } from './review.js';
 /** Линтер и тесты в worktree. Общий для «Проверок», базовых проверок и воспроизведения бага. */
@@ -121,6 +122,11 @@ export async function probeTests(k: Kernel, run: RunFile, check: CheckResult, be
     k.log(run, c.dim('Жду конца ревью, чтобы проверить тесты на исходном коде…') + '\n');
     await beforeStash;
     k.checkStop(run);
+  }
+  // Несколько репозиториев: спрятать изменения пришлось бы во всех сразу, а вернуть — тоже во всех. Пока не проверяем.
+  if (run.repos?.length) {
+    k.log(run, c.dim('Проект из нескольких репозиториев — проверку тестов на исходном коде пропускаю.') + '\n');
+    return retry;
   }
   const git = new Git((await k.tools(['git'])).git, k.opts.env);
   const keep = [RUN_JSON_GLOB, ...envFilesOf(k, run)];
@@ -398,7 +404,7 @@ export async function stageTests(k: Kernel, run: RunFile) {
   // Рефакторинг: тесты — эталон поведения, менять их нельзя.
   if (run.mode === 'refactor') {
     const tools = await k.tools(['git']);
-    const changed = await new Git(tools.git, k.opts.env).changedFiles(run.worktreePath, run.baseCommit);
+    const changed = await repoChangedFiles(new Git(tools.git, k.opts.env), run, { base: 'run' });
     const touched = changed.filter((f) => TEST_FILE.test(f) && !f.startsWith('openspec/'));
     if (touched.length) {
       k.log(run, c.coral(`✗ рефакторинг изменил тесты: ${touched.join(', ')}`) + '\n');
@@ -592,7 +598,7 @@ export async function stageBaseline(k: Kernel, run: RunFile) {
 export async function needsReview(k: Kernel, run: RunFile): Promise<boolean> {
   if (run.mode !== 'quick') return true;
   const tools = await k.tools(['git']);
-  const diff = await new Git(tools.git, k.opts.env).diffText(run.worktreePath, diffBase(k, run), [RUN_JSON_GLOB, ...envFilesOf(k, run)]);
+  const diff = await repoDiffText(new Git(tools.git, k.opts.env), run, [RUN_JSON_GLOB], envFilesOf(k, run));
   const lines = diff.split('\n').filter((l) => /^[+-][^+-]/.test(l)).length;
   if (lines > QUICK_REVIEW_LINES) return true;
   k.log(run, c.dim(`Дифф ${lines} строк — ревью пропущено (быстрая правка).`) + '\n');

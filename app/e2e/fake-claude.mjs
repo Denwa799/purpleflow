@@ -107,7 +107,14 @@ if (/исполнитель/.test(sys) || /Реализуй изменение|�
     );
     reply('Добавил slugify и тесты.');
   }
-  fs.appendFileSync('src/math.js', 'export const mul = (a, b) => a * b;\n');
+  // Проект из нескольких репозиториев: рабочая папка — общая, src/math.js — в каждом репозитории.
+  const targets = fs.existsSync('src/math.js')
+    ? ['src/math.js']
+    : fs
+        .readdirSync('.')
+        .map((d) => path.join(d, 'src/math.js'))
+        .filter((f) => fs.existsSync(f));
+  for (const f of targets) fs.appendFileSync(f, 'export const mul = (a, b) => a * b;\n');
   reply('Добавил mul.');
 }
 

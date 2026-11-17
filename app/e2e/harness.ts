@@ -96,7 +96,14 @@ export async function launch(box: Sandbox, env: Record<string, string> = {}): Pr
     // В контейнере CI нет прав на песочницу Chromium.
     // «.», а не путь к файлу: от каталога приложения окно ищет промпты ядра, как и при обычном запуске.
     args: [...(process.platform === 'linux' ? ['--no-sandbox'] : []), '.'],
-    env: { ...process.env, PURPLEFLOW_USER_DATA: box.profile, ELECTRON_DISABLE_SECURITY_WARNINGS: '1', ...env } as Record<string, string>,
+    env: {
+      ...process.env,
+      PURPLEFLOW_USER_DATA: box.profile,
+      ELECTRON_DISABLE_SECURITY_WARNINGS: '1',
+      // Окно не всплывает и не забирает фокус, пока идут тесты. Посмотреть глазами: PURPLEFLOW_E2E_SHOW=1.
+      ...(process.env.PURPLEFLOW_E2E_SHOW ? {} : { PURPLEFLOW_HIDDEN: '1' }),
+      ...env,
+    } as Record<string, string>,
   });
   // Системный диалог выбора папки автоматизировать нельзя — на его месте сразу ответ.
   await app.evaluate(({ dialog }, repo) => {

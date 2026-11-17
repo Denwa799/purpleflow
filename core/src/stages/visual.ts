@@ -14,9 +14,11 @@ import { Screencast, findChrome, waitForCdp } from '../screencast.js';
 import { agentBase, agentModel, claudeModel } from '../services/agents.js';
 import { attachmentsBlock } from '../services/attachments.js';
 import { getProjectConfig } from '../services/projects.js';
+import { workDir } from '../services/repos.js';
 import { modeRules, taskText } from '../services/prompting.js';
 import { getChangeDocs } from '../services/runs.js';
-import { diffBase, prepareApp } from '../services/workspace.js';
+import { prepareApp } from '../services/workspace.js';
+import { repoChangedFiles } from '../services/repos.js';
 import type { RunFile, VisualResult } from '../types.js';
 export function visualDir(k: Kernel, run: RunFile, attempt: number): string {
   return path.join(k.opts.dataDir, 'visual', run.id, String(attempt));
@@ -45,7 +47,7 @@ export async function stageVisual(k: Kernel, run: RunFile) {
   // Миграции и сиды ветки — до запуска: иначе приложение поднимется на старой схеме базы.
   await prepareApp(k, {
     repo: run.projectPath,
-    cwd: run.worktreePath,
+    cwd: workDir(run),
     group: serverGroup,
     onOutput: (t) => k.log(run, c.dim(crlf(t)), false),
   });
@@ -53,7 +55,7 @@ export async function stageVisual(k: Kernel, run: RunFile) {
   k.log(run, c.sky(`$ ${command}`) + c.dim(`  # приложение на ${url}`) + '\n');
   let exited: number | null | undefined;
   const server = runProc(command, [], {
-    cwd: run.worktreePath,
+    cwd: workDir(run),
     env: { ...k.opts.env, ...portEnv(run.runCommand!, port), BROWSER: 'none', CI: '1' },
     shell: true,
     group: serverGroup,
@@ -99,7 +101,7 @@ export async function stageVisual(k: Kernel, run: RunFile) {
     cast = live?.cast ?? null;
     const docs = await getChangeDocs(k, run.id);
     const tg = await k.tools(['git']);
-    const changed = await new Git(tg.git, k.opts.env).changedFiles(run.worktreePath, diffBase(k, run));
+    const changed = await repoChangedFiles(new Git(tg.git, k.opts.env), run);
     const prompt = k.prompts.render('visual.md', {
       url,
       dir,

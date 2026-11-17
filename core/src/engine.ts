@@ -17,6 +17,7 @@ import { attachmentsDir, saveAttachments } from './services/attachments.js';
 import { applyPending } from './services/control.js';
 import { stopPreview } from './services/preview.js';
 import { getProjectConfig } from './services/projects.js';
+import { removeRepoWorktrees, multiRepoOf } from './services/repos.js';
 import { runsWithFiles } from './services/runs.js';
 import { copyEnvFiles, ensureOnBranch, prepareWorkspace } from './services/workspace.js';
 import { isGate } from './stage-info.js';
@@ -115,7 +116,9 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
 
   const changeId = makeChangeId(input.task);
   const branch = runBranch(changeId);
-  const workspace = input.workspace ?? 'worktree';
+  // Несколько репозиториев: у каждого своя рабочая копия на той же ветке, все — в общей папке прогона.
+  const multi = multiRepoOf(repo, (getProjectConfig(k, repo) ?? getProjectConfig(k, input.projectPath))?.multiRepo);
+  const workspace = multi ? 'worktree' : (input.workspace ?? 'worktree');
   if (workspace === 'branch') {
     // В режиме «ветка» прогон занимает рабочую копию проекта целиком — второй в том же проекте ей бы помешал.
     const busy = runsWithFiles(k).find(
@@ -127,7 +130,30 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
     if (busy)
       throw new Error(`В режиме «Ветка» в проекте уже идёт «${busy.title}». Дождитесь его или выберите отдельную копию (worktree).`);
   }
-  const worktreePath = workspace === 'branch' ? repo : path.join(k.store.worktreesDir(), `${path.basename(repo)}-${changeId}`);
+  const rootDir = multi ? path.join(k.store.worktreesDir(), `${path.basename(multi.root)}-${changeId}`) : undefined;
+  const worktreePath =
+    workspace === 'branch'
+      ? repo
+      : multi
+        ? path.join(rootDir!, multi.main)
+        : path.join(k.store.worktreesDir(), `${path.basename(repo)}-${changeId}`);
+  const repos = multi
+    ? await Promise.all(
+        multi.repos.map(async (rel) => {
+          const at = path.join(multi.root, rel);
+          const head = await git.head(at).catch(() => {
+            throw new Error(`В репозитории ${rel} нет ни одного коммита — сделайте первый коммит или снимите его в настройках проекта`);
+          });
+          return {
+            rel,
+            path: at,
+            worktreePath: path.join(rootDir!, rel),
+            baseCommit: head,
+            baseBranch: (await git.currentBranch(at).catch(() => null)) ?? undefined,
+          };
+        }),
+      )
+    : undefined;
   const mode = input.mode ?? 'task';
   // Агента визуальной проверки на машине может не быть — тогда проверка выключается, а не роняет прогон.
   const visual = Boolean(input.visual && input.runCommand?.trim() && input.appUrl?.trim() && (await k.hasTool(visualAgent)));
@@ -147,6 +173,8 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
     task: input.task.trim(),
     projectPath: repo,
     worktreePath,
+    root: multi ? { path: multi.root, dir: rootDir!, main: multi.main } : undefined,
+    repos,
     branch,
     baseCommit: base,
     baseBranch,
@@ -479,6 +507,7 @@ export async function deleteRun(k: Kernel, id: string, deleteBranch: boolean) {
     if (r.workspace !== 'branch' && isInside(k.store.worktreesDir(), r.worktreePath) && fs.existsSync(r.worktreePath))
       await git.removeWorktree(r.projectPath, r.worktreePath).catch(traced('deleteRun: worktree'));
     if (deleteBranch) await git.deleteBranch(r.projectPath, r.branch).catch(traced('deleteRun: branch'));
+    if (r.root && isInside(k.store.worktreesDir(), r.root.dir)) await removeRepoWorktrees(git, r, deleteBranch);
   }
   for (const dir of [attachmentsDir(k, id), path.join(k.opts.dataDir, 'visual', id)]) fs.rmSync(dir, { recursive: true, force: true });
   k.store.forget(id);

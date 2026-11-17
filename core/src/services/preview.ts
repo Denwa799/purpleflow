@@ -6,6 +6,7 @@ import { killGroup, run as runProc } from '../proc.js';
 import type { PreviewState } from '../types.js';
 import { startChatPreview } from './chat.js';
 import { getProjectConfig } from './projects.js';
+import { workDir } from './repos.js';
 import { copyEnvFiles, ensureOnBranch, prepareApp } from './workspace.js';
 
 export function getPreview(k: Kernel, id: string): PreviewState {
@@ -32,7 +33,7 @@ export async function startPreview(k: Kernel, id: string): Promise<PreviewState>
   if (!fs.existsSync(r.worktreePath)) throw new Error(`Рабочая копия прогона не найдена: ${r.worktreePath}`);
   if (r.workspace === 'branch') await ensureOnBranch(k, r);
   copyEnvFiles(k, r);
-  return launchPreview(k, id, { repo: r.projectPath, cwd: r.worktreePath, runCommand, appUrl });
+  return launchPreview(k, id, { repo: r.projectPath, cwd: workDir(r), runCommand, appUrl });
 }
 
 /** Сколько вывода сервера держим и как часто отправляем его в окно. */

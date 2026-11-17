@@ -9,6 +9,15 @@ export interface ProjectCommands {
   detectedFrom: string | null;
 }
 
+/**
+ * Проект из нескольких репозиториев: верхняя папка (сама не репозиторий) и отмеченные в ней репозитории.
+ * Проект записан на основной репозиторий — в нём план OpenSpec, профиль и уроки; repos — остальные участники, пути от root.
+ */
+export interface MultiRepo {
+  root: string;
+  repos: string[];
+}
+
 export interface RelatedRepo {
   path: string;
   /** Что это за репозиторий — подсказка агентам: «бэкенд API», «общие типы». */
@@ -33,6 +42,8 @@ export interface ProjectConfig {
   /** Соседние репозитории: агенты читают их для контекста (API бэкенда, общие типы), но не меняют. */
   relatedRepos?: RelatedRepo[];
   workspace?: Workspace;
+  /** Несколько репозиториев в одной папке: прогон берёт их все, агенты и команды работают из верхней папки. */
+  multiRepo?: MultiRepo;
   /** Знания о проекте для всех агентов: профиль (стек, структура, соглашения) и уроки прошлых прогонов. */
   knowledge?: ProjectKnowledge;
   notes: { setup: string; lint: string; test: string; run?: string };
@@ -67,9 +78,27 @@ export interface ProjectBranches {
   current: string | null;
 }
 
+/** Что нашли в папке, выбранной под проект. */
+export interface DetectedProject extends ProjectCommands {
+  envFiles: string[];
+  isRepo: boolean;
+  name: string;
+  /** Папка лежит внутри этого репозитория. */
+  repoRoot?: string;
+  /** Папка не репозиторий, но в ней есть репозитории — пути от неё: можно собрать проект из нескольких. */
+  nested?: string[];
+  /** Папка уже собрана в проект из нескольких репозиториев — он записан на этот основной репозиторий. */
+  projectOf?: string;
+}
+
+/** Сохранение настроек проекта: multiRepo не передан — остаётся прежним, null — проект снова из одного репозитория. */
+export type ProjectConfigInput = Omit<ProjectConfig, 'updatedAt' | 'multiRepo'> & { multiRepo?: MultiRepo | null };
+
 /** Проект в списке «Проекты». */
 export interface ProjectListItem {
   path: string;
+  /** Проект из нескольких репозиториев: его верхняя папка (path — основной репозиторий). */
+  root?: string;
   /** Есть сохранённые команды проекта. */
   configured: boolean;
   /** Папка на месте. */

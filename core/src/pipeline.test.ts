@@ -1031,3 +1031,103 @@ test(
     assert.equal(await core.getManagerImage(runId, path.join(repo, 'src/math.js')), null, 'чужие файлы окну не отдаются');
   },
 );
+
+test(
+  'несколько репозиториев: общая папка прогона, правки в двух репозиториях, коммиты и слияние в каждом',
+  { skip: !hasOpenspec, timeout: 120_000 },
+  async () => {
+    // Верхняя папка — не репозиторий: в ней api (основной), web (участник) и shared (не отмечен — только чтение).
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-multi-'));
+    for (const name of ['api', 'web', 'shared']) execFileSync('git', ['clone', '-q', makeRepo(), path.join(root, name)]);
+    fs.writeFileSync(path.join(root, 'web', '.env'), 'WEB_SECRET=1\n');
+    const api = path.join(root, 'api');
+    const web = path.join(root, 'web');
+    let cwdSeen = '';
+    let system = '';
+    let reviewPrompt = '';
+    const fake = fakeClaude({
+      implement: (_n, cwd) => {
+        cwdSeen = cwd;
+        for (const r of ['api', 'web'])
+          fs.writeFileSync(path.join(cwd, r, 'src/math.js'), 'export const add = (a, b) => a + b;\nexport const mul = (a, b) => a * b;\n');
+      },
+      review: () => ({ blocking: [], notes: [] }),
+    });
+    const fn = fake.fn;
+    fake.fn = (async (o: { prompt: string; cwd: string; systemPrompt?: string }) => {
+      if (/исполнитель/.test(o.systemPrompt ?? '')) system = o.systemPrompt ?? '';
+      if (/ревьюер в конвейере PurpleFlow/.test(o.prompt)) reviewPrompt = o.prompt;
+      return fn(o);
+    }) as typeof fn;
+    const core = makeCore(fake);
+    const detected = await core.detectProject(root);
+    assert.equal(detected.isRepo, false);
+    assert.deepEqual(detected.nested, ['api', 'shared', 'web']);
+    await core.saveProjectConfig(api, {
+      setupCommand: '',
+      lintCommand: '',
+      testCommand: 'cd api && node --test && cd ../web && node --test',
+      multiRepo: { root, repos: ['web'] },
+      notes: { setup: '', lint: '', test: '' },
+    });
+    assert.equal((await core.detectProject(root)).projectOf, path.resolve(api));
+    assert.equal((await core.listProjects()).find((p) => p.path === path.resolve(api))?.root, path.resolve(root));
+
+    const { runId } = await core.dispatch({
+      type: 'run.start',
+      input: { projectPath: api, task: 'Добавь mul в api и web', testCommand: 'cd api && node --test', mode: 'task' } as never,
+    });
+    await untilGate(core, runId, 'gate1');
+    let r = (await core.getRun(runId))!;
+    assert.ok(r.root && r.repos?.length === 1);
+    // План лежит в основном репозитории, но виден из корня общей папки.
+    assert.ok(fs.existsSync(path.join(r.root.dir, 'openspec', 'changes', r.changeId, 'proposal.md')));
+    assert.ok(fs.existsSync(path.join(r.worktreePath, 'openspec', 'changes', r.changeId, 'proposal.md')));
+    // .env участника скопирован в его рабочую копию.
+    assert.ok(fs.existsSync(path.join(r.root.dir, 'web', '.env')));
+    await core.dispatch({ type: 'gate.approve', runId });
+    await untilGate(core, runId, 'gate2');
+    assert.equal(cwdSeen, r.root.dir);
+    assert.match(system, /Проект из нескольких репозиториев/);
+    // Ревьюер видит правки обоих репозиториев с путями от общей папки.
+    assert.ok(reviewPrompt.includes('web/src/math.js') && reviewPrompt.includes('api/src/math.js'), 'дифф обоих в ревью');
+    assert.ok(system.includes(path.resolve(root)));
+
+    const files = (await core.getChangedFiles(runId)).sort();
+    assert.ok(files.includes('api/src/math.js') && files.includes('web/src/math.js'), files.join(', '));
+    assert.ok(!files.includes('web/.env'), 'файл окружения участника не в изменениях');
+    assert.ok(
+      files.some((f) => f.startsWith('openspec/changes/')),
+      'файлы плана — без папки основного',
+    );
+    const diff = await core.getDiff(runId);
+    assert.ok(diff.some((f) => f.path === 'web/src/math.js' && f.modified.includes('mul')));
+
+    await core.dispatch({ type: 'gate.approve', runId });
+    r = (await core.getRun(runId))!;
+    for (let i = 0; i < 300 && !r.commit; i++) {
+      assert.notEqual(r.status, 'stopped', r.message);
+      await new Promise((res) => setTimeout(res, 100));
+      r = (await core.getRun(runId))!;
+    }
+    const x = r.repos![0];
+    assert.ok(x.commit && x.commit !== x.baseCommit, 'коммит в web');
+    const gw = (...a: string[]) => execFileSync('git', a, { cwd: web }).toString();
+    const inWeb = gw('show', '--name-only', '--format=', x.commit).split('\n');
+    assert.ok(inWeb.includes('src/math.js') && !inWeb.includes('.env'));
+    // После завершения дифф — из веток в репозиториях пользователя.
+    assert.ok((await core.getChangedFiles(runId)).includes('web/src/math.js'));
+
+    await core.dispatch({ type: 'run.merge', runId, target: 'main' });
+    r = (await core.getRun(runId))!;
+    assert.equal(r.merged?.into, 'main');
+    assert.equal(r.repos![0].merged?.into, 'main');
+    assert.match(gw('show', 'main:src/math.js'), /mul/);
+    const ga = (...a: string[]) => execFileSync('git', a, { cwd: api }).toString();
+    assert.match(ga('show', 'main:src/math.js'), /mul/);
+
+    await core.dispatch({ type: 'run.delete', runId, deleteBranch: true });
+    assert.ok(!fs.existsSync(r.root!.dir), 'общая папка прогона удалена');
+    assert.ok(!gw('branch').includes(r.branch), 'ветка в участнике удалена');
+  },
+);

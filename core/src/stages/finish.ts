@@ -8,6 +8,7 @@ import type { Kernel } from '../kernel.js';
 
 import { OpenSpec } from '../openspec.js';
 import { learn } from '../services/projects.js';
+import { repoSlots } from '../services/repos.js';
 import { envFilesOf } from '../services/workspace.js';
 import { RunStore } from '../store.js';
 import { traced } from '../trace.js';
@@ -49,6 +50,8 @@ export async function stageFinish(k: Kernel, run: RunFile) {
         : round
           ? `purpleflow: ${run.changeId} — замечания PR #${run.pr!.number}\n\nКруг доработки ${round.round}:\n${round.items.map((i) => `- ${i.kind === 'check' ? `CI: ${i.body}` : `${i.path ? i.path + ': ' : ''}${i.body.split('\n')[0].slice(0, 120)}`}`).join('\n')}${round.note ? `\n- ${round.note.split('\n')[0]}` : ''}\n\nPurpleFlow run: ${run.id}`
           : `purpleflow: ${run.changeId}\n\n${run.task}\n\n${run.mode === 'quick' ? '' : `OpenSpec change: ${run.changeId}\n`}PurpleFlow run: ${run.id}`;
+    // Участники проекта из нескольких репозиториев — тем же сообщением и до основного: в его коммите run.json с их коммитами.
+    for (const x of run.repos ?? []) x.commit = await git.commitAll(x.worktreePath, message, x.envFiles ?? []);
     sha = await git.commitAll(run.worktreePath, message, exclude);
   } catch (e) {
     // Коммит не прошёл — прогон не завершён: возвращаем статус и честно помечаем попытку.
@@ -75,12 +78,24 @@ export async function stageFinish(k: Kernel, run: RunFile) {
       k.log(run, c.amber(`! ${run.message}`) + '\n');
     }
   }
-  k.log(
-    run,
-    sha === run.baseCommit
-      ? c.amber(`! изменений нет — коммит в ${run.branch} не создан`) + '\n'
-      : c.mint(`✓ коммит ${sha.slice(0, 8)} в ветке ${run.branch}. Слияние — за вами.`) + '\n',
-  );
+  if (run.root) {
+    const made = repoSlots(run)
+      .map((x) => ({ rel: x.rel, sha: x.extra ? x.extra.commit : sha, base: x.extra ? x.extra.baseCommit : run.baseCommit }))
+      .filter((x) => x.sha && x.sha !== x.base);
+    k.log(
+      run,
+      made.length
+        ? c.mint(`✓ коммиты в ветке ${run.branch}: ${made.map((x) => `${x.rel} ${x.sha!.slice(0, 8)}`).join(', ')}. Слияние — за вами.`) +
+            '\n'
+        : c.amber(`! изменений нет — коммиты в ${run.branch} не созданы`) + '\n',
+    );
+  } else
+    k.log(
+      run,
+      sha === run.baseCommit
+        ? c.amber(`! изменений нет — коммит в ${run.branch} не создан`) + '\n'
+        : c.mint(`✓ коммит ${sha.slice(0, 8)} в ветке ${run.branch}. Слияние — за вами.`) + '\n',
+    );
   if (run.workspace === 'branch') {
     k.log(
       run,

@@ -1,5 +1,7 @@
 // Автообновление: настоящий electron-updater читает ленту с локального сервера, дальше — состояния из main.
+import fs from 'node:fs';
 import http from 'node:http';
+import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { expect, test } from '@playwright/test';
 import { launch, makeSandbox, quit, type Launched, type Sandbox } from './harness';
@@ -10,6 +12,14 @@ let feed: http.Server;
 let requested: string[];
 let feedBroken: boolean;
 let latest: string;
+/** Версия, чьё «Что нового» уже видели; пусто — первый запуск. */
+let seen = '';
+
+const RELEASES = [
+  { version: '0.3.4', date: '2026-11-13T14:00:00Z', notes: '- OpenCode как третий агент', url: '' },
+  { version: '0.3.3', date: '2026-11-13T08:00:00Z', notes: '### Добавлено\n\n- Модели Fable', url: '' },
+  { version: '0.3.0', date: '2026-11-11T08:00:00Z', notes: '- Старое', url: '' },
+];
 
 const LATEST = `version: 99.0.0
 files:
@@ -32,8 +42,12 @@ test.beforeEach(async () => {
     else res.writeHead(404).end();
   });
   await new Promise<void>((r) => feed.listen(0, '127.0.0.1', r));
-  box = makeSandbox();
-  l = await launch(box, { PURPLEFLOW_UPDATE_URL: `http://127.0.0.1:${(feed.address() as AddressInfo).port}/` });
+  box = makeSandbox({ settings: seen ? { seenVersion: seen } : {} });
+  fs.writeFileSync(path.join(box.root, 'releases.json'), JSON.stringify(RELEASES));
+  l = await launch(box, {
+    PURPLEFLOW_UPDATE_URL: `http://127.0.0.1:${(feed.address() as AddressInfo).port}/`,
+    PURPLEFLOW_RELEASES_FILE: path.join(box.root, 'releases.json'),
+  });
 });
 
 test.afterEach(async () => {
@@ -44,18 +58,13 @@ test.afterEach(async () => {
   expect(errors, 'необработанные ошибки страницы').toEqual([]);
 });
 
-const offer = () => l.page.getByRole('status', { name: 'Обновление' });
+const dialog = () => l.page.getByRole('dialog', { name: /Что нового|Обновились/ });
+const offer = () => dialog().getByRole('status', { name: 'Обновление' });
+const sideUpdate = () => l.page.locator('.side-whatsnew').getByRole('button', { name: 'Обновить' });
 
 /** Последние шаги зависят от подписи и ОС, поэтому их состояние передаём так же, как это делает main. */
 const pushState = (state: object) =>
   l.app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows()[0].webContents.send('update:state', s), state);
-
-test('новая версия в ленте: окно предлагает обновиться, «Позже» убирает предложение', async () => {
-  await expect(offer()).toContainText('Доступна версия 99.0.0');
-  expect(requested.some((u) => /latest.*\.yml/.test(u))).toBe(true);
-  await offer().getByRole('button', { name: 'Позже' }).click();
-  await expect(offer()).toHaveCount(0);
-});
 
 /** Настоящий пункт меню приложения. */
 const clickCheckInMenu = () =>
@@ -65,49 +74,69 @@ const clickCheckInMenu = () =>
     find(Menu.getApplicationMenu()!.items)!.click();
   });
 
-test('пункт меню проверяет заново и возвращает скрытое предложение', async () => {
+test('новая версия в ленте: кнопка «Обновить» в боковой панели, без плашки и без окна', async () => {
+  await expect(sideUpdate()).toBeVisible();
+  expect(requested.some((u) => /latest.*\.yml/.test(u))).toBe(true);
+  await expect(dialog()).toHaveCount(0);
+  if (process.env.PF_SHOT) await l.page.screenshot({ path: process.env.PF_SHOT.replace('.png', '-side.png') });
+  await l.page.getByRole('button', { name: 'Что нового' }).click();
   await expect(offer()).toContainText('Доступна версия 99.0.0');
-  await offer().getByRole('button', { name: 'Позже' }).click();
-  await expect(offer()).toHaveCount(0);
+  await expect(dialog().getByRole('article', { name: 'Версия 0.3.3' })).toContainText('Модели Fable');
+  await dialog().getByRole('button', { name: 'Закрыть' }).click();
+  await expect(dialog()).toHaveCount(0);
+});
+
+test('пункт меню проверяет заново и открывает окно с ответом', async () => {
+  await expect(sideUpdate()).toBeVisible();
   await clickCheckInMenu();
   await expect(offer()).toContainText('Доступна версия 99.0.0');
 });
 
 test('ручная проверка сообщает, что версия последняя, и показывает сбой', async () => {
-  await expect(offer()).toContainText('Доступна версия 99.0.0');
+  await expect(sideUpdate()).toBeVisible();
   latest = LATEST.replaceAll('99.0.0', '0.0.1');
   await clickCheckInMenu();
   await expect(offer()).toContainText('У вас последняя версия');
+  await expect(sideUpdate()).toHaveCount(0);
   feedBroken = true;
   await clickCheckInMenu();
   await expect(offer()).toContainText('Не удалось проверить обновления');
-  await offer().getByRole('button', { name: 'Закрыть' }).click();
-  await expect(offer()).toHaveCount(0);
 });
 
 test('кнопка в настройках запускает ту же проверку: на Windows и Linux меню не видно', async () => {
-  await expect(offer()).toContainText('Доступна версия 99.0.0');
-  await offer().getByRole('button', { name: 'Позже' }).click();
+  await expect(sideUpdate()).toBeVisible();
   await l.page.getByRole('button', { name: 'Настройки' }).click();
   await l.page.getByRole('tab', { name: 'Приложение' }).click();
   await l.page.getByRole('button', { name: 'Проверить обновления' }).click();
   await expect(offer()).toContainText('Доступна версия 99.0.0');
 });
 
-test('плашка наверху и непрозрачная, даже в режиме стекла', async () => {
-  await expect(offer()).toContainText('Доступна версия 99.0.0');
-  const box = await offer().boundingBox();
-  expect(box!.y).toBeLessThan(40);
-  const bg = await offer().evaluate((el) => getComputedStyle(el).backgroundColor);
-  // Непрозрачный фон всплывающих окон (--pop-bg): rgb без альфы, а не полупрозрачный rgba.
-  expect(bg).toMatch(/^rgb\(\d+, \d+, \d+\)$/);
-});
-
 test('готовое обновление предлагает перезапуск, сбой — ручную загрузку', async () => {
-  await expect(offer()).toContainText('Доступна версия 99.0.0');
+  await expect(sideUpdate()).toBeVisible();
   await pushState({ kind: 'ready', version: '99.0.0' });
+  await expect(l.page.locator('.side-whatsnew').getByRole('button', { name: 'Перезапустить' })).toBeVisible();
+  await l.page.getByRole('button', { name: 'Что нового' }).click();
   await expect(offer().getByRole('button', { name: 'Перезапустить' })).toBeVisible();
   await pushState({ kind: 'failed', version: '99.0.0', message: 'Code signature did not pass validation' });
   await expect(offer()).toContainText('Code signature');
   await expect(offer().getByRole('link', { name: 'Скачать вручную' })).toHaveAttribute('href', /releases\/latest/);
+});
+
+test.describe('после обновления', () => {
+  test.beforeAll(() => {
+    seen = '0.3.0';
+  });
+  test.afterAll(() => {
+    seen = '';
+  });
+
+  test('окно открывается само, новые выпуски отмечены; закрыли — больше само не откроется', async () => {
+    await expect(dialog()).toBeVisible();
+    await expect(dialog().getByRole('heading', { level: 2 })).toContainText('Обновились до 0.3.4');
+    await expect(dialog().getByRole('article', { name: 'Версия 0.3.3' })).toContainText('новое');
+    await expect(dialog().getByRole('article', { name: 'Версия 0.3.0' })).not.toContainText('новое');
+    if (process.env.PF_SHOT) await l.page.screenshot({ path: process.env.PF_SHOT });
+    await dialog().getByRole('button', { name: 'Закрыть' }).click();
+    await expect.poll(() => JSON.parse(fs.readFileSync(path.join(box.profile, 'settings.json'), 'utf8')).seenVersion).not.toBe('0.3.0');
+  });
 });

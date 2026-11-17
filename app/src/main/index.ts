@@ -20,7 +20,8 @@ import {
 } from 'electron';
 import type { CoreCommand, CoreEvent } from '@purpleflow/core';
 import type { CoreMethod, HostMessage, HostRequest, SettingsPatch } from '../shared/ipc';
-import { coreSettings, publicSettings, updateSettings } from './settings';
+import { coreSettings, publicSettings, seenVersion, setSeenVersion, updateSettings } from './settings';
+import { releases } from './releases';
 import * as account from './account';
 import { proxyModels } from './models';
 import { isLocalUrl, isSameDocument, isWebUrl } from '../shared/urls';
@@ -51,8 +52,11 @@ let ready: Promise<void> | null = null;
 let seq = 0;
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
+/** Сквозные тесты: окно не показывается, не берёт фокус, без значка в доке и системных уведомлений. */
+const HIDDEN = Boolean(process.env.PURPLEFLOW_HIDDEN);
+
 function focusWindow() {
-  if (!win) return;
+  if (!win || HIDDEN) return;
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
@@ -88,7 +92,7 @@ function notify(runId: string, title: string, body: string) {
   const focused = Boolean(win?.isFocused());
   // В фокусе — только звук в окне; свёрнуто или в фоне — системное уведомление и прыжок значка в доке.
   if (s.sound) win?.webContents.send('app:chime');
-  if (!s.notify || focused || !Notification.isSupported()) return;
+  if (!s.notify || focused || HIDDEN || !Notification.isSupported()) return;
   const n = new Notification({ title, body, silent: true });
   n.on('click', () => {
     focusWindow();
@@ -275,11 +279,12 @@ function createWindow() {
       // Вкладка «Браузер» — <webview> в отдельной сессии; параметры жёстко задаются в will-attach-webview.
       webviewTag: true,
       // Фоновое окно скриншотов не должно притормаживать отрисовку.
-      backgroundThrottling: !process.env.PURPLEFLOW_CAPTURE,
+      backgroundThrottling: !process.env.PURPLEFLOW_CAPTURE && !HIDDEN,
     },
   });
   nativeTheme.themeSource = 'dark';
   win.once('ready-to-show', () => {
+    if (HIDDEN) return;
     // Режим скриншотов не должен перехватывать фокус и клавиатуру у человека.
     if (process.env.PURPLEFLOW_CAPTURE) win?.showInactive();
     else win?.show();
@@ -505,6 +510,9 @@ const checkForUpdates = () => {
 handle('update:state', () => updateState());
 handle('update:check', () => checkForUpdates());
 handle('update:download', () => downloadUpdate());
+handle('whatsNew:releases', () => releases());
+handle('whatsNew:versions', () => ({ current: app.getVersion(), seen: seenVersion(app.getVersion()) }));
+handle('whatsNew:seen', () => setSeenVersion(app.getVersion()));
 handle('update:install', async () => {
   installing = true;
   quitting = true;
@@ -515,7 +523,7 @@ handle('update:install', async () => {
 handle('notify:test', () => {
   const s = publicSettings();
   if (s.sound) win?.webContents.send('app:chime');
-  if (s.notify && Notification.isSupported())
+  if (s.notify && !HIDDEN && Notification.isSupported())
     new Notification({
       title: 'PurpleFlow',
       body: 'Так будут выглядеть уведомления, когда прогону нужно ваше внимание.',
@@ -527,7 +535,7 @@ app.whenReady().then(() => {
   if (!primary) return;
   // Сайт проекта во вкладке «Браузер» не получает разрешений (камера, геолокация, уведомления…).
   session.fromPartition(PREVIEW_PARTITION).setPermissionRequestHandler((_wc, _p, cb) => cb(false));
-  if (process.env.PURPLEFLOW_CAPTURE && process.platform === 'darwin') app.dock?.hide();
+  if ((process.env.PURPLEFLOW_CAPTURE || HIDDEN) && process.platform === 'darwin') app.dock?.hide();
   void startHost();
   setupMenu();
   createWindow();

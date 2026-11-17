@@ -337,3 +337,31 @@
 .side-start-icon {
   color: var(--accent-hi);
 }
+.side-whatsnew {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.side-whatsnew > .side-link {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+.side-whatsnew .btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: var(--fs-12);
+}
+.side-dot {
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.side-dot.is-err {
+  background: var(--err);
+  box-shadow: 0 0 0 3px var(--err-wash);
+}

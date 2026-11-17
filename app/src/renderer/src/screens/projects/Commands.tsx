@@ -4,6 +4,7 @@ import {
   Check,
   DatabaseZap,
   FileLock2,
+  FolderGit2,
   FolderSearch,
   GitBranch,
   Globe,
@@ -22,7 +23,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button, Input, TextArea } from '../../components/ui';
 import { shortPath } from '../../lib/format';
-import { type Cmd, type Cmds, type LoadedProject, WORKSPACES, saveLoaded } from './common';
+import { type Cmd, type Cmds, type LoadedProject, RepoChecklist, WORKSPACES, saveLoaded } from './common';
 import { bridge, cleanErr } from '../../lib/api';
 
 // ——— Команды и окружение ———
@@ -36,6 +37,18 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
   const [prepare, setPrepare] = useState(p.prepare ?? '');
   const [envFiles, setEnvFiles] = useState(p.envFiles.join(', '));
   const [related, setRelated] = useState<RelatedRepo[]>(p.related ?? []);
+  // Проект из нескольких репозиториев: участники (без основного) и все репозитории верхней папки для галочек.
+  const [members, setMembers] = useState<string[]>(p.multi?.repos ?? []);
+  const [nested, setNested] = useState<string[] | null>(null);
+  const root = p.multi?.root;
+  const mainRel = root ? repo.slice(root.replace(/[\\/]+$/, '').length + 1).replace(/\\/g, '/') : '';
+  useEffect(() => {
+    if (!root) return;
+    void bridge.core
+      .detectProject(root)
+      .then((d) => setNested(d.nested ?? []))
+      .catch(() => setNested([]));
+  }, [root]);
   const [saved, setSavedState] = useState<'saved' | 'draft' | 'dirty'>(p.cfg ? 'saved' : 'draft');
   const [issues, setIssues] = useState<Record<string, CommandIssue[]>>({});
   const [aiBusy, setAiBusy] = useState(false);
@@ -51,12 +64,13 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
   useEffect(() => {
     const t = setTimeout(() => {
       void bridge.core
-        .checkCommands(repo, { setup: cmds.setup, lint: cmds.lint, test: cmds.test, run: cmds.run })
+        // Команды проекта из нескольких репозиториев запускаются из верхней папки — и проверяются от неё.
+        .checkCommands(root ?? repo, { setup: cmds.setup, lint: cmds.lint, test: cmds.test, run: cmds.run })
         .then(setIssues)
         .catch(() => setIssues({}));
     }, 350);
     return () => clearTimeout(t);
-  }, [repo, cmds.setup, cmds.lint, cmds.test, cmds.run]);
+  }, [repo, root, cmds.setup, cmds.lint, cmds.test, cmds.run]);
 
   const edit = (k: Cmd, v: string) => {
     setCmds({ ...cmds, [k]: v });
@@ -94,6 +108,8 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
         quickTest,
         prepare,
         related,
+        // Сняли все галочки — проект снова из одного репозитория.
+        ...(root ? { multi: members.length ? { root, repos: members } : null } : {}),
         envFiles: envFiles
           .split(/[,\n]/)
           .map((f) => f.trim())
@@ -219,6 +235,12 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
                   role="radio"
                   aria-checked={workspace === w.id}
                   className={workspace === w.id ? 'is-on' : ''}
+                  disabled={Boolean(root && members.length && w.id === 'branch')}
+                  title={
+                    root && members.length && w.id === 'branch'
+                      ? 'В проекте из нескольких репозиториев — только отдельные копии'
+                      : undefined
+                  }
                   onClick={() => {
                     setWorkspace(w.id);
                     touch();
@@ -256,6 +278,32 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
             </span>
           </div>
         </div>
+        {root && (
+          <div className="cmd-row">
+            <span className="cmd-icon">
+              <FolderGit2 size={17} />
+            </span>
+            <div className="cmd-label">
+              <strong>Репозитории проекта</strong>
+              <span>Агент работает во всех отмеченных: правки, проверки и ревью — по всем, коммит и слияние — в каждом</span>
+            </div>
+            <div className="cmd-field">
+              <RepoChecklist
+                repos={nested ?? [mainRel, ...members]}
+                on={members}
+                main={mainRel}
+                onToggle={(rel) => {
+                  setMembers(members.includes(rel) ? members.filter((r) => r !== rel) : [...members, rel]);
+                  touch();
+                }}
+              />
+              <span className="cmd-note">
+                Папка проекта <code>{shortPath(root)}</code>. Команды выше запускаются из неё. Неотмеченные репозитории агент только читает.
+                {members.length ? '' : ' Без отмеченных проект станет обычным, из одного репозитория.'}
+              </span>
+            </div>
+          </div>
+        )}
         <div className="cmd-row">
           <span className="cmd-icon">
             <FolderSearch size={17} />

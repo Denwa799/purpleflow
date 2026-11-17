@@ -8,6 +8,7 @@ import type { Kernel } from '../kernel.js';
 import type { AgentKind, Role, RunFile } from '../types.js';
 import { AGENT_KINDS, DEFAULT_AGENTS, enabledAgents } from '../types.js';
 import { knowledgeBlock, relatedRepos } from './projects.js';
+import { workDir } from './repos.js';
 
 type ServiceOptions = {
   prompt: string;
@@ -206,7 +207,7 @@ export function agentBase(k: Kernel, run: RunFile, bin: string, openspecBin?: st
   const env = openspecBin ? prependPath(k.opts.env, path.dirname(openspecBin)) : k.opts.env;
   return {
     bin,
-    cwd: run.worktreePath,
+    cwd: workDir(run),
     env,
     // Агента не обрываем за долгую работу: останавливаем, только если он молчит agentTimeoutMin (завис),
     // или по жёсткому потолку ×4. О долгой работе человеку подсказывает окно прогона.
@@ -226,6 +227,8 @@ export function agentDirs(k: Kernel, run: RunFile): string[] | undefined {
   const dirs = [
     ...(run.attachments?.length ? [path.dirname(run.attachments[0])] : []),
     ...relatedRepos(k, run.projectPath).map((r) => r.path),
+    // Папка проекта из нескольких репозиториев: неотмеченные репозитории и файлы в её корне — для чтения.
+    ...(run.root ? [run.root.path] : []),
   ];
   return dirs.length ? dirs : undefined;
 }
