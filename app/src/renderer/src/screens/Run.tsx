@@ -160,6 +160,7 @@ export function RunScreen({ runId }: { runId: string }) {
           onCancel={() => act('cancel', () => dispatch({ type: 'gate.cancel', runId }))}
           onAccept={gate === 'limit' ? () => act('accept', () => dispatch({ type: 'gate.accept', runId })) : undefined}
           acceptTo={gate === 'limit' ? acceptTarget(run) : undefined}
+          stuck={gate === 'limit' ? run.stuck?.items : undefined}
           onFix={
             gate === 'gate2'
               ? () =>

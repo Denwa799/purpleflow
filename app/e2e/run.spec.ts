@@ -129,3 +129,17 @@ test('подпапка чужого репозитория: прогон не у
   await expect(l.page.getByRole('button', { name: /demo/ }).first()).toBeVisible();
   await expect(l.page.getByRole('button', { name: 'Запустить прогон' })).toBeEnabled();
 });
+
+test('ревью по кругу: стоп раньше лимита, уточнение человека доходит до ревьюера', async () => {
+  await startRun(l.page, 'Задача', 'Добавь умножение в калькулятор РЕВЬЮ_ПО_КРУГУ');
+  await accept(l.page, /^Принять план/).click();
+  // Первое ревью — замечание, вторая попытка, повторное ревью — то же самое: стоп, хотя третья попытка ещё есть.
+  await expect(l.page.getByText('Ходят по кругу', { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(l.page.getByRole('list', { name: 'Замечания, которые не сдвинулись' })).toContainText('mul не проверяет аргументы');
+  await l.page.locator('.gate-comment').fill('Проверка аргументов не нужна, mul — внутренняя функция');
+  await l.page.getByRole('button', { name: /Уточнить и ещё попытка/ }).click();
+  await accept(l.page).click();
+  await expect.poll(() => resultOnBranch().math).toContain('mul');
+  const reviews = box.calls().filter((c) => /ревьюер в конвейере PurpleFlow/.test(c.prompt));
+  expect(reviews.at(-1)!.prompt).toContain('внутренняя функция');
+});

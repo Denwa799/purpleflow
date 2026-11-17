@@ -62,6 +62,12 @@ if (prompt.trim() === '/compact') {
 if (/Ты — менеджер прогона/.test(prompt)) reply('{"reply": "Всё идёт по плану."}');
 if (/Перед планом проверь/.test(prompt)) reply('{"questions": []}');
 if (/второй, независимый ревьюер/.test(prompt)) reply('{"items": []}');
+// РЕВЬЮ_ПО_КРУГУ (маркер попадает в proposal, а он — в промпт ревьюера): ревьюер стоит на своём замечании,
+// пока человек не уточнит его.
+if (/ревьюер в конвейере PurpleFlow/.test(prompt) && /РЕВЬЮ_ПО_КРУГУ/.test(prompt) && !/Уточнения человека/.test(prompt)) {
+  const origin = /повторное ревью/.test(prompt) ? 'unfixed' : 'new';
+  reply(JSON.stringify({ blocking: [{ file: 'src/math.js', line: 1, message: 'mul не проверяет аргументы', origin }], notes: [] }));
+}
 if (/ревьюер в конвейере PurpleFlow/.test(prompt)) reply('{"blocking": [], "notes": []}');
 
 if (/планировщик/.test(sys)) {
@@ -81,7 +87,7 @@ if (/планировщик/.test(sys)) {
   }
   write(
     path.join(dir, 'proposal.md'),
-    '# Умножение\n\n## Why\nНужно умножать два числа, сейчас есть только сложение, а задача его требует.\n\n## What Changes\n- Функция mul в src/math.js\n',
+    `# Умножение\n\n## Why\nНужно умножать два числа, сейчас есть только сложение, а задача его требует.${/РЕВЬЮ_ПО_КРУГУ/.test(prompt) ? ' РЕВЬЮ_ПО_КРУГУ' : ''}\n\n## What Changes\n- Функция mul в src/math.js\n`,
   );
   write(path.join(dir, 'tasks.md'), '## 1. Код\n- [ ] 1.1 mul в src/math.js\n');
   write(

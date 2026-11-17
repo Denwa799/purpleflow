@@ -689,3 +689,37 @@ test('зависимости: копия node_modules; lock-файлы совп�
   assert.ok(fs.existsSync(path.join(other, 'node_modules', 'pkg', 'i.js')));
   assert.equal(b.prepared, undefined);
 });
+
+test('ревью по кругу: те же замечания после попытки — стоп раньше лимита; уточнение человека получает и ревьюер', unix, async (t) => {
+  const prompts: string[] = [];
+  let origin: 'unfixed' | 'new' = 'unfixed';
+  const { k, repo, save } = setup(t, (o) => {
+    prompts.push(o.prompt);
+    return okReply(JSON.stringify({ blocking: [{ message: 'нет проверки на null', origin }], notes: [] }));
+  });
+  k.engine = { ...k.engine, drive: async () => {} };
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'правка\n');
+  const prev = { at: '2026-01-01T00:00:00Z', blocking: [{ file: null, line: null, message: 'нет проверки на null' }], notes: [] };
+  const run = save({ next: 'review', implAttemptsUsed: 2, implAttemptsLimit: 3, reviews: [prev] });
+  await stageReview(k, run);
+  assert.equal(run.next, 'limit', 'попытка ещё есть, но это круг');
+  assert.equal(run.stuck?.items.length, 1);
+  assert.match(run.message ?? '', /по кругу/);
+
+  run.status = 'waiting';
+  k.save(run);
+  await decide(k, run.id, 'approve', 'Проверка на null есть выше, в parse()');
+  const r = k.mustLoad(run.id);
+  assert.deepEqual([r.next, r.stuck, r.implAttemptsLimit], ['implement', undefined, 3]);
+  assert.deepEqual(r.reviewGuidance, ['Проверка на null есть выше, в parse()']);
+  assert.match(r.feedback!.text, /в parse\(\)/);
+
+  // Следующее ревью видит уточнение; новое замечание — не круг, обычная попытка.
+  origin = 'new';
+  r.next = 'review';
+  r.implAttemptsUsed = 2;
+  await stageReview(k, r);
+  assert.match(prompts.at(-1)!, /Уточнения человека[\s\S]*в parse\(\)/);
+  assert.equal(r.next, 'implement');
+  assert.equal(r.stuck, undefined);
+});

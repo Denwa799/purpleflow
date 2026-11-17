@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Globe, Wrench, CircleCheck, ClipboardCheck, RotateCcw, UserRoundCheck, MessageCircleQuestion } from 'lucide-react';
-import type { StageId } from '@purpleflow/core';
+import type { ReviewItem, StageId } from '@purpleflow/core';
 import { Button, TextArea } from '../../components/ui';
 import { bridge } from '../../lib/api';
 
@@ -23,6 +23,8 @@ export function GateBar(props: {
   onFix?: () => void;
   /** Сколько замечаний ревьюера выбрано галочками на приёмке. */
   pickedCount?: number;
+  /** Исполнитель и ревьюер ходят по кругу: эти замечания вернулись неисправленными. */
+  stuck?: ReviewItem[];
 }) {
   const { gate, comment, setComment, lineCount, busy, error } = props;
   const [open, setOpen] = useState(false);
@@ -57,7 +59,8 @@ export function GateBar(props: {
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
   const mod = bridge.platform === 'darwin' ? '⌘' : 'Ctrl+';
-  const title = gate === 'gate1' ? 'Утверждение плана' : gate === 'gate2' ? 'Приёмка' : 'Попытки исчерпаны';
+  const stuck = gate === 'limit' && props.stuck?.length ? props.stuck : null;
+  const title = gate === 'gate1' ? 'Утверждение плана' : gate === 'gate2' ? 'Приёмка' : stuck ? 'Ходят по кругу' : 'Попытки исчерпаны';
   const needsComment = gate !== 'limit';
   return (
     <div className="gatebar is-gate">
@@ -77,9 +80,27 @@ export function GateBar(props: {
             (props.diffShown
               ? `Замечаний на строках: ${lineCount}. Они уйдут исполнителю при возврате.`
               : 'Посмотрите дифф и замечания ревьюера.')}
-          {gate === 'limit' && 'Можно дать исполнителю ещё одну попытку с вашим комментарием.'}
+          {gate === 'limit' &&
+            (stuck
+              ? 'Ревьюер вернул те же замечания после попытки их исправить. Разберите спор: уточнение увидят и исполнитель, и ревьюер.'
+              : 'Можно дать исполнителю ещё одну попытку с вашим комментарием.')}
         </span>
       </div>
+      {stuck && (
+        <ul className="gate-stuck" aria-label="Замечания, которые не сдвинулись">
+          {stuck.map((i, n) => (
+            <li key={n}>
+              {i.file && (
+                <code>
+                  {i.file}
+                  {i.line ? `:${i.line}` : ''}
+                </code>
+              )}{' '}
+              {i.message.split('\n')[0]}
+            </li>
+          ))}
+        </ul>
+      )}
       {(open || gate === 'limit') && (
         <TextArea
           className="gate-comment"
@@ -87,7 +108,9 @@ export function GateBar(props: {
           autoFocus={open}
           placeholder={
             gate === 'limit'
-              ? 'Подсказка исполнителю (необязательно)'
+              ? stuck
+                ? 'Уточните замечание: в чём ревьюер не прав или как именно исправить — например, «проверка на null уже есть в parse()»'
+                : 'Подсказка исполнителю (необязательно)'
               : gate === 'gate2'
                 ? 'Что поправить — например: «кнопку сделать синей», «добавить пустое состояние»'
                 : 'Что доработать'
@@ -134,7 +157,7 @@ export function GateBar(props: {
               </Button>
             )}
             <Button tone="primary" icon={<RotateCcw size={14} />} busy={busy === 'approve'} onClick={props.onApprove}>
-              Ещё попытка <kbd className="kbd-mini">{mod}↵</kbd>
+              {stuck ? 'Уточнить и ещё попытка' : 'Ещё попытка'} <kbd className="kbd-mini">{mod}↵</kbd>
             </Button>
           </>
         ) : (

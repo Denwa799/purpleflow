@@ -112,6 +112,12 @@ export async function mapFilesToPlan(k: Kernel, id: string) {
   k.save(fresh);
 }
 
+/** Уточнения человека к прошлым замечаниям: ревьюер не настаивает на том, что человек уже разобрал. */
+function guidanceBlock(run: RunFile): string {
+  if (!run.reviewGuidance?.length) return '';
+  return `\n## Уточнения человека к замечаниям\n\nИсполнитель и ревьюер уже ходили по кругу, и человек разобрал спор. Его слова важнее твоих прошлых замечаний: не возвращай как блокирующее то, что он признал верным или ненужным.\n\n${run.reviewGuidance.map((g) => `- ${g.replace(/\n+/g, ' ')}`).join('\n')}\n`;
+}
+
 /**
  * Повторное ревью — продолжение прошлого: ревьюер видит свои блокирующие замечания и ответ исполнителя,
  * чтобы проверить исправления, а не читать большой дифф каждый раз заново и находить новое.
@@ -135,6 +141,17 @@ export function previousReviewBlock(k: Kernel, run: RunFile): string {
   });
 }
 
+/**
+ * Круг: прошлое ревью было с блокирующими, исполнитель пытался их исправить, а ревьюер ни одно не снял —
+ * вернул столько же «не исправлено». Тогда замечания, которые остались, — круг; иначе null (есть сдвиг).
+ */
+export function reviewLoop(run: RunFile, review: ReviewResult): ReviewItem[] | null {
+  const prev = run.reviews.at(-2);
+  if (!prev?.blocking.length || run.reviews.at(-1) !== review) return null;
+  const unfixed = review.blocking.filter((i) => i.origin === 'unfixed');
+  return unfixed.length && unfixed.length >= prev.blocking.length ? unfixed : null;
+}
+
 export async function stageReview(k: Kernel, run: RunFile) {
   const { review } = await reviewPass(k, run);
   if (!review.blocking.length) {
@@ -145,6 +162,8 @@ export async function stageReview(k: Kernel, run: RunFile) {
     return;
   }
   run.feedback = { source: 'review', text: reviewFeedback(k, review) };
+  const loop = reviewLoop(run, review);
+  if (loop) return k.stopOnLoop(run, loop);
   k.nextImplementOrLimit(run, `Ревьюер оставил блокирующие замечания, а ${run.implAttemptsUsed} попытки реализации исчерпаны.`);
 }
 
@@ -194,7 +213,7 @@ export async function reviewPass(k: Kernel, run: RunFile, quiet = false): Promis
   ]
     .filter(Boolean)
     .join('\n');
-  const previous = previousReviewBlock(k, run);
+  const previous = previousReviewBlock(k, run) + guidanceBlock(run);
   const prompt = k.prompts.render('review.md', {
     changeId: run.changeId,
     proposal: docs.proposal || '(нет)',

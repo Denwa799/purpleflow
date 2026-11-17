@@ -1179,3 +1179,24 @@ body.is-col-resizing .monaco-editor {
 .tab.is-on > svg {
   opacity: 1;
 }
+.gate-stuck {
+  order: 4;
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: var(--s-3) var(--s-4) var(--s-3) calc(var(--s-4) + 14px);
+  border-radius: 14px;
+  background: var(--wait-wash);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: 1.5;
+}
+.gate-stuck li::marker {
+  color: var(--wait);
+}
+.gate-stuck code {
+  font-size: var(--fs-12);
+  color: var(--text-1);
+}

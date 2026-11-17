@@ -57,6 +57,8 @@ export async function decide(
     gateAttempt.summary = decision === 'approve' ? 'Принято' : decision === 'reject' ? 'Возвращено' : 'Отменено';
   }
   r.message = undefined;
+  const loop = gate === 'limit' ? r.stuck : undefined;
+  r.stuck = undefined;
   const human = (text: string): Feedback => ({ source: 'human', text, lineComments: lineComments?.length ? lineComments : undefined });
 
   if (decision === 'fix') {
@@ -137,8 +139,11 @@ export async function decide(
     }
   } else {
     // limit: «Ещё попытка» — даём одну попытку, сохраняя последнюю обратную связь.
+    // Остановились на круге раньше лимита — оставшиеся попытки не отнимаем.
     r.next = 'implement';
-    r.implAttemptsLimit = r.implAttemptsUsed + 1;
+    r.implAttemptsLimit = Math.max(r.implAttemptsLimit, r.implAttemptsUsed + 1);
+    // Уточнение на круге — и ревьюеру: иначе он вернёт то же замечание, как бы исполнитель его ни понял.
+    if (loop && comment?.trim()) r.reviewGuidance = [...(r.reviewGuidance ?? []), comment.trim()];
     const prev = r.feedback?.text ?? '';
     r.feedback = {
       source: r.feedback?.source ?? 'human',
@@ -204,6 +209,10 @@ export async function autopilotGate(k: Kernel, run: RunFile, gate: GateId) {
     }
     k.log(run, c.violet('Автопилот: план принят без остановки.') + '\n');
     await autoDecide(k, run.id, gate, 'Автопилот не смог принять план — примите его сами', 'Автопилот');
+    return;
+  }
+  if (gate === 'limit' && run.stuck) {
+    k.log(run, c.amber('Автопилот: исполнитель и ревьюер ходят по кругу — новая попытка ничего не даст, решите сами.') + '\n');
     return;
   }
   if (gate === 'limit' && !run.autoRetried) {

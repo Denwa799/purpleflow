@@ -131,6 +131,9 @@ async function replan(k: Kernel, r: RunFile, reason: string, keepCode: boolean) 
   };
   r.replanNote = reason;
   r.next = 'plan';
+  // Новый план — прошлые замечания и уточнения к ним больше не о том.
+  r.stuck = undefined;
+  r.reviewGuidance = undefined;
   r.planRetries = 0;
   // Новый план — новый запас попыток: иначе после принятия сразу «попытки исчерпаны».
   r.implAttemptsLimit = r.implAttemptsUsed + MODE_LIMIT[r.mode];

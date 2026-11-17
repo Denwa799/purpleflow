@@ -14,7 +14,7 @@ import { type BasePrep, type CoreOptions, type Listener, StopSignal, type Tools 
 import { STAGE_TITLES, isGate } from './stage-info.js';
 import { RunStore } from './store.js';
 import { setTraceFile } from './trace.js';
-import type { CoreEvent, PreviewState, RunFile, StageAttempt, StageId } from './types.js';
+import type { CoreEvent, PreviewState, ReviewItem, RunFile, StageAttempt, StageId } from './types.js';
 import { AGENT_KINDS, enabledAgents, type AgentKind } from './types.js';
 
 /** Операции движка, которые нужны стадиям и сервисам; связываются в Orchestrator, чтобы модули не зависели от движка. */
@@ -166,6 +166,22 @@ export class Kernel {
     this.log(run, c.coral(`✗ ${error}`) + '\n');
     this.emit({ type: 'stage.failed', runId: run.id, stage, error });
     this.emit({ type: 'run.finished', runId: run.id, status: 'stopped', message: error });
+  }
+
+  /**
+   * Ревью вернуло те же замечания после попытки их исправить — следующая попытка, скорее всего, пройдёт тот же круг.
+   * Останавливаемся на решении человека, даже если попытки ещё есть.
+   */
+  stopOnLoop(run: RunFile, items: ReviewItem[]) {
+    run.stuck = { items };
+    run.next = 'limit';
+    run.message = `Исполнитель и ревьюер ходят по кругу: ${items.length === 1 ? 'замечание не исправлено' : `${items.length} замечания не исправлены`} и после попытки. Уточните замечание (увидят исполнитель и ревьюер), примите результат как есть или остановите прогон.`;
+    this.log(
+      run,
+      c.amber('! ревьюер вернул те же замечания — новая попытка, скорее всего, пройдёт тот же круг. Останавливаюсь на решении человека') +
+        '\n',
+    );
+    this.save(run);
   }
 
   nextImplementOrLimit(run: RunFile, limitMessage: string) {

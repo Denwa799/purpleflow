@@ -11,7 +11,7 @@ import { getProjectConfig } from '../services/projects.js';
 import { envFilesOf } from '../services/workspace.js';
 import { repoChangedFiles, repoDiffText } from '../services/repos.js';
 import type { CheckResult, ReviewResult, RunFile, TestResult } from '../types.js';
-import { reviewFeedback, reviewPass } from './review.js';
+import { reviewFeedback, reviewLoop, reviewPass } from './review.js';
 /** Линтер и тесты в worktree. Общий для «Проверок», базовых проверок и воспроизведения бага. */
 export async function runChecks(
   k: Kernel,
@@ -539,6 +539,9 @@ export async function stageTests(k: Kernel, run: RunFile) {
         : !result.passed
           ? 'Проверки красные'
           : 'Ревьюер оставил блокирующие замечания';
+    // Проверки зелёные, а ревью вернуло те же замечания — круг; красные проверки — обычная попытка, это не спор с ревьюером.
+    const loop = result.passed ? reviewLoop(run, review) : null;
+    if (loop) return k.stopOnLoop(run, loop);
     k.nextImplementOrLimit(run, `${why}, а ${run.implAttemptsUsed} попытки реализации исчерпаны.`);
     return;
   }
