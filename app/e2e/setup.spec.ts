@@ -1,4 +1,6 @@
 // Первый запуск: окно настройки после экрана входа. Настоящую установку не запускаем: сломанный путь останавливает её до npm.
+import fs from 'node:fs';
+import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { launch, makeSandbox, quit, type Launched, type Sandbox } from './harness';
 
@@ -68,4 +70,32 @@ test('пока проектов нет, «Как начать?» в меню о�
   await l.page.getByRole('button', { name: /Пропустить/ }).click();
   await expect(l.page.locator('#task')).toBeVisible();
   await expect(startBtn).toBeVisible();
+});
+
+test('выключенный codex не нужен: строка пропадает, роли переходят на claude', async () => {
+  await start({
+    authPrompted: true,
+    agents: { planner: 'claude', executor: 'claude', reviewer: 'codex' },
+    toolPaths: { codex: '/нет/такого/codex' },
+  });
+
+  const dialog = l.page.getByRole('dialog', { name: 'Подготовим окружение' });
+  await expect(dialog.getByRole('button', { name: 'Настроить' })).toBeVisible();
+  await dialog.getByRole('switch', { name: 'Codex CLI' }).click();
+  await expect(dialog.getByRole('switch', { name: 'Codex CLI' })).toHaveAttribute('aria-checked', 'false');
+  // Последний включённый агент выключить нельзя.
+  await expect(dialog.getByRole('switch', { name: 'Claude Code' })).toBeDisabled();
+  await expect(dialog.getByText('Codex CLI', { exact: true })).toHaveCount(1);
+  await expect(dialog.getByRole('button', { name: 'Готово, к задаче' })).toBeVisible();
+  if (process.env.PURPLEFLOW_SHOTS) await dialog.screenshot({ path: path.join(box.root, '..', 'pf-agents-dialog.png') });
+
+  await dialog.getByRole('button', { name: 'Позже' }).click();
+  const saved = JSON.parse(fs.readFileSync(path.join(box.profile, 'settings.json'), 'utf8'));
+  expect(saved.enabledAgents).toEqual(['claude']);
+  expect(saved.agents.reviewer).toBe('claude');
+  expect(saved.models.reviewer).toBe('opus');
+
+  await l.page.locator('.settings-tabs').getByText('Модели', { exact: true }).click();
+  await expect(l.page.getByRole('heading', { name: 'Агенты и модели по ролям' })).toBeVisible();
+  await expect(l.page.getByRole('radio', { name: 'codex' })).toHaveCount(0);
 });

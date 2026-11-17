@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { app, safeStorage } from 'electron';
-import type { AgentKind, CoreSettings, Role } from '@purpleflow/core';
+import { enabledAgents, type AgentKind, type CoreSettings, type Role } from '@purpleflow/core';
 import type { PublicSettings, SettingsPatch } from '../shared/ipc';
 import { diagnosticsFrom } from './diagnostics';
 import { ACCOUNT_ENABLED, DEFAULT_PROXY } from './provider';
@@ -14,6 +14,8 @@ interface StoredSettings {
   models: CoreSettings['models'];
   /** Роли конвейера; visual — по умолчанию claude, manager и scan — claude, если установлен, иначе codex. */
   agents: Record<Role, AgentKind> & { visual?: AgentKind; manager?: AgentKind; scan?: AgentKind };
+  /** Какими CLI пользоваться; выключенный не выполняет ни одной роли. Хотя бы один включён. */
+  enabledAgents: AgentKind[];
   agentTimeoutMin: number;
   testTimeoutMin: number;
   maxParallel: number;
@@ -44,6 +46,7 @@ const DEFAULTS: StoredSettings = {
   proxy: { baseUrl: '', codexBaseUrl: '', apiKeyEnc: '', enabled: true },
   models: { planner: 'opus', executor: 'sonnet', reviewer: '', visual: '', manager: '', scan: '' },
   agents: { planner: 'claude', executor: 'claude', reviewer: 'codex' },
+  enabledAgents: ['claude', 'codex'],
   agentTimeoutMin: 30,
   maxParallel: 2,
   testTimeoutMin: 10,
@@ -58,6 +61,8 @@ const DEFAULTS: StoredSettings = {
   diagnostics: true,
   usageInstallId: '',
 };
+
+const AGENT_SLOTS = ['planner', 'executor', 'reviewer', 'visual', 'manager', 'scan'] as const;
 
 const file = () => path.join(app.getPath('userData'), 'settings.json');
 
@@ -80,6 +85,7 @@ function load(): StoredSettings {
       models: { ...DEFAULTS.models, ...raw.models },
       agents: { ...DEFAULTS.agents, ...raw.agents },
       toolPaths: { ...raw.toolPaths },
+      enabledAgents: enabledAgents({ enabledAgents: raw.enabledAgents }),
       diagnostics: diagnosticsFrom({ ...raw, errorReports, usageEvents }),
     };
   } catch (e) {
@@ -180,6 +186,7 @@ export function publicSettings(): PublicSettings {
     proxy: { baseUrl: s.proxy.baseUrl, codexBaseUrl: s.proxy.codexBaseUrl, hasKey: Boolean(s.proxy.apiKeyEnc), enabled: s.proxy.enabled },
     models: s.models,
     agents: s.agents,
+    enabledAgents: s.enabledAgents,
     agentTimeoutMin: s.agentTimeoutMin,
     testTimeoutMin: s.testTimeoutMin,
     maxParallel: s.maxParallel,
@@ -209,6 +216,7 @@ export function coreSettings(): CoreSettings {
     },
     models: s.models,
     agents: s.agents,
+    enabledAgents: s.enabledAgents,
     claudeAuth: s.claudeAuth,
     userConfig: s.userConfig,
     agentTimeoutMin: s.agentTimeoutMin,
@@ -222,6 +230,15 @@ export function updateSettings(patch: SettingsPatch): PublicSettings {
   if (patch.toolPaths) s.toolPaths = { ...s.toolPaths, ...patch.toolPaths };
   if (patch.models) s.models = { ...s.models, ...patch.models };
   if (patch.agents) s.agents = { ...s.agents, ...patch.agents };
+  if (patch.enabledAgents) s.enabledAgents = enabledAgents(patch);
+  // Роли на выключенном CLI переходят на включённый — с его моделью по умолчанию: имя модели одного CLI другому не подходит.
+  for (const slot of AGENT_SLOTS) {
+    const a = s.agents[slot];
+    if (a && !s.enabledAgents.includes(a)) {
+      s.agents[slot] = s.enabledAgents[0];
+      s.models[slot] = '';
+    }
+  }
   if (patch.proxy) {
     if (patch.proxy.baseUrl !== undefined) s.proxy.baseUrl = patch.proxy.baseUrl;
     if (patch.proxy.codexBaseUrl !== undefined) s.proxy.codexBaseUrl = patch.proxy.codexBaseUrl;

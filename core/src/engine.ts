@@ -28,7 +28,7 @@ import { stageReview } from './stages/review.js';
 import { stageVisual } from './stages/visual.js';
 import { traced } from './trace.js';
 import type { AgentKind, GateId, Role, RunFile, StartRunInput } from './types.js';
-import { DEFAULT_AGENTS } from './types.js';
+import { DEFAULT_AGENTS, enabledAgent } from './types.js';
 
 /** После перезапуска приложения: прогоны, оборванные посреди стадии, помечаются остановленными. */
 export async function recover(k: Kernel): Promise<void> {
@@ -82,12 +82,16 @@ export async function recover(k: Kernel): Promise<void> {
 export async function start(k: Kernel, input: StartRunInput): Promise<string> {
   const s = k.opts.getSettings();
   // Нужны только агенты, выбранные для ролей: на машине может стоять один claude или один codex.
+  // Выключенный в настройках CLI роль не выполняет: она переходит на включённый, с его моделью по умолчанию.
   const roles: Record<Role, AgentKind> = {
-    planner: s.agents?.planner ?? DEFAULT_AGENTS.planner,
-    executor: s.agents?.executor ?? DEFAULT_AGENTS.executor,
-    reviewer: s.agents?.reviewer ?? DEFAULT_AGENTS.reviewer,
+    planner: enabledAgent(s, s.agents?.planner ?? DEFAULT_AGENTS.planner),
+    executor: enabledAgent(s, s.agents?.executor ?? DEFAULT_AGENTS.executor),
+    reviewer: enabledAgent(s, s.agents?.reviewer ?? DEFAULT_AGENTS.reviewer),
   };
-  const visualAgent = s.agents?.visual ?? 'claude';
+  const models = { ...s.models };
+  for (const r of Object.keys(roles) as Role[]) if (roles[r] !== (s.agents?.[r] ?? DEFAULT_AGENTS[r])) models[r] = '';
+  const visualAgent = enabledAgent(s, s.agents?.visual ?? 'claude');
+  if (visualAgent !== (s.agents?.visual ?? 'claude')) models.visual = '';
   const tools = await k.tools(['git', 'openspec', ...new Set(Object.values(roles))]);
   const git = new Git(tools.git, k.opts.env);
   if (!input.task.trim()) throw new Error('Опишите задачу');
@@ -161,8 +165,8 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
     envFiles: input.envFiles?.map((f) => f.trim()).filter(Boolean),
     // В режиме «ветка» зависимости — уже установленные пользователем; подготовку не запускаем.
     prepared: workspace === 'branch' || !input.setupCommand?.trim(),
-    models: { ...s.models },
-    agents: { ...roles, ...(s.agents?.visual ? { visual: s.agents.visual } : {}) },
+    models,
+    agents: { ...roles, ...(s.agents?.visual || visualAgent !== 'claude' ? { visual: visualAgent } : {}) },
     status: queued ? 'queued' : 'running',
     next: MODE_FIRST[mode],
     attempts: [],

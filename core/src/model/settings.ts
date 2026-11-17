@@ -40,6 +40,20 @@ export type Models = Record<Role, string> & { visual?: string; manager?: string;
 
 export const DEFAULT_AGENTS: Record<Role, AgentKind> = { planner: 'claude', executor: 'claude', reviewer: 'codex' };
 
+export const AGENT_KINDS: AgentKind[] = ['claude', 'codex'];
+
+/** Включённые в настройках CLI-агенты; пусто или не задано — оба. */
+export function enabledAgents(s: { enabledAgents?: AgentKind[] }): AgentKind[] {
+  const list = AGENT_KINDS.filter((a) => s.enabledAgents?.includes(a));
+  return list.length ? list : [...AGENT_KINDS];
+}
+
+/** Агент, если он включён, иначе — включённый другой: выключенный CLI роли не выполняет. */
+export function enabledAgent(s: { enabledAgents?: AgentKind[] }, a: AgentKind): AgentKind {
+  const on = enabledAgents(s);
+  return on.includes(a) ? a : on[0];
+}
+
 /**
  * Агенты: роли конвейера плюс визуальная проверка (по умолчанию claude) и менеджер прогона
  * и сканирование проекта — команды и профиль (оба по умолчанию — claude, если он установлен, иначе codex).
@@ -59,6 +73,8 @@ export interface CoreSettings {
   models: Models;
   /** Агент на роль; по умолчанию планировщик и исполнитель — claude, ревьюер — codex. */
   agents?: Agents;
+  /** Какими CLI пользоваться: выключенный не запускается, даже если установлен. Пусто или не задано — оба. */
+  enabledAgents?: AgentKind[];
   /**
    * Как claude авторизуется без прокси: 'login' — собственный вход Claude Code
    * (ANTHROPIC_API_KEY/AUTH_TOKEN/BASE_URL из окружения игнорируются), 'env' — ключ из окружения.

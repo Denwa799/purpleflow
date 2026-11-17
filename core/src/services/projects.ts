@@ -31,6 +31,7 @@ import type {
   RunMode,
   StageAttempt,
 } from '../types.js';
+import { enabledAgent } from '../types.js';
 import { service } from './agents.js';
 import { ghBin } from './pr.js';
 import { getChangeDocs } from './runs.js';
@@ -280,7 +281,7 @@ async function runEnvCheck(
   at: string,
 ): Promise<EnvCheck> {
   const s = k.opts.getSettings();
-  const agent = s.agents?.visual ?? 'claude';
+  const agent = enabledAgent(s, s.agents?.visual ?? 'claude');
   if (!(await k.hasTool(agent))) {
     return {
       ready: false,

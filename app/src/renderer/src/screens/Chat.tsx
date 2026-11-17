@@ -9,6 +9,7 @@ import { ModelInput } from '../components/ModelInput';
 import { useModelOptions } from '../lib/useModelOptions';
 import { onCoreEvent, useStore } from '../lib/store';
 import { shortPath } from '../lib/format';
+import { enabledList } from '../lib/tools';
 import { formatPick, insertPick, type PickedElement } from '../lib/pickElement';
 import { ChatSide, ChatSideRail, useChatChanged, useSideWidth, type ChatPane } from './ChatSide';
 import { bridge, cleanErr } from '../lib/api';
@@ -147,7 +148,10 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
     return () => window.removeEventListener('paste', onPaste);
   }, []);
 
-  const conf = chat ?? draft;
+  // Агент чата мог быть выключен в настройках — отвечает включённый, с моделью по умолчанию (так же решает ядро).
+  const enabled = enabledList(settings?.enabledAgents);
+  const raw = chat ?? draft;
+  const conf = enabled.includes(raw.agent) ? raw : { ...raw, agent: enabled[0], model: '' };
   const setConf = async (patch: Partial<Pick<ChatFile, 'agent' | 'model' | 'edits'>>) => {
     setError(null);
     if (!chat) return setDraft((d) => ({ ...d, ...patch, ...(patch.agent ? { model: '' } : {}) }));
@@ -477,7 +481,7 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
                   </button>
                 </div>
                 <div className="segmented chat-agent" role="radiogroup" aria-label="Агент">
-                  {(['claude', 'codex'] as AgentKind[]).map((a) => (
+                  {enabled.map((a) => (
                     <button
                       key={a}
                       type="button"

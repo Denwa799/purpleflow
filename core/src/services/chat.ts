@@ -11,6 +11,7 @@ import { killGroup } from '../proc.js';
 import { writeAtomic } from '../store.js';
 import { applyStep, partsText, settleParts, type ChatAnswer } from '../chatparts.js';
 import type { AgentKind, ChatFile, ChatMessage, ChatSkill, ChatSummary, DiffFile, NextPartDraft, PreviewState } from '../types.js';
+import { enabledAgent } from '../types.js';
 import { agentModel, service, serviceAgent } from './agents.js';
 import { findMentions, listSkills, mentionsBlock, walkFiles } from './mentions.js';
 import { getPreview, launchPreview, stopPreview } from './preview.js';
@@ -308,7 +309,8 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
   let changed: string[] | undefined;
   try {
     const s = k.opts.getSettings();
-    const agent = chat.agent;
+    // Агент чата мог быть выключен в настройках — отвечает включённый, со своей моделью по умолчанию.
+    const agent = enabledAgent(s, chat.agent);
     const tools = await k.tools([agent]);
     const cwd = chat.projectPath ?? path.join(chatFilesDir(k, id), 'work');
     fs.mkdirSync(cwd, { recursive: true });
@@ -328,7 +330,7 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
     prompt += mentionsBlock(findMentions(said, cwd, listSkills({ projectPath: chat.projectPath, userConfig: Boolean(s.userConfig) })));
     // Сжатие — встроенная команда CLI: только она, без истории и вложений.
     if (compact) prompt = '/compact';
-    const model = chat.model || chatDefaultModel(k, agent) || undefined;
+    const model = (agent === chat.agent ? chat.model : '') || chatDefaultModel(k, agent) || undefined;
     const common = {
       bin: tools[agent],
       cwd,

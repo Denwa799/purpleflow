@@ -7,6 +7,7 @@ import { Button } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
 import { shortPath } from '../lib/format';
 import { useStore } from '../lib/store';
+import { enabledList } from '../lib/tools';
 import { CmdChips, NotRepoNote, type LoadedProject, loadProject, saveLoaded } from './projects/common';
 import { AgentSwitch } from './settings/parts';
 
@@ -14,9 +15,14 @@ type Job = 'idle' | 'busy' | 'done' | 'error';
 
 export function FirstProjectScreen() {
   const { state, go, saveSettings } = useStore();
-  const found = (a: AgentKind) => Boolean(state.tools?.[a].path && !state.tools[a].error);
+  const enabled = enabledList(state.settings?.enabledAgents);
+  const enabledAgentOf = (a: AgentKind) => (enabled.includes(a) ? a : enabled[0]);
+  // Выключенный в настройках агент сканировать не будет, даже если установлен.
+  const found = (a: AgentKind) => enabled.includes(a) && Boolean(state.tools?.[a].path && !state.tools[a].error);
   // Как в настройках: не выбран — claude, если он установлен, иначе codex. Второй агент подстрахует, если первый не настроен.
-  const scanAgent: AgentKind = state.settings?.agents.scan ?? (state.tools && !found('claude') ? 'codex' : 'claude');
+  const scanAgent: AgentKind = enabledAgentOf(
+    state.settings?.agents.scan ?? (enabled.length === 1 ? enabled[0] : state.tools && !found('claude') ? 'codex' : 'claude'),
+  );
   const pickScanAgent = (a: AgentKind) => {
     if (a === scanAgent && state.settings?.agents.scan) return;
     // Имя модели одного CLI другому не подходит — сбрасываем на модель по умолчанию.
@@ -191,7 +197,7 @@ export function FirstProjectScreen() {
               {found('claude') && found('codex') ? (
                 <span className="fp-agent">
                   <span className="muted">Агент</span>
-                  <AgentSwitch label="Сканирование проекта" value={scanAgent} onChange={pickScanAgent} />
+                  <AgentSwitch enabled={enabled} label="Сканирование проекта" value={scanAgent} onChange={pickScanAgent} />
                 </span>
               ) : (
                 state.tools && <span className="muted">Сканирует {scanAgent}</span>

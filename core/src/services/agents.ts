@@ -6,7 +6,7 @@ import { addUsage, type AgentResult } from '../agents/common.js';
 import { prependPath } from '../env.js';
 import type { Kernel } from '../kernel.js';
 import type { AgentKind, Role, RunFile } from '../types.js';
-import { DEFAULT_AGENTS } from '../types.js';
+import { DEFAULT_AGENTS, enabledAgents } from '../types.js';
 import { knowledgeBlock, relatedRepos } from './projects.js';
 
 type ServiceOptions = {
@@ -98,7 +98,10 @@ async function serviceOn(k: Kernel, agent: AgentKind, model: string | undefined,
 export async function serviceAgent(k: Kernel): Promise<AgentKind> {
   if (await k.hasTool('claude')) return 'claude';
   if (await k.hasTool('codex')) return 'codex';
-  throw new Error('Не найдены ни claude, ни codex. Укажите пути в настройках.');
+  const on = enabledAgents(k.opts.getSettings());
+  throw new Error(
+    on.length === 1 ? `Не найден ${on[0]}. Укажите путь в настройках.` : 'Не найдены ни claude, ни codex. Укажите пути в настройках.',
+  );
 }
 
 /** Модель первой роли, которую выполняет этот агент. */

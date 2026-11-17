@@ -2,6 +2,7 @@
 import type { AgentKind, ConnectionCheck, Role, ToolName } from '@purpleflow/core';
 import { CheckCircle2, PlugZap, XCircle } from 'lucide-react';
 import { Button } from '../../components/ui';
+import { AGENT_KINDS } from '../../lib/tools';
 import type { SettingsDraft } from './useSettingsDraft';
 
 export const TOOL_INFO: Record<ToolName, { title: string; install: string }> = {
@@ -17,14 +18,65 @@ export const ROLES: { id: Role; title: string; text: string }[] = [
 ];
 export const MODEL_PLACEHOLDER: Record<AgentKind, string> = { claude: 'opus, sonnet, haiku или полное имя', codex: 'по умолчанию codex' };
 /** Выбор CLI-агента для роли. */
-export function AgentSwitch({ label, value, onChange }: { label: string; value: AgentKind; onChange: (a: AgentKind) => void }) {
+export function AgentSwitch({
+  label,
+  value,
+  enabled,
+  onChange,
+}: {
+  label: string;
+  value: AgentKind;
+  /** Включённые CLI: выключенный не предлагаем. */
+  enabled: AgentKind[];
+  onChange: (a: AgentKind) => void;
+}) {
   return (
     <div className="segmented small" role="radiogroup" aria-label={`Агент: ${label}`}>
-      {(['claude', 'codex'] as AgentKind[]).map((a) => (
+      {enabled.map((a) => (
         <button key={a} role="radio" aria-checked={value === a} className={value === a ? 'is-on' : ''} onClick={() => onChange(a)}>
           {a}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Какими CLI пользоваться. Выключенный не выполняет ни одной роли и не нужен на машине;
+ * последний включённый выключить нельзя.
+ */
+export function AgentToggles({ draft }: { draft: SettingsDraft }) {
+  const { enabled, setEnabled, savingEnabled } = draft;
+  return (
+    <div className="agent-toggles">
+      <span className="qs-label">Агенты</span>
+      <div className="agent-toggles-list">
+        {AGENT_KINDS.map((a) => {
+          const on = enabled.includes(a);
+          const last = on && enabled.length === 1;
+          return (
+            <button
+              key={a}
+              role="switch"
+              aria-checked={on}
+              className={`switch ${on ? 'is-on' : ''}`}
+              disabled={last || savingEnabled}
+              title={last ? 'Нужен хотя бы один агент' : undefined}
+              onClick={() =>
+                void setEnabled(on ? enabled.filter((x) => x !== a) : AGENT_KINDS.filter((x) => x === a || enabled.includes(x)))
+              }
+            >
+              <i />
+              <span>{TOOL_INFO[a].title}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p>
+        {enabled.length === 1
+          ? `Все роли выполняет ${enabled[0]}, второй агент не нужен и не запускается. Включить его можно здесь же.`
+          : 'Роли можно делить между claude и codex — например, ревью другой моделью находит больше. Оставьте один, если пользуетесь только им.'}
+      </p>
     </div>
   );
 }

@@ -5,14 +5,19 @@ import path from 'node:path';
 import { detectTools } from '../env.js';
 import type { Kernel } from '../kernel.js';
 import type { ConnectionCheck, Role } from '../types.js';
-import { DEFAULT_AGENTS } from '../types.js';
+import { DEFAULT_AGENTS, enabledAgents } from '../types.js';
 
 /** Тестовый запрос каждым агентом с текущими настройками прокси и моделей. */
 export async function testConnection(k: Kernel): Promise<ConnectionCheck[]> {
   const s = k.opts.getSettings();
   const found = await detectTools(k.opts.env, s.toolPaths);
-  const present = (['claude', 'codex'] as const).filter((a) => found[a].path && !found[a].error);
-  if (!present.length) throw new Error('Не найдены ни claude, ни codex. Укажите пути в настройках.');
+  const present = enabledAgents(s).filter((a) => found[a].path && !found[a].error);
+  if (!present.length) {
+    const on = enabledAgents(s);
+    throw new Error(
+      on.length === 1 ? `Не найден ${on[0]}. Укажите путь в настройках.` : 'Не найдены ни claude, ни codex. Укажите пути в настройках.',
+    );
+  }
   const tools = { claude: found.claude.path!, codex: found.codex.path! };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-check-'));
   const proxy = s.proxy.baseUrl ? s.proxy : undefined;

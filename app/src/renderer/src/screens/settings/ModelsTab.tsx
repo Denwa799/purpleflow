@@ -25,6 +25,7 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
     managerAgent,
     scanAgent,
     claudeFound,
+    enabled,
     flashSaved,
     agentTimeout,
     setAgentTimeout,
@@ -39,9 +40,12 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
         <div>
           <h2>Агенты и модели по ролям</h2>
           <p>
-            Каждую роль может выполнять claude или codex. Имя модели передаётся выбранному CLI как есть, пусто — его модель по умолчанию.
-            Служебные вызовы (сводка, уроки) — на claude, а если его нет — на codex. Новые настройки действуют на прогоны, запущенные после
-            сохранения.
+            {enabled.length > 1
+              ? 'Каждую роль может выполнять claude или codex.'
+              : `Все роли выполняет ${enabled[0]} — второй агент выключен на вкладке «Инструменты».`}{' '}
+            Имя модели передаётся выбранному CLI как есть, пусто — его модель по умолчанию.
+            {enabled.length > 1 ? 'Служебные вызовы (сводка, уроки) — на claude, а если его нет — на codex. ' : ''}Новые настройки действуют
+            на прогоны, запущенные после сохранения.
           </p>
         </div>
         <Button tone="primary" icon={<Wand2 size={15} />} onClick={() => setQuick(true)}>
@@ -51,6 +55,7 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
       {quick && (
         <QuickSetup
           installed={{ claude: claudeFound, codex: Boolean(tools?.codex.path && !tools.codex.error) }}
+          enabled={enabled}
           initialMain={agents.executor}
           onClose={() => setQuick(false)}
           onApply={async (v) => {
@@ -69,7 +74,7 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
             <div key={r.id} className={`role bezel role-${agent}`}>
               <div className="role-head">
                 <strong>{r.title}</strong>
-                <AgentSwitch label={r.title} value={agent} onChange={(a) => pickAgent(r.id, a)} />
+                <AgentSwitch enabled={enabled} label={r.title} value={agent} onChange={(a) => pickAgent(r.id, a)} />
               </div>
               <p>{r.text}</p>
               {sameAsExecutor && <p className="role-warn">Совпадает с исполнителем — ревью той же моделью находит меньше.</p>}
@@ -87,7 +92,7 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
         <div className={`role bezel role-${visualAgent}`}>
           <div className="role-head">
             <strong>Визуальная проверка</strong>
-            <AgentSwitch label="Визуальная проверка" value={visualAgent} onChange={(a) => pickAgent('visual', a)} />
+            <AgentSwitch enabled={enabled} label="Визуальная проверка" value={visualAgent} onChange={(a) => pickAgent('visual', a)} />
           </div>
           <p>
             Запускает приложение и проверяет результат в браузере через pw.
@@ -110,12 +115,12 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
         <div className={`role bezel role-${managerAgent}`}>
           <div className="role-head">
             <strong>Менеджер прогона</strong>
-            <AgentSwitch label="Менеджер прогона" value={managerAgent} onChange={(a) => pickAgent('manager', a)} />
+            <AgentSwitch enabled={enabled} label="Менеджер прогона" value={managerAgent} onChange={(a) => pickAgent('manager', a)} />
           </div>
           <p>
             Отвечает в чате прогона, как идут дела, и предлагает поправить ход работы. Хватит быстрой модели.
-            {agents.manager ? '' : ' Пока не выбран — claude, если он установлен, иначе codex.'} Пусто — модель первой роли на том же
-            агенте.
+            {agents.manager || enabled.length === 1 ? '' : ' Пока не выбран — claude, если он установлен, иначе codex.'} Пусто — модель
+            первой роли на том же агенте.
           </p>
           <ModelInput
             className="role-model"
@@ -129,12 +134,13 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
         <div className={`role bezel role-${scanAgent}`}>
           <div className="role-head">
             <strong>Сканирование проекта</strong>
-            <AgentSwitch label="Сканирование проекта" value={scanAgent} onChange={(a) => pickAgent('scan', a)} />
+            <AgentSwitch enabled={enabled} label="Сканирование проекта" value={scanAgent} onChange={(a) => pickAgent('scan', a)} />
           </div>
           <p>
             Находит команды проекта и собирает профиль — стек, структуру, соглашения. Только читает код.
-            {agents.scan ? '' : ' Пока не выбран — claude, если он установлен, иначе codex.'} Если агент не вошёл в аккаунт или упал —
-            сканирование повторит другой. Пусто — модель первой роли на том же агенте.
+            {agents.scan || enabled.length === 1 ? '' : ' Пока не выбран — claude, если он установлен, иначе codex.'}
+            {enabled.length > 1 ? ' Если агент не вошёл в аккаунт или упал — сканирование повторит другой.' : ''} Пусто — модель первой роли
+            на том же агенте.
           </p>
           <ModelInput
             className="role-model"

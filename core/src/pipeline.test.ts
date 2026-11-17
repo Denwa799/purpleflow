@@ -862,6 +862,57 @@ test('менеджер на codex по выбору в настройках, д�
 });
 
 test(
+  'выключенный в настройках codex не запускается: его роли и менеджер — на claude',
+  { skip: !hasOpenspec, timeout: 120_000 },
+  async () => {
+    const repo = fs.realpathSync(makeRepo());
+    const fake = fakeClaude({ implement: () => {}, review: () => ({ blocking: [], notes: [] }) });
+    const calls: string[] = [];
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-bin-'));
+    for (const n of ['codex', 'claude']) fs.writeFileSync(path.join(bin, n), `#!/bin/sh\necho "${n} 1.0.0"\n`, { mode: 0o755 });
+    const via = (name: string) =>
+      (async (o: { prompt: string; cwd: string }) => {
+        calls.push(name);
+        return fake.fn(o);
+      }) as never;
+    const settings = {
+      toolPaths: { codex: path.join(bin, 'codex'), claude: path.join(bin, 'claude') },
+      proxy: { baseUrl: '', apiKey: '' },
+      models: { planner: '', executor: '', reviewer: 'gpt-6-sol', manager: 'gpt-mini' },
+      agents: { planner: 'claude', executor: 'claude', reviewer: 'codex', manager: 'codex' },
+      enabledAgents: ['claude'],
+      agentTimeoutMin: 5,
+      testTimeoutMin: 2,
+      maxParallel: 2,
+    } as unknown as CoreSettings;
+    const core = new Orchestrator({
+      dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-data-')),
+      promptsDir: PROMPTS,
+      env,
+      getSettings: () => settings,
+      runners: { claude: via('claude'), codex: via('codex') },
+    });
+    const { runId } = await core.dispatch({
+      type: 'run.start',
+      input: {
+        projectPath: repo,
+        task: 'Добавь функцию mul(a, b) в src/math.js.',
+        testCommand: 'node --test',
+        mode: 'task',
+        workspace: 'worktree',
+      } as never,
+    });
+    const r = await untilGate(core, runId, 'gate1');
+    assert.equal(r.agents.reviewer, 'claude');
+    // Имя модели codex claude не подходит — у перенесённой роли модель по умолчанию.
+    assert.equal(r.models.reviewer, '');
+    await core.askManager(runId, 'Как дела?');
+    assert.ok(calls.length > 0);
+    assert.ok(!calls.includes('codex'));
+  },
+);
+
+test(
   'менеджеру можно приложить скриншот: путь в промпте, Read и папка доступны, картинка отдаётся окну',
   { skip: !hasOpenspec, timeout: 120_000 },
   async () => {

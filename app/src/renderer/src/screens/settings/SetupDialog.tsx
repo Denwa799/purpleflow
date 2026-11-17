@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Button } from '../../components/ui';
 import { useStore } from '../../lib/store';
 import { toolNeeded } from '../../lib/tools';
-import { CheckButton, ChecksList, TOOL_INFO } from './parts';
+import { AgentToggles, CheckButton, ChecksList, TOOL_INFO } from './parts';
 import type { SettingsDraft } from './useSettingsDraft';
 import { TOOL_NAMES, type ToolSetup } from './useToolSetup';
 
@@ -50,7 +50,7 @@ export function SetupDialog({
   const { state } = useStore();
   const tools = state.tools;
   const { checks } = draft;
-  const busy = setup.running || draft.checking;
+  const busy = setup.running || draft.checking || draft.savingEnabled;
   const close = () => !busy && onClose();
 
   useEffect(() => {
@@ -75,12 +75,14 @@ export function SetupDialog({
           </button>
         </header>
 
+        <AgentToggles draft={draft} />
+
         <div className="setup-rows">
           <NodeRow setup={setup} />
-          {TOOL_NAMES.map((t) => {
+          {TOOL_NAMES.filter((t) => (t !== 'claude' && t !== 'codex') || draft.enabled.includes(t)).map((t) => {
             const info = tools?.[t];
             const ok = info?.path && !info.error;
-            const needed = toolNeeded(t, draft.agents);
+            const needed = toolNeeded(t, draft.agents, draft.enabled);
             const error = setup.errors[t];
             const installing = setup.current === t;
             return (
@@ -118,8 +120,14 @@ export function SetupDialog({
         {checks && <ChecksList checks={checks} />}
         {checks?.some((c) => !c.ok) && (
           <p className="setup-note">
-            Если агент просит войти, запустите <code>claude</code> или <code>codex</code> в терминале и выполните вход, либо войдите в
-            аккаунт PurpleSchool и включите AI-прокси.
+            Если агент просит войти, запустите{' '}
+            {draft.enabled.map((a, i) => (
+              <span key={a}>
+                {i > 0 && ' или '}
+                <code>{a}</code>
+              </span>
+            ))}{' '}
+            в терминале и выполните вход, либо войдите в аккаунт PurpleSchool и включите AI-прокси.
           </p>
         )}
         {draft.error && <p className="setup-error">{draft.error}</p>}

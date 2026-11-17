@@ -14,6 +14,7 @@ import { STAGE_TITLES, isGate } from './stage-info.js';
 import { RunStore } from './store.js';
 import { setTraceFile } from './trace.js';
 import type { CoreEvent, PreviewState, RunFile, StageAttempt, StageId } from './types.js';
+import { enabledAgents } from './types.js';
 
 /** Операции движка, которые нужны стадиям и сервисам; связываются в Orchestrator, чтобы модули не зависели от движка. */
 export interface EngineHooks {
@@ -202,7 +203,9 @@ export class Kernel {
     return { git: found.git.path!, claude: found.claude.path!, codex: found.codex.path!, openspec: found.openspec.path! };
   }
 
+  /** Инструмент найден; claude и codex — ещё и включены в настройках. */
   async hasTool(name: keyof Tools): Promise<boolean> {
+    if ((name === 'claude' || name === 'codex') && !enabledAgents(this.opts.getSettings()).includes(name)) return false;
     const t = (await this.detect())[name];
     return Boolean(t.path && !t.error);
   }

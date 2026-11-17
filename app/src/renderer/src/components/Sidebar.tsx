@@ -4,7 +4,7 @@ import type { ChatSummary, RunSummary, ToolName } from '@purpleflow/core';
 import { useActions, useStore } from '../lib/store';
 import { shortPath } from '../lib/format';
 import { MODES } from '../lib/stages';
-import { toolNeeded } from '../lib/tools';
+import { enabledList, toolNeeded } from '../lib/tools';
 import { bridge } from '../lib/api';
 
 const TOOLS: ToolName[] = ['git', 'claude', 'codex', 'openspec'];
@@ -186,10 +186,10 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           <Settings size={16} /> Настройки
         </button>
         <div className="side-tools" title="Найденные инструменты">
-          {TOOLS.map((t) => {
+          {TOOLS.filter((t) => (t !== 'claude' && t !== 'codex') || enabledList(state.settings?.enabledAgents).includes(t)).map((t) => {
             const info = state.tools?.[t];
             const ok = info?.path && !info.error;
-            const needed = toolNeeded(t, state.settings?.agents);
+            const needed = toolNeeded(t, state.settings?.agents, state.settings?.enabledAgents);
             return (
               <span
                 key={t}

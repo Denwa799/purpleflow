@@ -24,7 +24,7 @@ export function useToolSetup(draft: SettingsDraft) {
   }, []);
 
   const tools = state.tools;
-  const missing = tools ? TOOL_NAMES.filter((t) => toolNeeded(t, draft.agents) && (!tools[t].path || tools[t].error)) : [];
+  const missing = tools ? TOOL_NAMES.filter((t) => toolNeeded(t, draft.agents, draft.enabled) && (!tools[t].path || tools[t].error)) : [];
 
   // Git ставится средствами ОС, остальным нужен npm.
   const needsNode = missing.some((t) => t !== 'git');
@@ -37,7 +37,7 @@ export function useToolSetup(draft: SettingsDraft) {
       await draft.save();
       const found = await bridge.core.detectTools();
       const failed: Partial<Record<SetupStep, string>> = {};
-      const need = TOOL_NAMES.filter((t) => toolNeeded(t, draft.agents) && (!found[t].path || found[t].error));
+      const need = TOOL_NAMES.filter((t) => toolNeeded(t, draft.agents, draft.enabled) && (!found[t].path || found[t].error));
       if (need.some((t) => t !== 'git') && !(await bridge.core.detectNode()).path) {
         setCurrent('node');
         const r = await bridge.core.installNode();

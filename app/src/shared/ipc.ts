@@ -12,6 +12,8 @@ export interface PublicSettings {
   proxy: { baseUrl: string; codexBaseUrl: string; hasKey: boolean; enabled: boolean };
   models: Models;
   agents: Record<Role, AgentKind> & { visual?: AgentKind; manager?: AgentKind; scan?: AgentKind };
+  /** Включённые CLI: выключенный не выполняет ни одной роли, хотя бы один включён. */
+  enabledAgents: AgentKind[];
   agentTimeoutMin: number;
   testTimeoutMin: number;
   maxParallel: number;
@@ -35,6 +37,7 @@ export interface SettingsPatch {
   proxy?: { baseUrl?: string; codexBaseUrl?: string; apiKey?: string; enabled?: boolean };
   models?: Partial<Models>;
   agents?: Partial<Record<Role, AgentKind>> & { visual?: AgentKind; manager?: AgentKind; scan?: AgentKind };
+  enabledAgents?: AgentKind[];
   agentTimeoutMin?: number;
   testTimeoutMin?: number;
   maxParallel?: number;

@@ -86,25 +86,45 @@ export function buildPreset(main: AgentKind, preset: PresetId): { agents: Agents
   };
 }
 
+/**
+ * Роли на выключенных CLI переводим на включённый: модель — ступени «Оптимального» пресета,
+ * потому что имя модели одного CLI другому не подходит. Роли на включённых агентах не трогаем.
+ */
+export function restrictAgents(enabled: AgentKind[], agents: Agents, models: Models): { agents: Agents; models: Models } {
+  const main = enabled[0];
+  const preset = buildPreset(main, 'optimal').models;
+  const nextAgents: Agents = { ...agents };
+  const nextModels: Models = { ...models };
+  for (const slot of Object.keys(ROLE_TITLE) as Slot[]) {
+    // Без явного выбора визуальная проверка — на claude, менеджер и сканирование ядро выберет само.
+    const current = agents[slot] ?? (slot === 'visual' ? 'claude' : undefined);
+    if (!current || enabled.includes(current)) continue;
+    nextAgents[slot] = main;
+    nextModels[slot] = preset[slot] ?? '';
+  }
+  return { agents: nextAgents, models: nextModels };
+}
+
 /** Поп-ап быстрой настройки: основной агент и пресет — роли и модели расставляются сами. */
 export function QuickSetup({
   installed,
+  enabled,
   initialMain,
   onApply,
   onClose,
 }: {
   installed: Record<AgentKind, boolean>;
+  /** Включённые в настройках CLI: выключенный основным агентом не предлагаем. */
+  enabled: AgentKind[];
   initialMain: AgentKind;
   onApply: (v: { agents: Agents; models: Models }) => Promise<void>;
   onClose: () => void;
 }) {
-  const [main, setMain] = useState<AgentKind>(
-    installed[initialMain] || !installed[initialMain === 'claude' ? 'codex' : 'claude']
-      ? initialMain
-      : initialMain === 'claude'
-        ? 'codex'
-        : 'claude',
-  );
+  const [main, setMain] = useState<AgentKind>(() => {
+    if (!enabled.includes(initialMain)) return enabled[0];
+    const other: AgentKind = initialMain === 'claude' ? 'codex' : 'claude';
+    return installed[initialMain] || !enabled.includes(other) || !installed[other] ? initialMain : other;
+  });
   const [preset, setPreset] = useState<PresetId>('optimal');
   const [busy, setBusy] = useState(false);
   const plan = buildPreset(main, preset);
@@ -141,7 +161,7 @@ export function QuickSetup({
         <div className="qs-section">
           <span className="qs-label">Основной агент</span>
           <div className="segmented qs-agents" role="radiogroup" aria-label="Основной агент">
-            {(['claude', 'codex'] as AgentKind[]).map((a) => (
+            {enabled.map((a) => (
               <button key={a} role="radio" aria-checked={main === a} className={main === a ? 'is-on' : ''} onClick={() => setMain(a)}>
                 {a}
                 {!installed[a] && <em> · не найден</em>}

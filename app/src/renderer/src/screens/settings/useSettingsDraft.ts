@@ -3,7 +3,8 @@ import type { AgentKind, ConnectionCheck, Models, Role, ToolName } from '@purple
 import { useEffect, useRef, useState } from 'react';
 import { bridge } from '../../lib/api';
 import { useStore } from '../../lib/store';
-import { toolNeeded } from '../../lib/tools';
+import { restrictAgents } from '../../components/QuickSetup';
+import { enabledList, toolNeeded } from '../../lib/tools';
 import { rebase } from './rebase';
 
 export type SettingsDraft = ReturnType<typeof useSettingsDraft>;
@@ -26,6 +27,7 @@ export function useSettingsDraft() {
   const [checking, setChecking] = useState(false);
   const [checks, setChecks] = useState<ConnectionCheck[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [savingEnabled, setSavingEnabled] = useState(false);
 
   const seen = useRef(s);
   const first = useRef(true);
@@ -82,11 +84,36 @@ export function useSettingsDraft() {
     }
   };
 
+  const enabled = enabledList(s?.enabledAgents);
+  /**
+   * Включить или выключить CLI — сразу, вместе с ролями: роли выключенного переходят на оставшийся.
+   * Пересчитываем черновик, а не сохранённое, чтобы не потерять несохранённые правки ролей.
+   */
+  const setEnabled = async (next: AgentKind[]) => {
+    if (!next.length) return;
+    const moved = restrictAgents(next, agents, models);
+    setSavingEnabled(true);
+    setError(null);
+    try {
+      setAgents(moved.agents);
+      setModels(moved.models);
+      await saveSettings({ enabledAgents: next, agents: moved.agents, models: moved.models });
+      setChecks(null);
+      flashSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSavingEnabled(false);
+    }
+  };
+
   const tools = state.tools;
   const claudeFound = Boolean(tools?.claude.path && !tools.claude.error);
-  const visualAgent = agents.visual ?? 'claude';
-  const managerAgent = agents.manager ?? (tools && !claudeFound ? 'codex' : 'claude');
-  const scanAgent = agents.scan ?? (tools && !claudeFound ? 'codex' : 'claude');
+  // Без явного выбора: визуальная проверка — claude; менеджер и сканирование — claude, если он есть, иначе codex.
+  const autoAgent: AgentKind = enabled.length === 1 ? enabled[0] : tools && !claudeFound ? 'codex' : 'claude';
+  const visualAgent = agents.visual ?? (enabled.includes('claude') ? 'claude' : 'codex');
+  const managerAgent = agents.manager ?? autoAgent;
+  const scanAgent = agents.scan ?? autoAgent;
   const pickAgent = (id: Role | 'visual' | 'manager' | 'scan', a: AgentKind) => {
     const current = id === 'visual' ? visualAgent : id === 'manager' ? managerAgent : id === 'scan' ? scanAgent : agents[id];
     // Менеджер и сканирование без явного выбора — «авто»: нажатие на текущий вариант закрепляет его.
@@ -98,7 +125,9 @@ export function useSettingsDraft() {
 
   const allFound =
     tools &&
-    (['git', 'claude', 'codex', 'openspec'] as ToolName[]).every((t) => (tools[t].path && !tools[t].error) || !toolNeeded(t, agents));
+    (['git', 'claude', 'codex', 'openspec'] as ToolName[]).every(
+      (t) => (tools[t].path && !tools[t].error) || !toolNeeded(t, agents, enabled),
+    );
 
   return {
     models,
@@ -124,6 +153,9 @@ export function useSettingsDraft() {
     setChecks,
     check,
     claudeFound,
+    enabled,
+    setEnabled,
+    savingEnabled,
     visualAgent,
     managerAgent,
     scanAgent,
