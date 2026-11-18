@@ -2149,3 +2149,70 @@ body.is-side-resizing webview {
   display: flex;
   flex-direction: column;
 }
+
+/* Свёрнутая панель чата: иконки вкладок, клик — сразу на нужную. */
+.chat-rail-tabs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--s-2) 0;
+}
+.chat-rail-tab {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--text-3);
+  transition:
+    background 0.2s var(--ease),
+    color 0.2s var(--ease);
+}
+.chat-rail-tab:hover {
+  background: var(--bg-4);
+  color: var(--text-1);
+}
+.chat-rail-tab .tab-dot,
+.chat-rail-tab .tab-live {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+.chat-rail-count {
+  position: absolute;
+  top: 1px;
+  right: -1px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: 600 10px/15px var(--font-sans, inherit);
+  text-align: center;
+}
+
+.chat-rail-tip {
+  position: fixed;
+  z-index: 50;
+  transform: translateY(-50%);
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--pop-bg);
+  box-shadow:
+    0 0 0 1px var(--line-2),
+    0 12px 28px -12px rgba(0, 0, 0, 0.7);
+  color: var(--text-1);
+  font-size: var(--fs-13);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: chat-rail-tip-in 0.15s var(--ease);
+}
+@keyframes chat-rail-tip-in {
+  from {
+    opacity: 0;
+    transform: translate(4px, -50%);
+  }
+}

@@ -174,8 +174,8 @@ test('чат: вкладка «Файлы» — дерево проекта, с�
     await expect(page.locator('.chat-msg.is-assistant')).toBeVisible();
 
     // Панель справа свёрнута в полосу — разворачиваем и открываем «Файлы».
-    await page.getByTitle('Развернуть код и браузер').click();
-    await page.locator('.chat-side .pilltabs button', { hasText: 'Файлы' }).click();
+    // Свёрнутая панель: иконка вкладки открывает сразу её.
+    await page.getByRole('navigation', { name: 'Вкладки панели' }).getByRole('button', { name: 'Файлы проекта' }).click();
     const tree = page.getByRole('tree', { name: 'Файлы проекта' });
     const src = tree.getByRole('treeitem', { name: 'src' });
     await src.getByRole('button', { name: 'src', exact: true }).click();
@@ -280,8 +280,10 @@ test('Git (просмотр): ветки, история с графом и ди
     await input.fill('привет');
     await input.press('Enter');
     await expect(page.locator('.chat-msg.is-assistant')).toBeVisible();
-    await page.getByTitle('Развернуть код и браузер').click();
-    await page.locator('.chat-side .pilltabs button', { hasText: 'Git' }).click();
+    const gitRail = page.getByRole('navigation', { name: 'Вкладки панели' }).getByRole('button', { name: 'Git' });
+    await gitRail.hover();
+    await expect(page.getByRole('tooltip', { name: 'Git', exact: true })).toBeVisible();
+    await gitRail.click();
     await expect(page.locator('.chat-side').getByRole('list', { name: 'История коммитов' }).getByRole('listitem')).toHaveCount(4);
     expect(l.errors).toEqual([]);
   } finally {
@@ -483,8 +485,8 @@ test('чат: вкладка «Запуск» — старт, вывод сер�
     await expect(page.locator('.chat-msg.is-assistant')).toBeVisible({ timeout: 30_000 });
 
     const side = page.locator('.chat-side');
-    if (!(await side.getByRole('tab', { name: /Запуск/ }).count())) await page.locator('.manager-rail').click();
-    await side.getByRole('tab', { name: /Запуск/ }).click();
+    if (await side.getByRole('tab', { name: /Запуск/ }).count()) await side.getByRole('tab', { name: /Запуск/ }).click();
+    else await page.getByRole('navigation', { name: 'Вкладки панели' }).getByRole('button', { name: 'Запуск приложения' }).click();
     await expect(side.getByRole('status')).toHaveText('Не запущено');
     await expect(side.getByText('node server.cjs')).toBeVisible();
 

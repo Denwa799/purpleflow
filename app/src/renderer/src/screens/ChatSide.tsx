@@ -1,4 +1,4 @@
-import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Activity, CircleAlert, FileCode2, FolderTree, GitBranch, Globe, PanelRightClose, Play, RefreshCw } from 'lucide-react';
 import { GitView } from '../components/GitView';
 import { ChatFiles } from './ChatFiles';
@@ -225,32 +225,94 @@ export function ChatSide({
   );
 }
 
-/** Свёрнутая панель — узкая полоса справа, как у чата менеджера слева; сверху — заполнение контекста, по клику — «Сессия». */
+/**
+ * Свёрнутая панель — узкая полоса справа: сверху заполнение контекста («Сессия»),
+ * ниже — иконки доступных вкладок; клик открывает панель сразу на нужной.
+ */
 export function ChatSideRail({ chat, changed, onOpen }: { chat: ChatFile; changed: string[] | null; onOpen: (p: ChatPane) => void }) {
   const ctx = chatSession(chat).context;
+  const preview = usePreview(chat.id);
+  // Свои подсказки: системные title в окне Electron появляются не всегда.
+  // Полоса обрезает переполнение, поэтому подсказка — fixed, слева от кнопки.
+  const [tip, setTip] = useState<{ label: string; top: number; right: number } | null>(null);
+  const showTip = (label: string, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setTip({ label, top: r.top + r.height / 2, right: window.innerWidth - r.left + 8 });
+  };
+  const live =
+    preview.state.status === 'ready' ? (
+      <span className="tab-dot is-ok" />
+    ) : preview.state.status === 'starting' ? (
+      <span className="tab-live" />
+    ) : preview.state.status === 'failed' ? (
+      <span className="tab-dot is-error" />
+    ) : null;
+  const items: { id: ChatPane; label: string; icon: ReactNode; extra?: ReactNode }[] = [
+    ...(chat.projectPath
+      ? [
+          { id: 'files' as const, label: 'Файлы проекта', icon: <FolderTree size={16} /> },
+          {
+            id: 'code' as const,
+            label: changed?.length ? `Изменения: ${changed.length}` : 'Изменения',
+            icon: <FileCode2 size={16} />,
+            extra: changed?.length ? <span className="chat-rail-count">{changed.length}</span> : null,
+          },
+          { id: 'git' as const, label: 'Git', icon: <GitBranch size={16} /> },
+          { id: 'run' as const, label: 'Запуск приложения', icon: <Play size={16} />, extra: live },
+        ]
+      : []),
+    {
+      id: 'browser',
+      label: 'Браузер',
+      icon: <Globe size={16} />,
+      extra: preview.state.status === 'ready' ? <span className="tab-dot is-ok" /> : null,
+    },
+  ];
+  const sessionTip = ctx
+    ? `Сессия · контекст ${ctx.pct != null ? `${ctx.pct}% окна` : `${Math.round(ctx.used / 1000)} тыс. токенов`}`
+    : 'Сессия';
   return (
-    <aside className="run-main chat-side is-collapsed" aria-label="Код и браузер">
+    <aside className="run-main chat-side is-collapsed" aria-label="Панель чата">
       <button
         className="chat-rail-session"
-        onClick={() => onOpen('session')}
-        title={
-          ctx
-            ? `Контекст: ${ctx.pct != null ? `${ctx.pct}% окна` : `${Math.round(ctx.used / 1000)} тыс. токенов`} — открыть сведения о сессии`
-            : 'Сведения о сессии'
-        }
+        onClick={() => {
+          setTip(null);
+          onOpen('session');
+        }}
+        onMouseEnter={(e) => showTip(sessionTip, e.currentTarget)}
+        onMouseLeave={() => setTip(null)}
+        onFocus={(e) => showTip(sessionTip, e.currentTarget)}
+        onBlur={() => setTip(null)}
         aria-label="Сессия"
       >
         <ContextRing pct={ctx?.pct} />
         {ctx?.pct != null && <span className="chat-rail-pct">{ctx.pct}%</span>}
       </button>
-      <button className="manager-rail" onClick={() => onOpen(chat.projectPath ? 'code' : 'browser')} title="Развернуть код и браузер">
-        <span className="chat-rail-icons">
-          {chat.projectPath && <FileCode2 size={15} />}
-          <Globe size={15} />
+      <nav className="chat-rail-tabs" aria-label="Вкладки панели">
+        {items.map((it) => (
+          <button
+            key={it.id}
+            className="chat-rail-tab"
+            aria-label={it.label}
+            onMouseEnter={(e) => showTip(it.label, e.currentTarget)}
+            onMouseLeave={() => setTip(null)}
+            onFocus={(e) => showTip(it.label, e.currentTarget)}
+            onBlur={() => setTip(null)}
+            onClick={() => {
+              setTip(null);
+              onOpen(it.id);
+            }}
+          >
+            {it.icon}
+            {it.extra}
+          </button>
+        ))}
+      </nav>
+      {tip && (
+        <span className="chat-rail-tip" role="tooltip" style={{ top: tip.top, right: tip.right }}>
+          {tip.label}
         </span>
-        {changed?.length ? <span className="chat-pane-count">{changed.length}</span> : null}
-        <span className="manager-rail-label">{chat.projectPath ? 'Код и браузер' : 'Браузер'}</span>
-      </button>
+      )}
     </aside>
   );
 }
