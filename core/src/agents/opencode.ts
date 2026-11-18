@@ -91,10 +91,15 @@ export function opencodeConfig(o: Pick<OpencodeOptions, 'readOnly' | 'proxy' | '
  * opencode run --format json; промпт — из stdin. --auto одобряет то, что не запрещено явно:
  * спросить человека в неинтерактивном запуске некому.
  */
-export function opencodeArgs(o: Pick<OpencodeOptions, 'cwd' | 'model' | 'proxy' | 'images' | 'userConfig' | 'resumeSession'>): string[] {
-  const args = ['run', '--format', 'json', '--auto', '--dir', o.cwd];
-  // Без настроек пользователя — без его плагинов (MCP и agents из конфига opencode всё равно читает).
-  if (!o.userConfig) args.push('--pure');
+export function opencodeArgs(
+  o: Pick<OpencodeOptions, 'cwd' | 'model' | 'proxy' | 'images' | 'userConfig' | 'resumeSession'>,
+  major = 1,
+): string[] {
+  // opencode 2: --dir и --pure убраны (папка — рабочая папка процесса и PWD); --standalone — свой сервер,
+  // а не фоновый сервис: тот запущен раньше и не увидел бы OPENCODE_CONFIG_CONTENT (права «только чтение», прокси).
+  const args = major >= 2 ? ['run', '--format', 'json', '--auto', '--standalone'] : ['run', '--format', 'json', '--auto', '--dir', o.cwd];
+  // Без настроек пользователя — без его плагинов (MCP и agents из конфига opencode всё равно читает). В opencode 2 флага нет.
+  if (!o.userConfig && major < 2) args.push('--pure');
   const model = opencodeModel(o.model, o.proxy);
   if (model) args.push('-m', model);
   if (o.resumeSession) args.push('-s', o.resumeSession);
@@ -104,6 +109,26 @@ export function opencodeArgs(o: Pick<OpencodeOptions, 'cwd' | 'model' | 'proxy' 
 }
 
 type Part = Record<string, unknown>;
+
+const majors = new Map<string, Promise<number>>();
+
+/**
+ * Старшая версия opencode: у 2.x другие флаги run. Узнаём один раз на путь к программе;
+ * не вышло — считаем 1.x, как было до второй версии.
+ */
+export function opencodeMajor(bin: string, env: NodeJS.ProcessEnv): Promise<number> {
+  let hit = majors.get(bin);
+  if (!hit) {
+    hit = run(bin, ['--version'], { cwd: process.cwd(), env, timeoutMs: 15_000 }).then((r) => parseMajor(`${r.stdout}\n${r.stderr}`));
+    majors.set(bin, hit);
+  }
+  return hit;
+}
+
+export function parseMajor(text: string): number {
+  const m = /(\d+)\.\d+\.\d+/.exec(text);
+  return m ? Number(m[1]) : 1;
+}
 
 /** Имена инструментов opencode → привычные по claude, чтобы чат показывал их так же. */
 const TOOL_NAMES: Record<string, string> = {
@@ -182,8 +207,11 @@ export async function runOpencode(o: OpencodeOptions): Promise<AgentResult> {
   const out = (s: string) => o.onOutput(crlf(s));
   const prompt = o.systemPrompt ? `${o.systemPrompt}\n\n---\n\n${o.prompt}` : o.prompt;
   const model = opencodeModel(o.model, o.proxy);
+  const major = await opencodeMajor(o.bin, env);
+  // opencode 2 берёт папку из PWD раньше, чем из рабочей папки процесса, — а PWD унаследован от приложения.
+  env.PWD = o.cwd;
 
-  const r = await run(o.bin, opencodeArgs(o), {
+  const r = await run(o.bin, opencodeArgs(o, major), {
     cwd: o.cwd,
     env,
     input: prompt,

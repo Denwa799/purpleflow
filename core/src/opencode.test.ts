@@ -5,13 +5,25 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import type { AgentStep } from './agents/common.js';
-import { opencodeArgs, opencodeConfig, opencodeModel, opencodeSteps, runOpencode, type OpencodeOptions } from './agents/opencode.js';
+import {
+  opencodeArgs,
+  opencodeConfig,
+  opencodeModel,
+  opencodeSteps,
+  parseMajor,
+  runOpencode,
+  type OpencodeOptions,
+} from './agents/opencode.js';
 
 const unix = { skip: process.platform === 'win32' };
 const PROXY = { baseUrl: 'https://proxy.test/api/', apiKey: 'key' };
 
 /** Фейковый opencode: печатает события, запоминает stdin, аргументы и OPENCODE_CONFIG_CONTENT. */
-function fakeOpencode(t: { after: (fn: () => void) => void }, lines: unknown[], o: { code?: number; stderr?: string } = {}) {
+function fakeOpencode(
+  t: { after: (fn: () => void) => void },
+  lines: unknown[],
+  o: { code?: number; stderr?: string; version?: string } = {},
+) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-opencode-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const out = path.join(dir, 'out.jsonl');
@@ -21,7 +33,9 @@ function fakeOpencode(t: { after: (fn: () => void) => void }, lines: unknown[], 
     bin,
     [
       '#!/bin/sh',
+      `if [ "$1" = "--version" ]; then echo "${o.version ?? '1.19.6'}"; exit 0; fi`,
       `cat > "${dir}/stdin"`,
+      `printf '%s' "$PWD" > "${dir}/pwd"`,
       `printf '%s\\n' "$@" > "${dir}/args"`,
       `printf '%s' "$OPENCODE_CONFIG_CONTENT" > "${dir}/config"`,
       `printf '%s' "$PURPLEFLOW_OPENAI_API_KEY" > "${dir}/key"`,
@@ -38,6 +52,7 @@ function fakeOpencode(t: { after: (fn: () => void) => void }, lines: unknown[], 
     stdin: () => read('stdin'),
     args: () => read('args').trim().split('\n'),
     config: () => read('config'),
+    pwd: () => read('pwd'),
     key: () => read('key'),
   };
 }
@@ -88,6 +103,24 @@ test('opencodeArgs: формат json, автоодобрение, папка, �
     '--file=/a.png',
     '--file=/b.png',
   ]);
+});
+
+test('opencodeArgs для opencode 2: без --dir и --pure, свой сервер (--standalone)', () => {
+  assert.deepEqual(opencodeArgs({ cwd: '/w', model: 'gpt-6-sol', proxy: PROXY, resumeSession: 's1', images: ['/a.png'] }, 2), [
+    'run',
+    '--format',
+    'json',
+    '--auto',
+    '--standalone',
+    '-m',
+    'purpleflow/gpt-6-sol',
+    '-s',
+    's1',
+    '--file=/a.png',
+  ]);
+  assert.equal(parseMajor('2.3.2'), 2);
+  assert.equal(parseMajor('opencode v1.19.6\n'), 1);
+  assert.equal(parseMajor('что-то непонятное'), 1);
 });
 
 test('opencodeConfig: только чтение запрещает правки, прокси — провайдер с ключом из окружения', () => {
@@ -159,6 +192,18 @@ test('runOpencode: ответ — текст последнего шага, то
   );
   assert.match(cli.stdin(), /^СИСТЕМА\n\n---\n\nзадача$/);
   // Чужой OPENCODE_CONFIG_CONTENT из окружения заменён нашим.
+  assert.equal(JSON.parse(cli.config()).permission.edit, 'deny');
+});
+
+test('runOpencode на opencode 2: флаги второй версии, папка через PWD, конфиг и ответ как раньше', unix, async (t) => {
+  const cli = fakeOpencode(t, [ev('step_start'), ev('text', { text: 'ok' }), ev('step_finish')], { version: '2.3.2' });
+  const { o } = opts(cli.bin, cli.dir, { readOnly: true });
+  const r = await runOpencode(o);
+  assert.equal(r.ok, true);
+  assert.equal(r.text, 'ok');
+  assert.ok(cli.args().includes('--standalone'));
+  assert.ok(!cli.args().includes('--dir') && !cli.args().includes('--pure'));
+  assert.equal(cli.pwd(), o.cwd);
   assert.equal(JSON.parse(cli.config()).permission.edit, 'deny');
 });
 

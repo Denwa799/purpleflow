@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { stripAnsi } from '../agents/common.js';
+import { opencodeMajor } from '../agents/opencode.js';
 import { detectTools, prependPath } from '../env.js';
 import { run } from '../proc.js';
 import type { Kernel } from '../kernel.js';
@@ -80,18 +81,22 @@ export async function listOpencodeModels(k: Kernel, dir?: string): Promise<strin
   const hit = modelsCache.get(key);
   if (hit && Date.now() - hit.at < 60_000) return hit.list;
   for (const [x, v] of modelsCache) if (Date.now() - v.at >= 60_000) modelsCache.delete(x);
-  const list = run(bin, ['models'], { cwd, env: prependPath(k.opts.env, path.dirname(bin)), timeoutMs: 30_000 }).then((r) =>
-    r.code === 0
-      ? [
-          ...new Set(
-            stripAnsi(r.stdout)
-              .split('\n')
-              .map((l) => l.trim())
-              .filter((l) => /^[\w.-]+\/\S+$/.test(l)),
-          ),
-        ]
-      : [],
-  );
+  const env = { ...prependPath(k.opts.env, path.dirname(bin)), PWD: cwd };
+  // opencode 2 без --standalone поднял бы фоновый сервис и оставил его работать.
+  const list = opencodeMajor(bin, env)
+    .then((major) => run(bin, major >= 2 ? ['models', '--standalone'] : ['models'], { cwd, env, timeoutMs: 30_000 }))
+    .then((r) =>
+      r.code === 0
+        ? [
+            ...new Set(
+              stripAnsi(r.stdout)
+                .split('\n')
+                .map((l) => l.trim())
+                .filter((l) => /^[\w.-]+\/\S+$/.test(l)),
+            ),
+          ]
+        : [],
+    );
   modelsCache.set(key, { at: Date.now(), list });
   list.catch(() => modelsCache.delete(key));
   return list;
