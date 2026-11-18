@@ -143,3 +143,36 @@ test('ревью по кругу: стоп раньше лимита, уточн
   const reviews = box.calls().filter((c) => /ревьюер в конвейере PurpleFlow/.test(c.prompt));
   expect(reviews.at(-1)!.prompt).toContain('внутренняя функция');
 });
+
+test('настройки: числовое поле можно стереть и набрать заново; пустое при уходе — значение по умолчанию', async () => {
+  await l.page.getByRole('button', { name: 'Настройки', exact: true }).click();
+  await l.page.locator('.settings-tabs').getByText('Модели', { exact: true }).click();
+  const field = l.page.getByRole('spinbutton', { name: /Таймаут тестов/ });
+  await field.fill('');
+  await expect(field).toHaveValue('');
+  await field.pressSequentially('25');
+  await expect(field).toHaveValue('25');
+  const parallel = l.page.getByRole('spinbutton', { name: /Одновременно прогонов/ });
+  await parallel.fill('');
+  await parallel.blur();
+  await expect(parallel).toHaveValue('2');
+  await parallel.fill('12');
+  await parallel.blur();
+  await expect(parallel).toHaveValue('8');
+});
+
+test('длинное описание задачи раскрывается с прокруткой, шапка не уходит за край окна', async () => {
+  const long = Array.from({ length: 120 }, (_, i) => `Пункт ${i + 1}: добавь функцию mul в src/math.js`).join('\n');
+  await startRun(l.page, 'Быстрая правка', long);
+  await l.page.locator('.desc-toggle').click();
+  const inner = l.page.locator('.desc.is-open .desc-inner');
+  await expect(inner).toBeVisible();
+  await expect
+    .poll(() => inner.evaluate((el) => el.scrollHeight > el.clientHeight && getComputedStyle(el).overflowY === 'auto'))
+    .toBe(true);
+  const viewport = l.page.viewportSize() ?? (await l.page.evaluate(() => ({ width: innerWidth, height: innerHeight })));
+  const box2 = await inner.boundingBox();
+  expect(box2!.y + box2!.height).toBeLessThan(viewport.height);
+  await inner.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect(l.page.getByText('Пункт 120:', { exact: false })).toBeInViewport();
+});

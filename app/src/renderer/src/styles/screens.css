@@ -67,6 +67,10 @@
 }
 .desc.is-open .desc-inner {
   padding: var(--s-4) 0 var(--s-2);
+  /* Длинное описание не растягивает шапку за край окна: своя прокрутка, метрики и кнопки ниже остаются видны. */
+  max-height: min(45vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .desc-text {
   margin: 0;

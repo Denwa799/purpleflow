@@ -3,7 +3,7 @@ import { ExternalLink, Wand2 } from 'lucide-react';
 import { useState } from 'react';
 import { ModelInput } from '../../components/ModelInput';
 import { QuickSetup } from '../../components/QuickSetup';
-import { Button, Field, Input } from '../../components/ui';
+import { Button, Field, NumberInput } from '../../components/ui';
 import { isTrialSetup, trialSetup } from '../../lib/presets';
 import { agentList } from '../../lib/tools';
 import { PLANS_URL, trialOptions, useTrialLock } from '../../lib/trial';
@@ -223,19 +223,13 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
           label="Агент молчит дольше, мин"
           hint="Столько без вывода — агент считается зависшим и останавливается. Долгую работу не обрывает: после этого времени покажем предупреждение, предел — ×4."
         >
-          <Input type="number" min={1} value={agentTimeout} onChange={(e) => setAgentTimeout(Number(e.target.value) || 30)} />
+          <NumberInput min={1} fallback={30} value={agentTimeout} onValue={setAgentTimeout} />
         </Field>
         <Field label="Таймаут тестов, мин">
-          <Input type="number" min={1} value={testTimeout} onChange={(e) => setTestTimeout(Number(e.target.value) || 10)} />
+          <NumberInput min={1} fallback={10} value={testTimeout} onValue={setTestTimeout} />
         </Field>
         <Field label="Одновременно прогонов" hint="Остальные ждут в очереди. Ожидание вашего решения место не занимает.">
-          <Input
-            type="number"
-            min={1}
-            max={8}
-            value={parallel}
-            onChange={(e) => setParallel(Math.max(1, Math.min(8, Number(e.target.value) || 1)))}
-          />
+          <NumberInput min={1} max={8} fallback={2} value={parallel} onValue={setParallel} />
         </Field>
       </div>
     </section>

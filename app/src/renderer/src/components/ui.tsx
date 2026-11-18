@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
-import { forwardRef } from 'react';
+import { forwardRef, useEffect, useState } from 'react';
+import { liveNumber, settleNumber, type NumberRange } from '../lib/numberDraft';
 import type { RunStatus } from '@purpleflow/core';
 import { STATUS_LABEL } from '../lib/format';
 
@@ -40,6 +41,56 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 ) {
   return <input ref={ref} spellCheck={false} {...rest} className={`input ${mono ? 'mono' : ''} ${className}`} />;
 });
+
+/**
+ * Целое число в настройках: поле можно стереть и набрать заново — значение по умолчанию и пределы
+ * применяются, когда человек ушёл из поля, а не на каждое нажатие.
+ */
+export function NumberInput({
+  value,
+  onValue,
+  min,
+  max,
+  fallback,
+  ...rest
+}: NumberRange & { value: number; onValue: (n: number) => void } & Omit<
+    InputHTMLAttributes<HTMLInputElement>,
+    'value' | 'onChange' | 'min' | 'max' | 'type'
+  >) {
+  const [text, setText] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  // Значение поменялось снаружи (сброс настроек, загрузка) — показываем его, если человек сейчас не печатает.
+  useEffect(() => {
+    if (!editing) setText(String(value));
+  }, [value, editing]);
+  const range = { min, max, fallback };
+  return (
+    <Input
+      {...rest}
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      value={text}
+      onFocus={(e) => {
+        setEditing(true);
+        rest.onFocus?.(e);
+      }}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = liveNumber(e.target.value, range);
+        if (n !== null && n !== value) onValue(n);
+      }}
+      onBlur={(e) => {
+        setEditing(false);
+        const n = settleNumber(text, range);
+        setText(String(n));
+        if (n !== value) onValue(n);
+        rest.onBlur?.(e);
+      }}
+    />
+  );
+}
 
 export const TextArea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function TextArea(
   { className = '', ...rest },
