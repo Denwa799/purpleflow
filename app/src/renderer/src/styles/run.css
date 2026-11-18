@@ -185,6 +185,13 @@
   background: var(--bg-2);
   animation: rise 0.45s var(--ease);
 }
+.banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+}
 .banner > svg {
   margin-top: 2px;
 }

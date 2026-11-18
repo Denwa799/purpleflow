@@ -8,6 +8,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { emptyUsage, type AgentResult, type AgentRunOptions } from './agents/common.js';
+import { restore } from './engine.js';
 import { decide } from './gates.js';
 import { Orchestrator } from './orchestrator.js';
 import { copyEnvFiles, cloneDeps } from './services/workspace.js';
@@ -551,6 +552,21 @@ test('отмена на плане: прогон отменён, фоновые 
   assert.ok(r.finishedAt);
   assert.equal(k.basePrep.has(run.id), false);
   assert.ok(!drives.includes(run.id));
+});
+
+test('восстановление отменённого: снова ждёт решения на той же стадии; без рабочей копии — отказ', unix, async (t) => {
+  const { k, save, drives } = gates(t);
+  const run = save({ status: 'waiting', next: 'gate2' });
+  await decide(k, run.id, 'cancel');
+  await restore(k, run.id);
+  const r = k.mustLoad(run.id);
+  assert.deepEqual([r.status, r.next, r.finishedAt], ['waiting', 'gate2', undefined]);
+  assert.ok(!drives.includes(run.id), 'на решении человека агенты не запускаются');
+  await assert.rejects(restore(k, run.id), /только отменённый/);
+
+  const gone = save({ status: 'cancelled', next: 'gate1', worktreeRemoved: true });
+  await assert.rejects(restore(k, gone.id), /уже удалена/);
+  assert.equal(k.mustLoad(gone.id).status, 'cancelled');
 });
 
 // ——— Реализация, ревью, рабочая копия ———

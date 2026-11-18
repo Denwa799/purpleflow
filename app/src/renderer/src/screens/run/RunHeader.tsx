@@ -1,5 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Clock3, GitPullRequest, Trash2, ArrowRight, FileText, GitMerge, Hand, ShieldAlert, X, TriangleAlert } from 'lucide-react';
+import {
+  Clock3,
+  GitPullRequest,
+  Trash2,
+  ArrowRight,
+  FileText,
+  GitMerge,
+  Hand,
+  RotateCcw,
+  ShieldAlert,
+  X,
+  TriangleAlert,
+} from 'lucide-react';
 import type { PrStatus, RunFile, StageId } from '@purpleflow/core';
 import { useNow } from '../../components/Timeline';
 import { isGate } from '../../lib/bars';
@@ -69,6 +81,45 @@ export function DeleteRun({ run, runId }: { run: RunFile; runId: string }) {
   );
 }
 
+/** Отменённый прогон: пока рабочая копия на месте, его можно вернуть на ту стадию, где отменили. */
+function CancelledBanner({ run }: { run: RunFile }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const gone = run.workspace !== 'branch' && run.worktreeRemoved;
+  const restore = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await bridge.core.dispatch({ type: 'run.restore', runId: run.id });
+    } catch (e) {
+      setError(cleanErr(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="banner b-quiet">
+      <X size={18} />
+      <div>
+        <strong>Прогон отменён</strong>
+        <p>
+          {gone
+            ? 'Рабочая копия удалена при очистке хранилища — план и код не сохранились, восстановить нельзя.'
+            : 'План и код на месте: прогон можно вернуть на стадию, где его отменили, и решить заново.'}
+        </p>
+        {!gone && (
+          <div className="banner-actions">
+            <Button tone="ghost" icon={<RotateCcw size={14} />} busy={busy} onClick={() => void restore()}>
+              Восстановить
+            </Button>
+            {error && <span className="actionbar-error">{error}</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Banner({ run }: { run: RunFile }) {
   if (run.status === 'finished') return null;
   if (run.status === 'queued') {
@@ -85,15 +136,7 @@ export function Banner({ run }: { run: RunFile }) {
       </div>
     );
   }
-  if (run.status === 'cancelled')
-    return (
-      <div className="banner b-quiet">
-        <X size={18} />
-        <div>
-          <strong>Прогон отменён</strong>
-        </div>
-      </div>
-    );
+  if (run.status === 'cancelled') return <CancelledBanner run={run} />;
   if (run.status === 'stopped' && run.message) {
     const failed = run.attempts.some((a) => a.status === 'failed' && a.error === run.message);
     return (

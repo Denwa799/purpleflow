@@ -326,6 +326,25 @@ export async function resume(k: Kernel, id: string) {
   void drive(k, r);
 }
 
+/**
+ * Отменённый прогон — снова в работу: отмена бывает только на решении человека (уточнение, план, приёмка),
+ * а рабочая копия с планом и кодом остаётся до очистки хранилища. Возвращаем на ту же стадию решения.
+ */
+export async function restore(k: Kernel, id: string) {
+  const r = k.mustLoad(id);
+  if (r.status !== 'cancelled') throw new Error('Восстановить можно только отменённый прогон');
+  // Незакоммиченные план и код жили только в рабочей копии: удалена очисткой — возвращать нечего.
+  if (r.workspace !== 'branch' && (r.worktreeRemoved || !fs.existsSync(r.worktreePath)))
+    throw new Error('Рабочая копия прогона уже удалена при очистке хранилища — восстановить нельзя. Запустите задачу заново.');
+  r.status = 'stopped';
+  r.finishedAt = undefined;
+  r.message = 'Восстановлен после отмены';
+  k.log(r, c.violet('↺ прогон восстановлен после отмены') + '\n');
+  k.save(r);
+  k.emit({ type: 'run.updated', run: r });
+  await resume(k, id);
+}
+
 export async function stop(k: Kernel, id: string) {
   const r = k.store.load(id);
   if (!r) return;

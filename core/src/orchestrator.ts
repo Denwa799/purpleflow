@@ -90,6 +90,9 @@ export class Orchestrator implements CoreApi {
       case 'run.resume':
         await engine.resume(k, cmd.runId);
         break;
+      case 'run.restore':
+        await engine.restore(k, cmd.runId);
+        break;
       case 'gate.approve':
         await decide(k, cmd.runId, 'approve', cmd.comment);
         break;

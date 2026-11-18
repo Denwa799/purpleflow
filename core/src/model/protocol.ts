@@ -64,6 +64,8 @@ export interface StartRunInput {
 export type CoreCommand =
   | { type: 'run.start'; input: StartRunInput }
   | { type: 'run.resume'; runId: string }
+  /** Вернуть отменённый прогон на стадию, где его отменили, — если рабочая копия ещё на месте. */
+  | { type: 'run.restore'; runId: string }
   | { type: 'gate.approve'; runId: string; comment?: string }
   | { type: 'gate.reject'; runId: string; comment: string; lineComments?: LineComment[] }
   | { type: 'gate.cancel'; runId: string }
