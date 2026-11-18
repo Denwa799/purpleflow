@@ -6,7 +6,7 @@ import { formatItem, originTag } from '../items.js';
 import { parseJsonReply } from '../json.js';
 import type { Kernel } from '../kernel.js';
 
-import { parseReview, parseVerdicts } from '../parse.js';
+import { parsePlanCoverage, parseReview, parseVerdicts } from '../parse.js';
 import { GENERATED_GLOBS, lineStats, packReview, splitDiff } from '../reviewdiff.js';
 import { afterReview } from '../route.js';
 import { INLINE_DIFF, RUN_JSON_GLOB } from '../runtime.js';
@@ -289,7 +289,9 @@ export async function reviewPass(k: Kernel, run: RunFile, quiet = false): Promis
     parsed.blocking = verified.blocking;
     parsed.notes = [...parsed.notes, ...verified.demoted];
   }
-  const review: ReviewResult = { at: new Date().toISOString(), ...parsed };
+  // Без tasks.md сверять не с чем: что бы ни вернул ревьюер, пункты плана не показываем.
+  const plan = docs.tasks.trim() ? parsePlanCoverage(res.text) : [];
+  const review: ReviewResult = { at: new Date().toISOString(), ...parsed, ...(plan.length ? { plan } : {}) };
   run.reviews.push(review);
   k.emit({ type: 'review.result', runId: run.id, result: review });
   if (review.blocking.length)
@@ -298,6 +300,17 @@ export async function reviewPass(k: Kernel, run: RunFile, quiet = false): Promis
         review.blocking.map((i) => `  • ${originTag(i)}${formatItem(i)}`).join('\n') +
         '\n',
     );
+  if (plan.length) {
+    const open = plan.filter((p) => p.status !== 'done');
+    out(
+      c.dim(`план → факт: сделано ${plan.length - open.length} из ${plan.length}`) +
+        '\n' +
+        open
+          .map((p) => `  ${p.status === 'missing' ? c.coral('✗') : c.amber('◐')} ${p.task}${p.note ? c.dim(` — ${p.note}`) : ''}`)
+          .join('\n') +
+        (open.length ? '\n' : ''),
+    );
+  }
   if (review.notes.length)
     out(c.amber(`• заметки (${review.notes.length}):\n`) + review.notes.map((i) => `  • ${formatItem(i)}`).join('\n') + '\n');
   k.end(

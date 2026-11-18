@@ -2,7 +2,7 @@
 import type { ReviewItem, RunFile } from '@purpleflow/core';
 import { CircleCheck, Sparkles } from 'lucide-react';
 import { useMemo } from 'react';
-import { OriginTag, PickBox } from '../../../components/diff/ReviewNotes';
+import { OriginTag, PickBox, PlanCoverageList, planScore } from '../../../components/diff/ReviewNotes';
 import { Empty } from '../../../components/ui';
 import { originSummary } from '../util';
 
@@ -40,12 +40,14 @@ export function ReviewView({
                   : 'Задача вернулась исполнителю с этими замечаниями.'
                 : 'Изменение передано вам на приёмку.'}{' '}
               Заметок: {r.notes.length}.{originSummary(r.blocking)}
+              {planScore(r.plan) ? ` План: сделано ${planScore(r.plan)!.done} из ${planScore(r.plan)!.total}.` : ''}
             </p>
           </div>
           <span className="muted mono">
             {run.agents.reviewer} · {run.models.reviewer || 'по умолчанию'}
           </span>
         </div>
+        <PlanCoverageList plan={r.plan} picked={picked} onPicked={onPicked} />
         <ul className="review-list">
           {items.map((x, i) => (
             <li key={i} className={`note n-${x.kind}`}>

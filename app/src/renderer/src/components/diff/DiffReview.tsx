@@ -1,6 +1,6 @@
 // Дифф прогона или чата: дерево файлов, Monaco, комментарии к строкам и замечания ревью.
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react';
-import type { DiffFile, LineComment, ReviewItem } from '@purpleflow/core';
+import type { DiffFile, LineComment, PlanCoverage, ReviewItem } from '@purpleflow/core';
 import { Check, MessageSquarePlus, Sparkles, Trash2 } from 'lucide-react';
 import * as monaco from 'monaco-editor';
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
@@ -8,14 +8,14 @@ import { Markdown } from '../Markdown';
 import { PillTabs } from '../PillTabs';
 import { Button, TextArea } from '../ui';
 import { FileList, type FilesView } from './FileList';
-import { NoteList } from './ReviewNotes';
+import { NoteList, PassedList, PlanCoverageList, planScore } from './ReviewNotes';
 import { langOf } from './monaco';
 import { buildTree, treeOrder } from './tree';
 import { fingerprint, useViewed } from './viewed';
 
 interface Props {
   files: DiffFile[];
-  review?: { blocking: ReviewItem[]; notes: ReviewItem[] };
+  review?: { blocking: ReviewItem[]; notes: ReviewItem[]; plan?: PlanCoverage[] };
   comments: LineComment[];
   onComments: (c: LineComment[]) => void;
   readOnly?: boolean;
@@ -26,6 +26,8 @@ interface Props {
   onPicked?: (items: ReviewItem[]) => void;
   /** Замечания визуальной проверки — на вкладке «Заметки» рядом с замечаниями ревьюера. */
   visualItems?: ReviewItem[];
+  /** Что визуальная проверка подтвердила — отдельным списком, не замечаниями. */
+  visualPassed?: string[];
   /** Файлы по пунктам плана — вид «По плану» в списке файлов. */
   groups?: { title: string; files: string[] }[];
   /** Вкладка «Код»/«Заметки» управляется снаружи (переключатель в шапке приёмки). */
@@ -49,6 +51,7 @@ export function DiffReview({
   picked,
   onPicked,
   visualItems = [],
+  visualPassed = [],
   tab: outerTab,
   onTab,
   groups,
@@ -309,7 +312,13 @@ export function DiffReview({
               {
                 id: 'notes',
                 label: `Заметки · ${noteCount}`,
-                extra: review?.blocking.length ? <span className="tab-badge is-bad">{review.blocking.length}</span> : undefined,
+                extra: review?.blocking.length ? (
+                  <span className="tab-badge is-bad">{review.blocking.length}</span>
+                ) : planScore(review?.plan)?.open ? (
+                  <span className="tab-badge is-pick" title="Пункты плана, которые ревьюер не нашёл сделанными">
+                    {planScore(review?.plan)!.open}
+                  </span>
+                ) : undefined,
               },
             ]}
           />
@@ -463,6 +472,7 @@ export function DiffReview({
               )}
             </section>
           )}
+          <PlanCoverageList plan={review?.plan} picked={!readOnly ? picked : undefined} onPicked={onPicked} />
           <NoteList
             title="Блокирующие"
             kind="blocking"
@@ -507,7 +517,8 @@ export function DiffReview({
             onPicked={onPicked}
             onJump={jumpTo}
           />
-          {noteCount === 0 && <p className="composer-hint">Замечаний нет.</p>}
+          <PassedList items={visualPassed} />
+          {noteCount === 0 && !review?.plan?.length && !visualPassed.length && <p className="composer-hint">Замечаний нет.</p>}
         </div>
       )}
     </div>

@@ -177,6 +177,7 @@ export const CORE_METHODS: Record<CoreMethod, true> = {
   detectProject: true,
   isDriving: true,
   listBranches: true,
+  mergeCheck: true,
   getAttachment: true,
   detectCommandsAI: true,
   getProjectConfig: true,

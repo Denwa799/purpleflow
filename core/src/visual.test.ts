@@ -120,6 +120,25 @@ test('проблемы видны: задача возвращается исп�
   assert.match(run.feedback!.text, /кнопка не видна[\s\S]*bug\.png/);
 });
 
+test('подтверждения — в passed, а не в заметках: задача идёт на приёмку', unix, async (t) => {
+  const { k, run } = setup(t, () =>
+    JSON.stringify({
+      blocking: [],
+      passed: ['Вкладка «Все» открывается', '  ', { message: 'Консоль без ошибок' }],
+      notes: [{ file: null, line: null, message: 'Отступ у заголовка на 390px великоват' }],
+    }),
+  );
+  await stageVisual(k, run);
+  assert.equal(run.next, 'gate2');
+  const v = run.visuals!.at(-1)!;
+  assert.deepEqual(v.passed, ['Вкладка «Все» открывается', 'Консоль без ошибок']);
+  assert.deepEqual(
+    v.notes.map((n) => n.message),
+    ['Отступ у заголовка на 390px великоват'],
+  );
+  assert.match(run.attempts.at(-1)!.summary ?? '', /проверено: 2/);
+});
+
 test('проверить не удалось: не вина исполнителя — сразу к человеку, замечания как заметки', unix, async (t) => {
   const { k, run } = setup(t, () => JSON.stringify({ blocking: [{ message: 'нет входа' }], notes: [], unverified: 'нужен логин' }));
   await stageVisual(k, run);

@@ -992,6 +992,104 @@ body.is-col-resizing .monaco-editor {
   display: flex;
   justify-content: space-between;
 }
+
+/* Подтверждения визуальной проверки: спокойный список с галочками, не карточки замечаний. */
+.passed-list ul {
+  list-style: none;
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-l);
+  background: var(--ok-wash);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.passed-list li {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  font-size: var(--fs-13);
+  line-height: 1.55;
+  color: var(--text-2);
+  user-select: text;
+}
+.passed-mark {
+  flex: none;
+  margin-top: 3px;
+  color: var(--ok);
+}
+
+/* План → факт: пункт tasks.md и его статус по оценке ревьюера. */
+.plan-cover {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.plan-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: var(--s-2);
+  align-items: start;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-s);
+  background: var(--bg-2);
+}
+.plan-row .plan-mark {
+  margin-top: 2px;
+}
+.plan-row.is-done .plan-mark {
+  color: var(--ok);
+}
+.plan-row.is-partial .plan-mark {
+  color: var(--wait);
+}
+.plan-row.is-missing .plan-mark {
+  color: var(--err);
+}
+.plan-row .plan-task {
+  font-size: var(--fs-13);
+  color: var(--text-1);
+  line-height: 1.5;
+  user-select: text;
+}
+.plan-row .plan-note {
+  margin: 2px 0 0;
+  font-size: var(--fs-12);
+  color: var(--text-3);
+  line-height: 1.5;
+  user-select: text;
+}
+.plan-row.is-done .plan-task {
+  color: var(--text-2);
+}
+
+/* Перед влитием: база ушла вперёд, конфликты, пересечения с другими прогонами. */
+.merge-check {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+  font-size: var(--fs-12);
+  color: var(--text-3);
+}
+.merge-check.is-bad {
+  color: var(--err);
+}
+.merge-check.is-warn {
+  color: var(--wait);
+}
+.accept-merge-check:empty {
+  display: none;
+}
+.accept-merge-check {
+  padding: 0 var(--s-4) var(--s-2);
+}
+.merge-check details summary {
+  cursor: pointer;
+}
+.merge-check .mono {
+  font-family: var(--font-code);
+}
 .composer {
   border-radius: var(--r-l);
   padding: var(--s-4);

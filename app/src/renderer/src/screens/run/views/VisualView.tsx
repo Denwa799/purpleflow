@@ -1,6 +1,7 @@
 // Визуальная проверка: скриншоты агента и просмотр их во весь экран.
 import type { RunFile, StageAttempt } from '@purpleflow/core';
 import { CircleCheck, RotateCcw, Sparkles } from 'lucide-react';
+import { PassedList } from '../../../components/diff/ReviewNotes';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PillTabs } from '../../../components/PillTabs';
@@ -122,7 +123,9 @@ export function VisualView({ run, runId, idx, attempt }: { run: RunFile; runId: 
                 <div>
                   <strong>{v.blocking.length ? `Видимых проблем: ${v.blocking.length}` : 'В браузере всё выглядит верно'}</strong>
                   <p>
-                    {v.url} · скриншотов: {v.shots.length} · заметок: {v.notes.length}
+                    {v.url}
+                    {v.passed?.length ? ` · проверено: ${v.passed.length}` : ''} · скриншотов: {v.shots.length}
+                    {v.notes.length ? ` · заметок: ${v.notes.length}` : ''}
                   </p>
                 </div>
               </div>
@@ -143,6 +146,7 @@ export function VisualView({ run, runId, idx, attempt }: { run: RunFile; runId: 
                 </figure>
               ))}
             </div>
+            <PassedList items={v.passed ?? []} />
             {items.length > 0 && (
               <ul className="review-list">
                 {items.map((x, i) => (

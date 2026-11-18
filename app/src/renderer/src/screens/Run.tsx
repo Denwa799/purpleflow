@@ -17,6 +17,7 @@ import { RunTitle } from './run/RunTitle';
 import { StageDrawer } from './run/StageDrawer';
 import { useRunGate } from './run/useRunGate';
 import { useStageDrawer } from './run/useStageDrawer';
+import { MergeCheckNote, useMergeCheck } from './run/MergeCheckNote';
 import { currentStage, unstableText, withPicked } from './run/util';
 
 type View = 'timeline' | 'log' | 'browser' | 'code' | 'pr';
@@ -85,6 +86,8 @@ export function RunScreen({ runId }: { runId: string }) {
   const managerLayout = useManagerLayout();
   /** Место в строке вкладок для инструментов вкладки «Код»: «Код / Заметки» и «Обновить». */
   const [tabTools, setTabTools] = useState<HTMLDivElement | null>(null);
+  // На приёмке: базовая ветка ушла вперёд или те же файлы правит другой прогон — видно до решения, а не при влитии.
+  const mergeCheck = useMergeCheck(run, run?.baseBranch?.replace(/^origin\//, ''), run?.next === 'gate2' && run.status === 'waiting');
 
   if (!run) {
     return (
@@ -268,12 +271,18 @@ export function RunScreen({ runId }: { runId: string }) {
                             : run.status === 'waiting'
                               ? null
                               : undefined,
-                        banner:
-                          unstableChecks.length > 0 ? (
-                            <p className="check-old unstable-banner">
-                              <TriangleAlert size={14} /> {unstableText(unstableChecks[0].unstable!)}
-                            </p>
-                          ) : undefined,
+                        banner: (
+                          <>
+                            {unstableChecks.length > 0 && (
+                              <p className="check-old unstable-banner">
+                                <TriangleAlert size={14} /> {unstableText(unstableChecks[0].unstable!)}
+                              </p>
+                            )}
+                            <div className="accept-merge-check">
+                              <MergeCheckNote check={mergeCheck} />
+                            </div>
+                          </>
+                        ),
                       }
                     : undefined
                 }

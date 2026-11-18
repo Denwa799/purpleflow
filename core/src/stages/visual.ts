@@ -8,7 +8,7 @@ import { Git } from '../git.js';
 import { formatItem } from '../items.js';
 import type { Kernel } from '../kernel.js';
 import { expandPorts, freePort, portEnv, waitForUrl } from '../net.js';
-import { parseReview, parseShots, parseUnverified } from '../parse.js';
+import { parsePassed, parseReview, parseShots, parseUnverified } from '../parse.js';
 import { killGroup, run as runProc } from '../proc.js';
 import { Screencast, findChrome, waitForCdp } from '../screencast.js';
 import { agentBase, agentModel, claudeModel } from '../services/agents.js';
@@ -163,6 +163,7 @@ export async function stageVisual(k: Kernel, run: RunFile) {
       if (!shots.some((x) => x.file === full)) shots.push({ file: full, caption: f });
     }
     const unverified = parseUnverified(res.text);
+    const passed = parsePassed(res.text);
     if (unverified) {
       // Окружение не дало проверить (не поднялся API, нет входа): исполнитель тут не поможет — идём дальше, решает человек.
       const result: VisualResult = {
@@ -170,6 +171,7 @@ export async function stageVisual(k: Kernel, run: RunFile) {
         url,
         blocking: [],
         notes: [...parsed.blocking, ...parsed.notes],
+        passed,
         shots,
         unverified,
         command,
@@ -195,6 +197,7 @@ export async function stageVisual(k: Kernel, run: RunFile) {
       url,
       blocking: parsed.blocking,
       notes: parsed.notes,
+      passed,
       shots,
       command,
       serverOutput: serverOut.trim() || undefined,
@@ -207,6 +210,7 @@ export async function stageVisual(k: Kernel, run: RunFile) {
           result.blocking.map((i) => `  • ${formatItem(i)}`).join('\n') +
           '\n',
       );
+    if (passed.length) k.log(run, c.mint(`✓ проверено (${passed.length}):\n`) + passed.map((x) => `  • ${x}`).join('\n') + '\n');
     k.log(run, c.dim(`скриншотов: ${shots.length}`) + '\n');
     k.end(
       run,
@@ -214,7 +218,7 @@ export async function stageVisual(k: Kernel, run: RunFile) {
       result.blocking.length ? 'failed' : 'done',
       result.blocking.length
         ? `Проблем: ${result.blocking.length}, скриншотов: ${shots.length}`
-        : `Выглядит верно, скриншотов: ${shots.length}`,
+        : `Выглядит верно${passed.length ? `, проверено: ${passed.length}` : ''}, скриншотов: ${shots.length}`,
     );
 
     if (!result.blocking.length) {

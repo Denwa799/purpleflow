@@ -55,3 +55,16 @@ export interface PrFollowupItem {
   line?: number;
   url?: string;
 }
+
+/** Перед влитием: насколько целевая ветка ушла вперёд и что пересекается с другими прогонами. */
+export interface MergeCheck {
+  target: string;
+  /** Коммитов в целевой ветке с начала задачи. */
+  behind: number;
+  /** Файлы с конфликтом (exact) или изменённые и в задаче, и в целевой ветке (могут конфликтовать). */
+  conflicts: string[];
+  /** true — проверено пробным слиянием (git merge-tree), false — только пересечение файлов. */
+  exact: boolean;
+  /** Другие незавершённые или не влитые прогоны этого проекта, которые меняют те же файлы. */
+  overlaps: { runId: string; title: string; files: string[] }[];
+}

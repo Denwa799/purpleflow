@@ -1,7 +1,7 @@
 // API ядра, доступное окну: каждый метод выполняется в utilityProcess и вызывается через IPC.
 // Orchestrator реализует этот интерфейс; список методов для моста — CORE_METHODS в app/src/shared/ipc.ts.
 import type { ChatFile, ChatSkill, ChatSummary } from './chat.js';
-import type { PrDetails, PrStatus } from './pr.js';
+import type { MergeCheck, PrDetails, PrStatus } from './pr.js';
 import type {
   AiCommands,
   CommandIssue,
@@ -58,6 +58,8 @@ export interface CoreApi {
   initRepo(dir: string): Promise<DetectedProject>;
   isDriving(id: string): Promise<boolean>;
   listBranches(id: string): Promise<{ branches: string[]; current: string | null; suggested: string | null }>;
+  /** Перед влитием: отставание от target (по умолчанию — предложенной ветки), конфликты, пересечения с другими прогонами. */
+  mergeCheck(id: string, target?: string): Promise<MergeCheck | null>;
   getAttachment(id: string, index: number): Promise<string | null>;
   detectCommandsAI(dir: string): Promise<AiCommands>;
   getProjectConfig(dir: string): Promise<ProjectConfig | null>;

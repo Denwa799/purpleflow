@@ -9,9 +9,9 @@ import { createPr, failedJobLog, mergePr, prComments, prReadiness, prStatus, pus
 import { isRunBranch } from '../ids.js';
 import type { Kernel } from '../kernel.js';
 
-import type { PrDetails, PrFollowupItem, PrStatus, RunFile, RunRepo } from '../types.js';
+import type { MergeCheck, PrDetails, PrFollowupItem, PrStatus, RunFile, RunRepo } from '../types.js';
 import { getChangeDocs } from './runs.js';
-import { copyEnvFiles } from './workspace.js';
+import { copyEnvFiles, envFilesOf } from './workspace.js';
 const MULTI_ROUND = 'В проекте из нескольких репозиториев новый круг по PR пока не поддерживается — поставьте доработку новой задачей.';
 
 export function ghBin(k: Kernel): string | null {
@@ -103,9 +103,15 @@ export async function prBody(k: Kernel, r: RunFile): Promise<string> {
       `## Ревью (${r.agents.reviewer})\n\n${review.blocking.length ? `Блокирующих: ${review.blocking.length}` : 'Блокирующих замечаний нет.'}${notes ? `\n\nЗаметки:\n${notes}` : ''}`,
     );
   }
+  if (review?.plan?.length) {
+    const mark = { done: '✅', partial: '◐', missing: '❌' } as const;
+    parts.push(
+      `## План → факт\n\n${review.plan.map((p) => `- ${mark[p.status]} ${p.task}${p.status !== 'done' && p.note ? ` — ${p.note}` : ''}`).join('\n')}`,
+    );
+  }
   if (visual) {
     parts.push(
-      `## Визуальная проверка\n\n${visual.unverified ? `⚠️ Проверить не удалось: ${visual.unverified}` : visual.blocking.length ? `Проблем: ${visual.blocking.length}` : '✅ В браузере всё выглядит верно'}${visual.shots.length ? `\n\nСкриншоты (${visual.shots.length}) — в PurpleFlow:\n${visual.shots.map((s) => `- ${s.caption}`).join('\n')}` : ''}`,
+      `## Визуальная проверка\n\n${visual.unverified ? `⚠️ Проверить не удалось: ${visual.unverified}` : visual.blocking.length ? `Проблем: ${visual.blocking.length}` : '✅ В браузере всё выглядит верно'}${visual.passed?.length ? `\n\nПроверено:\n${visual.passed.map((x) => `- ${x}`).join('\n')}` : ''}${visual.shots.length ? `\n\nСкриншоты (${visual.shots.length}) — в PurpleFlow:\n${visual.shots.map((s) => `- ${s.caption}`).join('\n')}` : ''}`,
     );
   }
   parts.push(`---\nСделано в PurpleFlow · режим «${r.mode}» · прогон \`${r.id.slice(0, 8)}\``);
@@ -315,6 +321,71 @@ export async function listBranches(
   const from = r.baseBranch?.replace(/^origin\//, '');
   const suggested = [from, 'main', 'master', b.current].find((x): x is string => Boolean(x && branches.includes(x))) ?? branches[0] ?? null;
   return { branches, current: b.current, suggested };
+}
+
+/** Изменённые прогоном файлы основного репозитория: служебное OpenSpec и файлы окружения не в счёт. */
+async function runFiles(k: Kernel, git: Git, r: RunFile): Promise<string[]> {
+  if (r.workspacePending || (r.worktreeRemoved && r.status !== 'finished')) return [];
+  const env = new Set(envFilesOf(k, r));
+  const files =
+    r.status === 'finished'
+      ? await git.namesBetween(r.projectPath, r.baseCommit, r.branch)
+      : await git.changedFiles(r.worktreePath, r.baseCommit);
+  return files.filter((f) => !f.startsWith('openspec/') && !env.has(f));
+}
+
+/** Прогоны, которые ещё могут попасть в ту же ветку: идут, ждут решения или завершены, но не влиты. */
+const PENDING = new Set(['running', 'waiting', 'stopped', 'queued']);
+const FRESH_MS = 14 * 24 * 3600_000;
+
+/**
+ * Перед влитием: насколько целевая ветка ушла вперёд с начала задачи, где будут конфликты
+ * (у завершённого — пробным слиянием, у идущего — по пересечению файлов) и какие другие прогоны правят те же файлы.
+ * Только основной репозиторий проекта; ничего не меняет.
+ */
+export async function mergeCheck(k: Kernel, id: string, target?: string): Promise<MergeCheck | null> {
+  const r = k.mustLoad(id);
+  if (r.merged || r.status === 'cancelled') return null;
+  const into = target?.trim() || (await listBranches(k, id)).suggested;
+  if (!into) return null;
+  const git = new Git((await k.tools(['git'])).git, k.opts.env);
+  const targetSha = await git.revParse(r.projectPath, into).catch(() => '');
+  if (!targetSha) return null;
+  const ours = await runFiles(k, git, r).catch(() => [] as string[]);
+  const mine = new Set(ours);
+  const behind = await git.countAhead(r.projectPath, r.baseCommit, targetSha).catch(() => 0);
+  let conflicts: string[] = [];
+  let exact = false;
+  if (behind > 0) {
+    const exactConflicts = r.status === 'finished' ? await git.mergeConflicts(r.projectPath, targetSha, r.branch).catch(() => null) : null;
+    if (exactConflicts) {
+      conflicts = exactConflicts;
+      exact = true;
+    } else {
+      const theirs = await git.namesBetween(r.projectPath, r.baseCommit, targetSha).catch(() => [] as string[]);
+      conflicts = theirs.filter((f) => mine.has(f));
+    }
+  }
+  const overlaps: MergeCheck['overlaps'] = [];
+  if (mine.size) {
+    const others = k.store
+      .list()
+      .filter(
+        (s) =>
+          s.id !== r.id &&
+          s.projectPath === r.projectPath &&
+          // Завершённые, но не влитые — только свежие: брошенная месяц назад ветка уже никуда не пойдёт.
+          (PENDING.has(s.status) || (s.status === 'finished' && Date.now() - Date.parse(s.updatedAt) < FRESH_MS)),
+      )
+      .slice(0, 12);
+    for (const s of others) {
+      const o = k.store.load(s.id);
+      if (!o || o.merged || (o.status === 'finished' && !o.commit)) continue;
+      const files = (await runFiles(k, git, o).catch(() => [] as string[])).filter((f) => mine.has(f));
+      if (files.length) overlaps.push({ runId: o.id, title: o.title, files });
+    }
+  }
+  return { target: into, behind, conflicts, exact, overlaps };
 }
 
 /**

@@ -192,6 +192,9 @@ export class Orchestrator implements CoreApi {
   listBranches(id: string) {
     return pr.listBranches(this.kernel, id);
   }
+  mergeCheck(id: string, target?: string) {
+    return pr.mergeCheck(this.kernel, id, target);
+  }
   prReady(id: string) {
     return pr.prReady(this.kernel, id);
   }

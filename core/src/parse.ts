@@ -1,7 +1,7 @@
 // Разбор ответов агентов и вывода проверок: всё чистое, без ввода-вывода.
 
 import { jsonCandidates, parseJsonReply } from './json.js';
-import type { ClarifyQuestion, ReviewItem } from './types.js';
+import type { ClarifyQuestion, PlanCoverage, ReviewItem } from './types.js';
 
 /** Название изменения от планировщика: первая строка proposal.md вида «# Название». */
 export function planTitle(proposal: string): string | null {
@@ -106,6 +106,47 @@ export function parseUnverified(text: string): string | null {
     return j && typeof j.unverified === 'string' && j.unverified.trim() ? j.unverified.trim().slice(0, 400) : null;
   } catch {
     return null;
+  }
+}
+
+/** Сверка «план → факт» из ответа ревьюера; неизвестный статус — пропускаем пункт. */
+export function parsePlanCoverage(text: string): PlanCoverage[] {
+  for (const cand of jsonCandidates(text)) {
+    try {
+      const j = JSON.parse(cand) as { plan?: unknown };
+      if (!j || !Array.isArray(j.plan)) continue;
+      return j.plan
+        .map((x): PlanCoverage | null => {
+          const o = x as { task?: unknown; status?: unknown; note?: unknown };
+          const task = typeof o?.task === 'string' ? o.task.trim() : '';
+          const status = o?.status === 'done' || o?.status === 'partial' || o?.status === 'missing' ? o.status : null;
+          if (!task || !status) return null;
+          const note = typeof o.note === 'string' && o.note.trim() ? o.note.trim() : undefined;
+          return { task: task.slice(0, 300), status, ...(note ? { note: note.slice(0, 600) } : {}) };
+        })
+        .filter((x): x is PlanCoverage => x !== null)
+        .slice(0, 80);
+    } catch {
+      /* следующий кандидат */
+    }
+  }
+  return [];
+}
+
+/** Подтверждения визуальной проверки: что проверено и работает (строки; объекты с message тоже принимаем). */
+export function parsePassed(text: string): string[] {
+  try {
+    const j = parseJsonReply<{ passed?: unknown }>(text);
+    if (!j || !Array.isArray(j.passed)) return [];
+    return j.passed
+      .map((x) =>
+        typeof x === 'string' ? x : typeof (x as { message?: unknown })?.message === 'string' ? (x as { message: string }).message : '',
+      )
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, 40);
+  } catch {
+    return [];
   }
 }
 

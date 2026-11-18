@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CircleAlert, FileCode2, RefreshCw } from 'lucide-react';
 import type { DiffFile, LineComment, ReviewItem, RunFile } from '@purpleflow/core';
 import { DiffReview } from '../../components/diff/DiffReview';
+import { planScore } from '../../components/diff/ReviewNotes';
 import { PillTabs } from '../../components/PillTabs';
 import { Button, Empty } from '../../components/ui';
 import { bridge, cleanErr } from '../../lib/api';
@@ -105,6 +106,7 @@ export function CodePane({
   const live = run.status === 'running';
   const lastReview = run.reviews.at(-1);
   const lastVisual = run.visuals?.at(-1);
+  const planOpen = planScore(lastReview?.plan)?.open ?? 0;
 
   // Переключатель и «Обновить» — в строке вкладок прогона, а не отдельной полосой над диффом.
   const bar = (
@@ -119,7 +121,13 @@ export function CodePane({
             {
               id: 'notes',
               label: `Заметки · ${accept.notes}`,
-              extra: accept.picked.length ? <span className="tab-badge is-pick">{accept.picked.length}</span> : undefined,
+              extra: accept.picked.length ? (
+                <span className="tab-badge is-pick">{accept.picked.length}</span>
+              ) : planOpen ? (
+                <span className="tab-badge is-bad" title="Пункты плана, которые ревьюер не нашёл сделанными">
+                  {planOpen}
+                </span>
+              ) : undefined,
             },
           ]}
         />
@@ -158,6 +166,7 @@ export function CodePane({
             review={lastReview}
             groups={run.taskMap?.groups}
             visualItems={lastVisual ? [...lastVisual.blocking, ...lastVisual.notes] : []}
+            visualPassed={lastVisual?.passed}
             {...(accept
               ? {
                   comments: accept.comments,

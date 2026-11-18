@@ -10,6 +10,7 @@ import { Button } from '../../components/ui';
 import { tokens, usageTotal, when } from '../../lib/format';
 import { Lightbox } from './views/VisualView';
 import { bridge, cleanErr } from '../../lib/api';
+import { MergeCheckNote, useMergeCheck } from './MergeCheckNote';
 
 /** Удаление прогона с подтверждением: worktree и данные приложения, ветка — по выбору. */
 export function DeleteRun({ run, runId }: { run: RunFile; runId: string }) {
@@ -164,6 +165,7 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [prWhy, setPrWhy] = useState<string | null | undefined>(undefined);
   const [pr, setPr] = useState<PrStatus | null>(null);
+  const check = useMergeCheck(run, target || undefined, Boolean(target) && !run.pr && !run.merged);
 
   useEffect(() => {
     if (run.merged || run.pr) return;
@@ -367,6 +369,7 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
       >
         {target ? `Влить в ${target}` : 'Влить'}
       </Button>
+      <MergeCheckNote check={check} compact />
       {offMain && (
         <span className="merge-note" title={`Задача начата от ветки ${run.baseBranch}, поэтому она выбрана по умолчанию`}>
           не {offMain}

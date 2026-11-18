@@ -23,6 +23,8 @@ export interface VisualResult {
   url: string;
   blocking: ReviewItem[];
   notes: ReviewItem[];
+  /** Что проверено в браузере и работает — подтверждения, а не замечания. Нет у проверок до 0.4.2. */
+  passed?: string[];
   shots: VisualShot[];
   /** Проверить не удалось из‑за окружения (не поднялся API, нет тестового входа…) — это не ошибка реализации. */
   unverified?: string;
@@ -100,10 +102,20 @@ export interface ReviewItem {
   origin?: 'new' | 'unfixed' | 'from_fix';
 }
 
+/** Пункт плана (tasks.md) глазами ревьюера: сделан ли он в диффе. */
+export interface PlanCoverage {
+  task: string;
+  status: 'done' | 'partial' | 'missing';
+  /** Где сделано или чего не хватает — коротко. */
+  note?: string;
+}
+
 export interface ReviewResult {
   at: string;
   blocking: ReviewItem[];
   notes: ReviewItem[];
+  /** Сверка «план → факт» по пунктам tasks.md. Нет у быстрой правки и у ревью до 0.4.2. */
+  plan?: PlanCoverage[];
 }
 
 export interface LineComment {

@@ -404,6 +404,27 @@ export class Git {
     return out.split('\0').filter(Boolean);
   }
 
+  /** Сколько коммитов в head, которых нет в base (насколько head ушла вперёд). */
+  async countAhead(repo: string, base: string, head: string): Promise<number> {
+    return Number((await this.git(repo, ['rev-list', '--count', `${base}..${head}`])).trim()) || 0;
+  }
+
+  /**
+   * Файлы, которые дали бы конфликт при слиянии ours и theirs, — без рабочей копии и без изменений (git merge-tree, git ≥ 2.38).
+   * null — git старый или merge-tree не справился: тогда точного ответа нет.
+   */
+  async mergeConflicts(repo: string, ours: string, theirs: string): Promise<string[] | null> {
+    const r = await run(this.bin, ['merge-tree', '--write-tree', '--name-only', '--no-messages', '-z', ours, theirs], {
+      cwd: repo,
+      env: this.env,
+      timeoutMs: 60_000,
+    });
+    if (r.code === 0) return [];
+    if (r.code !== 1) return null;
+    // Первая запись — дерево результата, дальше — пути с конфликтом.
+    return [...new Set(r.stdout.split('\0').slice(1).filter(Boolean))];
+  }
+
   /** Унифицированный дифф текстом — для промпта ревьюера. */
   diffText(worktree: string, base: string, excludeGlobs: string[] = [], prefix?: string): Promise<string> {
     return serialized(worktree, async () => {
