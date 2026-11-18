@@ -36,6 +36,42 @@ interface TsApi {
   javascriptDefaults?: { setDiagnosticsOptions?: (o: object) => void; setModeConfiguration?: (o: object) => void };
 }
 
+// То же для JSON/CSS/SCSS/LESS/HTML: их сервисы (цвета, символы, ховеры, ссылки) тоже уходят в общий воркер
+// и падают с «Missing requestHandler or method». Для диффа только для чтения они не нужны.
+{
+  type Defaults = { setModeConfiguration?: (o: object) => void } | undefined;
+  type Ns = Record<string, Defaults> | undefined;
+  const m = monaco as unknown as { css?: Ns; json?: Ns; html?: Ns; languages?: { css?: Ns; json?: Ns; html?: Ns } };
+  const ns = (k: 'css' | 'json' | 'html'): Ns => m[k] ?? m.languages?.[k];
+  const off = {
+    completionItems: false,
+    hovers: false,
+    documentSymbols: false,
+    definitions: false,
+    references: false,
+    links: false,
+    documentHighlights: false,
+    rename: false,
+    colors: false,
+    foldingRanges: false,
+    diagnostics: false,
+    selectionRanges: false,
+    // tokens не трогаем: это подсветка JSON, она работает без воркера.
+    documentFormattingEdits: false,
+    documentRangeFormattingEdits: false,
+  };
+  const all: Defaults[] = [
+    ns('css')?.cssDefaults,
+    ns('css')?.scssDefaults,
+    ns('css')?.lessDefaults,
+    ns('json')?.jsonDefaults,
+    ns('html')?.htmlDefaults,
+    ns('html')?.handlebarDefaults,
+    ns('html')?.razorDefaults,
+  ];
+  for (const d of all) d?.setModeConfiguration?.(off);
+}
+
 monaco.editor.defineTheme('purpleflow-night', {
   base: 'vs-dark',
   inherit: true,
