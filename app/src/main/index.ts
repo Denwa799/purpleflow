@@ -55,6 +55,8 @@ const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Err
 
 /** Сквозные тесты: окно не показывается, не берёт фокус, без значка в доке и системных уведомлений. */
 const HIDDEN = Boolean(process.env.PURPLEFLOW_HIDDEN);
+// Сквозные тесты без звука: сигнал о готовности и звук сайта во вкладке «Браузер» глушит сам Chromium.
+if (process.env.PURPLEFLOW_MUTE || HIDDEN) app.commandLine.appendSwitch('mute-audio');
 
 function focusWindow() {
   if (!win || HIDDEN) return;

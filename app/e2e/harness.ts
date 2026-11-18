@@ -99,6 +99,8 @@ export async function launch(box: Sandbox, env: Record<string, string> = {}): Pr
     env: {
       ...process.env,
       PURPLEFLOW_USER_DATA: box.profile,
+      // Без звука и с видимым окном (PURPLEFLOW_E2E_SHOW=1): прогон тестов не пищит.
+      PURPLEFLOW_MUTE: '1',
       ELECTRON_DISABLE_SECURITY_WARNINGS: '1',
       // Окно не всплывает и не забирает фокус, пока идут тесты. Посмотреть глазами: PURPLEFLOW_E2E_SHOW=1.
       ...(process.env.PURPLEFLOW_E2E_SHOW ? {} : { PURPLEFLOW_HIDDEN: '1' }),
