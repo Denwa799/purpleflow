@@ -376,6 +376,11 @@ export class Orchestrator implements CoreApi {
     await Promise.race([turn, new Promise((r) => setTimeout(r, 50))]);
     turn.catch(() => {});
   }
+  async allowChatMcp(id: string, tool: { server: string; tool: string; always?: boolean }): Promise<void> {
+    const turn = chat.allowChatMcp(this.kernel, id, tool);
+    await Promise.race([turn, new Promise((r) => setTimeout(r, 50))]);
+    turn.catch(() => {});
+  }
   stopChat(id: string) {
     return chat.stopChat(this.kernel, id);
   }

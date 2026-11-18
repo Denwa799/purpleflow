@@ -37,6 +37,8 @@ export interface ChatToolPart {
   detail?: string;
   /** Начало вывода инструмента. */
   output?: string;
+  /** codex отказал в вызове MCP без подтверждения — человек может разрешить его и попросить повторить. */
+  approval?: { server: string; tool: string };
   /** Шаги субагента, запущенного этим вызовом. */
   sub?: ChatSubStep[];
 }
@@ -130,6 +132,10 @@ export interface ChatFile {
   edits: boolean;
   /** Сессия CLI, которую продолжает следующий ход: claude --resume или codex exec resume. */
   session?: { agent: AgentKind; id: string };
+  /** MCP-инструменты, разрешённые codex в этом чате без подтверждения. */
+  mcpAllow?: { server: string; tool: string }[];
+  /** Разрешённые только на следующий ход codex. */
+  mcpOnce?: { server: string; tool: string }[];
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];

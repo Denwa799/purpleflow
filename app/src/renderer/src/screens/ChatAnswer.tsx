@@ -10,6 +10,7 @@ import {
   FilePen,
   Info,
   ListChecks,
+  LockOpen,
   LoaderCircle,
   MessageCircleQuestion,
   TriangleAlert,
@@ -25,8 +26,19 @@ const plural = (n: number) =>
   n === 1 ? 'действие' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'действия' : 'действий';
 
 /** Ответ: блоки по порядку, индикатор, пока пишется, и итоги хода. answerable — на вопросы агента ещё можно ответить. */
-export function AssistantMessage({ m, answerable, onAnswer }: { m: ChatMessage; answerable: boolean; onAnswer: (text: string) => void }) {
+export function AssistantMessage({
+  m,
+  answerable,
+  onAnswer,
+  onAllowMcp,
+}: {
+  m: ChatMessage;
+  answerable: boolean;
+  onAnswer: (text: string) => void;
+  onAllowMcp?: (t: McpApproval, always: boolean) => void;
+}) {
   const blocks = chatBlocks(m);
+  const refused = m.pending ? [] : refusedMcp(blocks);
   const live = Boolean(m.pending);
   const tail = blocks[blocks.length - 1];
   const footer = live ? [] : answerFooter(m);
@@ -49,6 +61,14 @@ export function AssistantMessage({ m, answerable, onAnswer }: { m: ChatMessage; 
             return <Markdown key={i} className="md chat-md" source={b.text} />;
         }
       })}
+      {refused.map((t) => (
+        <McpApprovalCard
+          key={`${t.server}/${t.tool}`}
+          t={t}
+          answerable={answerable && Boolean(onAllowMcp)}
+          onAllow={(a) => onAllowMcp?.(t, a)}
+        />
+      ))}
       {live && (!tail || (tail.kind !== 'text' && tail.kind !== 'thinking')) && (
         <div className="chat-typing" aria-label="Агент отвечает">
           <i />
@@ -179,6 +199,40 @@ function Notice({ level, text }: { level: 'info' | 'warn' | 'error'; text: strin
 }
 
 /** Вопросы агента: один вопрос с одним ответом уходит по клику, иначе — кнопкой «Ответить». */
+type McpApproval = NonNullable<ChatToolPart['approval']>;
+
+/** Вызовы MCP, в которых codex отказал без подтверждения, — по одному на инструмент. */
+function refusedMcp(blocks: ReturnType<typeof chatBlocks>): McpApproval[] {
+  const out = new Map<string, McpApproval>();
+  for (const b of blocks)
+    if (b.kind === 'tools') for (const t of b.items) if (t.approval) out.set(`${t.approval.server}/${t.approval.tool}`, t.approval);
+  return [...out.values()];
+}
+
+/** codex exec не умеет спросить человека: разрешение даём после отказа и просим повторить вызов. */
+function McpApprovalCard({ t, answerable, onAllow }: { t: McpApproval; answerable: boolean; onAllow: (always: boolean) => void }) {
+  return (
+    <div className="chat-question chat-mcp-approval">
+      <p className="chat-question-text">
+        <LockOpen size={14} />
+        <span>
+          Codex хотел вызвать <code>{t.server}</code> · <code>{t.tool}</code>, но без подтверждения инструмент недоступен.
+        </span>
+      </p>
+      {answerable && (
+        <div className="chat-question-options">
+          <button type="button" className="chat-question-send" onClick={() => onAllow(false)}>
+            Разрешить и повторить
+          </button>
+          <button type="button" className="chip" onClick={() => onAllow(true)}>
+            Разрешать в этом чате
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QuestionCard({
   questions,
   answerable,

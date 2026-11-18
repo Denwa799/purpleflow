@@ -1,5 +1,11 @@
 import type { ChatMcpServer, ChatQuestion, ChatTodo, TokenUsage } from '../types.js';
 
+/** MCP-инструмент: сервер и имя. */
+export interface McpTool {
+  server: string;
+  tool: string;
+}
+
 export interface AgentRunOptions {
   bin: string;
   cwd: string;
@@ -46,7 +52,7 @@ export type AgentStep =
   | { kind: 'text'; text: string; delta?: boolean; fresh?: boolean }
   | { kind: 'thinking'; text: string; delta?: boolean }
   | { kind: 'tool'; text: string; id?: string; parent?: string; detail?: string }
-  | { kind: 'tool_result'; id: string; ok: boolean; output?: string; parent?: string }
+  | { kind: 'tool_result'; id: string; ok: boolean; output?: string; parent?: string; approval?: McpTool }
   | { kind: 'todos'; items: ChatTodo[] }
   | { kind: 'question'; id?: string; questions: ChatQuestion[] }
   | { kind: 'notice'; level: 'info' | 'warn' | 'error'; text: string; key?: string }

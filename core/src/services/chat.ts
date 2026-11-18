@@ -226,6 +226,21 @@ export async function sendChat(k: Kernel, id: string, text: string, files: { nam
 }
 
 /**
+ * Разрешить codex инструмент MCP, в котором он отказал (codex exec не умеет спросить человека),
+ * и попросить повторить вызов. always — на весь чат, иначе только на следующий ход. Песочница файлов не меняется.
+ */
+export async function allowChatMcp(k: Kernel, id: string, t: { server: string; tool: string; always?: boolean }): Promise<void> {
+  const chat = must(k, id);
+  const tool = { server: t.server, tool: t.tool };
+  const has = (l?: { server: string; tool: string }[]) => l?.some((x) => x.server === tool.server && x.tool === tool.tool);
+  if (t.always) {
+    if (!has(chat.mcpAllow)) chat.mcpAllow = [...(chat.mcpAllow ?? []), tool];
+  } else if (!has(chat.mcpOnce)) chat.mcpOnce = [...(chat.mcpOnce ?? []), tool];
+  save(k, chat);
+  await sendChat(k, id, `Разрешаю вызов ${tool.server} · ${tool.tool} — повтори его.`);
+}
+
+/**
  * Сжать контекст сессии claude (/compact): переписка остаётся, агент помнит её в пересказе, окно освобождается.
  * Ответом — уведомление о сжатии; сообщения, присланные во время сжатия, уходят следующим ходом.
  */
@@ -383,11 +398,13 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
         sandbox: chat.edits ? 'workspace-write' : 'read-only',
         persist: true,
         resumeThread: session,
+        mcpApprove: [...(chat.mcpAllow ?? []), ...(chat.mcpOnce ?? [])],
         onSession: (sid) => {
           thread = sid;
         },
       });
       if (thread) chat.session = { agent, id: thread };
+      chat.mcpOnce = undefined;
     } else {
       // claude не принимает изображения флагом — даём пути, он откроет их инструментом Read.
       if (images.length) prompt += `\n\nИзображения (открой инструментом Read):\n${images.map((f) => `- ${f}`).join('\n')}`;

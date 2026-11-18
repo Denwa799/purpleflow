@@ -56,6 +56,7 @@ export function applyStep(a: ChatAnswer, st: AgentStep): void {
       if (!t) return;
       t.status = status;
       if (st.output) t.output = st.output;
+      if (st.approval) t.approval = st.approval;
       return;
     }
     case 'todos': {

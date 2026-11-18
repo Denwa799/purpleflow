@@ -104,6 +104,8 @@ export interface CoreApi {
   updateChat(id: string, patch: Partial<Pick<ChatFile, 'title' | 'agent' | 'model' | 'effort' | 'edits'>>): Promise<ChatFile>;
   deleteChat(id: string): Promise<void>;
   sendChat(id: string, text: string, files?: { name: string; data: Uint8Array }[]): Promise<void>;
+  /** Разрешить codex отклонённый инструмент MCP и попросить повторить вызов. */
+  allowChatMcp(id: string, tool: { server: string; tool: string; always?: boolean }): Promise<void>;
   stopChat(id: string): Promise<void>;
   /** Убрать сообщение из очереди, пока агент его не получил. */
   unqueueChat(id: string, messageId: string): Promise<ChatFile>;

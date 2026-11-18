@@ -218,6 +218,7 @@ export const CORE_METHODS: Record<CoreMethod, true> = {
   updateChat: true,
   deleteChat: true,
   sendChat: true,
+  allowChatMcp: true,
   stopChat: true,
   unqueueChat: true,
   chatToTask: true,

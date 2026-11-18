@@ -393,7 +393,15 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
                 m.role === 'user' ? (
                   <UserMessage key={m.id} m={m} chatId={chat!.id} />
                 ) : (
-                  <AssistantMessage key={m.id} m={m} answerable={i > lastUser} onAnswer={(t) => void send(t)} />
+                  <AssistantMessage
+                    key={m.id}
+                    m={m}
+                    answerable={i > lastUser}
+                    onAnswer={(t) => void send(t)}
+                    onAllowMcp={(t, always) =>
+                      chat && void bridge.core.allowChatMcp(chat.id, { ...t, always }).catch((e) => setError(cleanErr(e)))
+                    }
+                  />
                 ),
               )}
             </div>

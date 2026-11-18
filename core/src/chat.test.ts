@@ -452,3 +452,39 @@ test('чат: уровень рассуждений уходит агенту и
   // Неизвестный уровень не сохраняется.
   assert.equal((await core.updateChat(chat.id, { effort: 'ultra' })).effort, undefined);
 });
+
+test('чат: отказ codex в MCP — разрешение на ход или на весь чат, повторная просьба уходит сообщением', async () => {
+  const calls: { mcpApprove?: { server: string; tool: string }[] }[] = [];
+  let refuse = true;
+  const codex = async (o: AgentRunOptions & { mcpApprove?: { server: string; tool: string }[] }) => {
+    calls.push(o);
+    o.onStep?.({ kind: 'tool', id: 'c1', text: 'cognify · cognify_status' });
+    if (refuse) o.onStep?.({ kind: 'tool_result', id: 'c1', ok: false, approval: { server: 'cognify', tool: 'cognify_status' } });
+    refuse = false;
+    return { ok: true, text: 'Ок', usage: emptyUsage() };
+  };
+  const core = makeCore({ codex });
+  const chat = await core.createChat({ agent: 'codex' });
+  await core.sendChat(chat.id, 'Статус?');
+  let after = await untilIdle(core, chat.id);
+  const tool = after.messages.at(-1)!.parts!.find((p) => p.kind === 'tool');
+  assert.deepEqual(tool && 'approval' in tool && tool.approval, { server: 'cognify', tool: 'cognify_status' });
+  assert.deepEqual(calls[0].mcpApprove, []);
+
+  // На один ход: разрешено в следующем, потом снова нет.
+  await core.allowChatMcp(chat.id, { server: 'cognify', tool: 'cognify_status' });
+  after = await untilIdle(core, chat.id);
+  assert.match(after.messages.at(-2)!.text, /Разрешаю вызов cognify · cognify_status/);
+  assert.deepEqual(calls[1].mcpApprove, [{ server: 'cognify', tool: 'cognify_status' }]);
+  await core.sendChat(chat.id, 'Ещё');
+  await untilIdle(core, chat.id);
+  assert.deepEqual(calls[2].mcpApprove, []);
+
+  // На весь чат.
+  await core.allowChatMcp(chat.id, { server: 'cognify', tool: 'cognify_status', always: true });
+  await untilIdle(core, chat.id);
+  await core.sendChat(chat.id, 'И ещё');
+  after = await untilIdle(core, chat.id);
+  assert.deepEqual(calls[4].mcpApprove, [{ server: 'cognify', tool: 'cognify_status' }]);
+  assert.deepEqual(after.mcpAllow, [{ server: 'cognify', tool: 'cognify_status' }]);
+});

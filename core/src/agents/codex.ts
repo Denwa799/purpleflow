@@ -15,6 +15,7 @@ import {
   type AgentResult,
   type AgentRunOptions,
   type AgentStep,
+  type McpTool,
 } from './common.js';
 import { toolName } from './tools.js';
 import type { ChatTodo } from '../types.js';
@@ -28,9 +29,12 @@ export interface CodexOptions extends AgentRunOptions {
   persist?: boolean;
   /** Продолжить сохранённую сессию: codex exec resume <id>. */
   resumeThread?: string;
+  /** MCP-инструменты, которые можно вызывать без подтверждения (codex exec отказывает в остальных без readOnlyHint). */
+  mcpApprove?: McpTool[];
 }
 
 const KEY_ENV = 'PURPLEFLOW_OPENAI_API_KEY';
+const MCP_NAME = /^[A-Za-z0-9_-]+$/;
 
 export function codexProxyBase(p: NonNullable<AgentRunOptions['proxy']>): string {
   if (p.codexBaseUrl?.trim()) return p.codexBaseUrl.trim();
@@ -43,7 +47,10 @@ export function codexProxyBase(p: NonNullable<AgentRunOptions['proxy']>): string
  * Прокси подключаем отдельным провайдером через -c, не трогая ~/.codex/config.toml.
  */
 export function codexArgs(
-  o: Pick<CodexOptions, 'cwd' | 'model' | 'effort' | 'sandbox' | 'proxy' | 'images' | 'userConfig' | 'persist' | 'resumeThread'>,
+  o: Pick<
+    CodexOptions,
+    'cwd' | 'model' | 'effort' | 'sandbox' | 'proxy' | 'images' | 'userConfig' | 'persist' | 'resumeThread' | 'mcpApprove'
+  >,
   extra: { schemaFile?: string; lastFile: string },
 ): string[] {
   // У resume нет -C и -s: папка — рабочая папка процесса, песочница — через -c.
@@ -73,6 +80,10 @@ export function codexArgs(
   if (o.sandbox === 'workspace-write') args.push('-c', 'sandbox_workspace_write.network_access=true');
   if (o.model) args.push('-m', o.model);
   if (o.effort) args.push('-c', `model_reasoning_effort="${o.effort}"`);
+  // Имя — ключ TOML без кавычек: пропускаем только безопасные.
+  for (const t of o.mcpApprove ?? [])
+    if (MCP_NAME.test(t.server) && MCP_NAME.test(t.tool))
+      args.push('-c', `mcp_servers.${t.server}.tools.${t.tool}.approval_mode="approve"`);
   if (extra.schemaFile) args.push('--output-schema', extra.schemaFile);
   // --image=… по одному: иначе многозначный -i проглотит завершающий «-» (промпт из stdin).
   for (const img of o.images ?? []) args.push(`--image=${img}`);
@@ -133,7 +144,11 @@ export function codexItemSteps(item: Record<string, unknown>, done: boolean): Ag
       const text = `${toolName(`mcp__${String(item.server ?? '?')}__${String(item.tool ?? '?')}`)}${main ? ` ${firstLine(main)}` : ''}`;
       const detail = Object.keys(args).length ? JSON.stringify(args, null, 2).slice(0, 3000) : undefined;
       const err = (item.error as { message?: string } | null | undefined)?.message;
-      return [defined({ kind: 'tool', id, text, detail }), ...result(!err && !failed, err ?? mcpResultText(item.result))];
+      const res = result(!err && !failed, err ?? mcpResultText(item.result));
+      // codex exec не может спросить человека и отказывает: «MCP tool call requires approval, but approval policy is never».
+      if (err && /requires approval/i.test(err) && item.server && item.tool)
+        for (const r of res) if (r.kind === 'tool_result') r.approval = { server: String(item.server), tool: String(item.tool) };
+      return [defined({ kind: 'tool', id, text, detail }), ...res];
     }
     case 'web_search':
       return [defined({ kind: 'tool', id, text: `Поиск в сети ${firstLine(item.query)}`.trim() }), ...result(!failed)];

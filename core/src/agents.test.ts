@@ -127,6 +127,24 @@ test('effort: claude --effort, codex model_reasoning_effort; без уровня
   assert.ok(!codexArgs({ cwd: '/w', sandbox: 'read-only' }, { lastFile: '/l' }).some((a) => a.includes('reasoning')));
 });
 
+test('mcpApprove: codex получает approval_mode="approve" для разрешённых инструментов, небезопасные имена отброшены', () => {
+  const x = codexArgs(
+    {
+      cwd: '/w',
+      sandbox: 'read-only',
+      mcpApprove: [
+        { server: 'cognify', tool: 'cognify_status' },
+        { server: 'a.b', tool: 'x"]' },
+      ],
+    },
+    { lastFile: '/l' },
+  );
+  assert.ok(x.includes('mcp_servers.cognify.tools.cognify_status.approval_mode="approve"'));
+  assert.ok(!x.some((v) => v.includes('a.b')));
+  assert.ok(x.includes('read-only'));
+  assert.equal(x.at(-1), '-');
+});
+
 test('addUsage: стоимость остаётся неизвестной, если её не сообщали', () => {
   const a = addUsage(emptyUsage(), { input: 2, output: 3 });
   assert.equal(a.costUsd, undefined);
@@ -457,6 +475,27 @@ test('codexItemSteps: команды с итогом, MCP, поиск, план,
       { kind: 'tool', id: 'm', text: 'gh · search bug', detail: '{\n  "q": "bug"\n}' },
       { kind: 'tool_result', id: 'm', ok: false, output: 'нет доступа' },
     ],
+  );
+  // Отказ без подтверждения: результат помечен, чтобы чат предложил разрешить инструмент.
+  assert.deepEqual(
+    codexItemSteps(
+      {
+        id: 'm1',
+        type: 'mcp_tool_call',
+        server: 'cognify',
+        tool: 'cognify_status',
+        status: 'failed',
+        error: { message: 'user cancelled MCP tool call: MCP tool call requires approval, but approval policy is never' },
+      },
+      true,
+    ).at(-1),
+    {
+      kind: 'tool_result',
+      id: 'm1',
+      ok: false,
+      output: 'user cancelled MCP tool call: MCP tool call requires approval, but approval policy is never',
+      approval: { server: 'cognify', tool: 'cognify_status' },
+    },
   );
   assert.deepEqual(
     codexItemSteps(
