@@ -10,6 +10,7 @@ import { checkCommand, detectProjectCommands } from './detect.js';
 import { decide } from './gates.js';
 import { makeTitle } from './ids.js';
 import { Kernel } from './kernel.js';
+import { agentModel } from './services/agents.js';
 import { applyPending } from './services/control.js';
 import { cleanStorage, getStorage } from './services/disk.js';
 import { attachmentsBlock, saveAttachments } from './services/attachments.js';
@@ -402,4 +403,12 @@ test('сканирование: на выбранном агенте с его �
   codex = { ok: false, error: 'codex: превышен предельный таймаут', timedOut: true };
   await assert.rejects(detectCommandsAI(k, bin), /таймаут/);
   assert.deepEqual(calls, [{ agent: 'codex', model: 'gpt-mini' }]);
+});
+
+test('agentModel: роль без своей модели не прячет модель другой роли на том же агенте', () => {
+  const k = {} as Kernel;
+  const agents = { planner: 'claude', executor: 'opencode', reviewer: 'opencode' } as const;
+  assert.equal(agentModel(k, 'opencode', agents, { planner: 'opus', executor: '', reviewer: 'openrouter/x' }), 'openrouter/x');
+  assert.equal(agentModel(k, 'opencode', agents, { planner: 'opus', executor: 'deepseek/v4', reviewer: 'openrouter/x' }), 'deepseek/v4');
+  assert.equal(agentModel(k, 'opencode', agents, { planner: 'opus', executor: ' ', reviewer: '' }), '');
 });

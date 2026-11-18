@@ -357,8 +357,8 @@ export class Orchestrator implements CoreApi {
   async chatDefaultModel(agent: AgentKind) {
     return chat.chatDefaultModel(this.kernel, agent);
   }
-  async listOpencodeModels() {
-    return listOpencodeModels(this.kernel);
+  async listOpencodeModels(dir?: string) {
+    return listOpencodeModels(this.kernel, dir);
   }
   async listChatSkills(projectPath?: string) {
     return chat.listChatSkills(this.kernel, projectPath);

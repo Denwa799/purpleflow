@@ -32,7 +32,6 @@ interface Picked {
 
 /** Чат с агентом вне конвейера: вопросы по проекту и небольшие правки без плана и ревью. */
 export function ChatScreen({ chatId, initialProject }: { chatId?: string; initialProject?: string }) {
-  const modelOptions = useModelOptions();
   const { state, go } = useStore();
   const settings = state.settings;
   const [chat, setChat] = useState<ChatFile | null>(null);
@@ -267,6 +266,7 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
   const lastUser = messages.reduce((at, m, i) => (m.role === 'user' ? i : at), -1);
   const empty = !loading && messages.length === 0;
   const projectPath = chat ? chat.projectPath : draft.projectPath;
+  const modelOptions = useModelOptions(projectPath);
   const mention = useMentions({ text, setText, input, projectPath });
 
   /** Элемент, указанный во вкладке «Браузер»: описание — в поле ввода, курсор — после него, чтобы дописать просьбу. */

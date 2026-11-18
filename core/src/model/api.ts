@@ -116,6 +116,7 @@ export interface CoreApi {
   /** Модель чата по умолчанию для агента (из настроек ролей); пусто — модель выбирает CLI. */
   chatDefaultModel(agent: AgentKind): Promise<string>;
   /** Модели opencode «провайдер/модель» из его настроенных провайдеров; opencode выключен или не найден — пусто. */
-  listOpencodeModels(): Promise<string[]>;
+  /** dir — папка проекта: подмешиваются провайдеры из его opencode.json. */
+  listOpencodeModels(dir?: string): Promise<string[]>;
   getChatChangedFiles(id: string): Promise<string[]>;
 }

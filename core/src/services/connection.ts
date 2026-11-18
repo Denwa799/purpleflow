@@ -60,21 +60,27 @@ export async function testConnection(k: Kernel): Promise<ConnectionCheck[]> {
   try {
     return await Promise.all(present.map(one));
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    // На Windows процесс агента может ещё держать файлы папки — несколько повторов вместо ошибки проверки.
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
 
-let modelsCache: { bin: string; at: number; list: Promise<string[]> } | null = null;
+const modelsCache = new Map<string, { at: number; list: Promise<string[]> }>();
 
 /**
  * Модели opencode: `opencode models` — провайдеры, которые пользователь подключил сам (opencode auth login, конфиг),
  * и бесплатные opencode/*. Список держим минуту: подсказки нужны на каждом экране моделей.
+ * dir — папка проекта: тогда видны и провайдеры из его opencode.json. Без неё — из домашней папки.
  */
-export async function listOpencodeModels(k: Kernel): Promise<string[]> {
+export async function listOpencodeModels(k: Kernel, dir?: string): Promise<string[]> {
   if (!(await k.hasTool('opencode'))) return [];
   const bin = (await k.tools(['opencode'])).opencode;
-  if (modelsCache?.bin === bin && Date.now() - modelsCache.at < 60_000) return modelsCache.list;
-  const list = run(bin, ['models'], { cwd: os.homedir(), env: prependPath(k.opts.env, path.dirname(bin)), timeoutMs: 30_000 }).then((r) =>
+  const cwd = dir && fs.existsSync(dir) ? path.resolve(dir) : os.homedir();
+  const key = `${bin}\0${cwd}`;
+  const hit = modelsCache.get(key);
+  if (hit && Date.now() - hit.at < 60_000) return hit.list;
+  for (const [x, v] of modelsCache) if (Date.now() - v.at >= 60_000) modelsCache.delete(x);
+  const list = run(bin, ['models'], { cwd, env: prependPath(k.opts.env, path.dirname(bin)), timeoutMs: 30_000 }).then((r) =>
     r.code === 0
       ? [
           ...new Set(
@@ -86,7 +92,7 @@ export async function listOpencodeModels(k: Kernel): Promise<string[]> {
         ]
       : [],
   );
-  modelsCache = { bin, at: Date.now(), list };
-  list.catch(() => (modelsCache = null));
+  modelsCache.set(key, { at: Date.now(), list });
+  list.catch(() => modelsCache.delete(key));
   return list;
 }

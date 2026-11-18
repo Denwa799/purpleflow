@@ -15,7 +15,8 @@ let opencodeLast: string[] = [];
  * Подсказки моделей: сразу встроенные, следом — с моделями AI-прокси, когда список придёт.
  * Модели, доступные только через прокси, видны всегда — с пометкой; выбор без подписки перехватывает ModelInput.
  */
-export function useModelOptions(): Record<AgentKind, DropOption<string>[]> {
+/** dir — папка проекта: у opencode могут быть свои провайдеры в opencode.json проекта. */
+export function useModelOptions(dir?: string): Record<AgentKind, DropOption<string>[]> {
   const [remote, setRemote] = useState(last);
   const [opencode, setOpencode] = useState(opencodeLast);
   useEffect(() => {
@@ -26,7 +27,7 @@ export function useModelOptions(): Record<AgentKind, DropOption<string>[]> {
       if (alive) setRemote(m);
     });
     // Список провайдеров opencode меняется редко, но после `opencode auth login` должен подхватиться — спрашиваем при каждом открытии.
-    opencodeLoaded = bridge.core.listOpencodeModels().catch(() => []);
+    opencodeLoaded = bridge.core.listOpencodeModels(dir).catch(() => []);
     void opencodeLoaded.then((m) => {
       opencodeLast = m;
       if (alive) setOpencode(m);
@@ -34,6 +35,6 @@ export function useModelOptions(): Record<AgentKind, DropOption<string>[]> {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [dir]);
   return useMemo(() => mergeModelOptions(remote, opencode), [remote, opencode]);
 }

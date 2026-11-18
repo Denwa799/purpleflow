@@ -86,6 +86,9 @@ function extraDirs(): string[] {
       path.join(appData, 'npm'),
       path.join(h, '.local', 'bin'),
       path.join(h, '.bun', 'bin'),
+      path.join(h, '.opencode', 'bin'),
+      // Официальный установщик opencode (curl … | bash, install.ps1) кладёт его сюда, а не в npm.
+      path.join(h, '.opencode', 'bin'),
       path.join(local, 'Programs', 'Git', 'cmd'),
       'C:\\Program Files\\Git\\cmd',
       'C:\\Program Files\\nodejs',

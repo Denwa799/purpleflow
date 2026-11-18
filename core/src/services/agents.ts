@@ -127,7 +127,8 @@ export function agentModel(
   models: Record<Role, string>,
 ): string {
   const a = { ...DEFAULT_AGENTS, ...agents };
-  const role = (['executor', 'planner', 'reviewer'] as Role[]).find((r) => a[r] === agent);
+  // Роль без своей модели пропускаем: иначе пустое поле исполнителя спрятало бы модель ревьюера на том же агенте.
+  const role = (['executor', 'planner', 'reviewer'] as Role[]).find((r) => a[r] === agent && models[r]?.trim());
   return role ? models[role] : '';
 }
 
