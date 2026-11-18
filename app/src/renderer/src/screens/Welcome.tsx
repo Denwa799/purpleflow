@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, LogIn, UserPlus } from 'lucide-react';
 import { ACCOUNT_BENEFITS, AccountKeys, AuthForms } from '../components/Account';
 import { EmailBonus } from '../components/EmailBonus';
 import { Button } from '../components/ui';
 import { Mark } from '../components/Sidebar';
 import { useStore } from '../lib/store';
+import { setupStep } from '../lib/setupUsage';
 
 type Step = 'start' | 'login' | 'register' | 'key';
 
@@ -16,6 +17,8 @@ export function WelcomeScreen() {
   const { state, saveSettings, go } = useStore();
   const [step, setStep] = useState<Step>(state.settings?.account ? 'key' : 'start');
   const [leaving, setLeaving] = useState(false);
+  // Какой экран входа открыт — для статистики настройки (welcome — заставка).
+  useEffect(() => setupStep(step === 'start' ? 'welcome' : step), [step]);
 
   const next = async () => {
     setLeaving(true);
@@ -52,6 +55,10 @@ export function WelcomeScreen() {
             </Button>
           </div>
           <p className="onboard-skip-hint">Без входа агенты работают по вашим подпискам. Войти можно позже в настройках.</p>
+          <p className="onboard-skip-hint">
+            Мы получаем статистику шагов (без кода, задач и путей к проектам) и отчёты об ошибках, чтобы находить, где PurpleFlow мешает;
+            после входа через PurpleSchool — вместе с аккаунтом. Отключить можно в настройках, на вкладке «Приложение».
+          </p>
           <ul className="onboard-benefits">
             {ACCOUNT_BENEFITS.map((b) => (
               <li key={b.title}>

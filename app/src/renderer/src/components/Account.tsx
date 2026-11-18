@@ -4,6 +4,7 @@ import type { AccountKey } from '../../../shared/ipc';
 import { Button, Field, Input } from './ui';
 import { useActions, useStore } from '../lib/store';
 import { bridge } from '../lib/api';
+import { authReason, setupStep } from '../lib/setupUsage';
 
 /** Документы для согласия при регистрации — те же, что в форме на app.purpleschool.ru. */
 const LEGAL = {
@@ -25,6 +26,8 @@ type Mode = 'login' | 'register' | 'restore';
 /** Вход, регистрация и восстановление пароля PurpleSchool. onDone — вошли или зарегистрировались. */
 export function AuthForms({ onDone, initial = 'login' }: { onDone: () => void | Promise<void>; initial?: Mode }) {
   const { reloadSettings } = useActions();
+  // Неудачный вход — в статистику настройки, пока она не пройдена (потом эта же форма живёт в настройках).
+  const onboarded = useStore().state.settings?.onboarded;
   const [mode, setMode] = useState<Mode>(initial);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -66,7 +69,10 @@ export function AuthForms({ onDone, initial = 'login' }: { onDone: () => void | 
         mode === 'login'
           ? await bridge.account.login(mail, password)
           : await bridge.account.register({ name, email: mail, password, mailing });
-      if (!r.ok) return setError({ text: r.error, toLogin: r.code === 'exists' });
+      if (!r.ok) {
+        if (!onboarded) setupStep(mode, authReason(r.code));
+        return setError({ text: r.error, toLogin: r.code === 'exists' });
+      }
       setPassword('');
       await reloadSettings();
       await onDone();
@@ -199,6 +205,7 @@ export function AccountKeys({ onUnauthorized }: { onUnauthorized?: () => void })
 
   const fail = async (r: { error: string; code?: string }) => {
     setError(r.error);
+    if (!state.settings?.onboarded) setupStep('key', r.code === 'network' ? 'network' : 'key');
     if (r.code === 'unauthorized') {
       await reloadSettings();
       onUnauthorized?.();

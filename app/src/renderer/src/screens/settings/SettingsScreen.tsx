@@ -5,6 +5,7 @@ import { PillTabs } from '../../components/PillTabs';
 import { Mark } from '../../components/Sidebar';
 import { Button, Topbar } from '../../components/ui';
 import { bridge } from '../../lib/api';
+import { setupStep } from '../../lib/setupUsage';
 import { useStore, type SettingsTab } from '../../lib/store';
 import { AccountTab } from './AccountTab';
 import { AppTab } from './AppTab';
@@ -39,6 +40,16 @@ export function SettingsScreen() {
     });
   }, [tab, accountEmail, reloadSettings]);
 
+  const firstRun = Boolean(s && !s.onboarded);
+  const toolsKnown = Boolean(state.tools);
+  // Первая настройка открыта; агенты не найдены — отдельным сбоем: на этом месте настройку и бросают.
+  useEffect(() => {
+    if (firstRun) setupStep('settings');
+  }, [firstRun]);
+  useEffect(() => {
+    if (firstRun && toolsKnown && !allFound) setupStep('settings', 'tools');
+  }, [firstRun, toolsKnown, allFound]);
+
   if (!s) return null;
   const first = !s.onboarded;
   const tools = state.tools;
@@ -63,8 +74,8 @@ export function SettingsScreen() {
               claude, codex или opencode: проверим, что они найдены, и выберем модели.
             </p>
             <p>
-              Мы получаем анонимную статистику шагов и отчёты об ошибках — без кода, задач и путей к проектам. Отключить можно на вкладке
-              «Приложение».
+              Мы получаем статистику шагов и отчёты об ошибках — без кода, задач и путей к проектам; при входе через PurpleSchool статистика
+              связана с аккаунтом. Отключить можно на вкладке «Приложение».
             </p>
           </div>
         </div>

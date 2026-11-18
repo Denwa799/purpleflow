@@ -6,6 +6,7 @@ import { useStore } from '../../lib/store';
 import { restrictAgents } from '../../lib/presets';
 import { enabledList, TOOL_NAMES, toolNeeded } from '../../lib/tools';
 import { rebase } from './rebase';
+import { setupStep } from '../../lib/setupUsage';
 
 export type SettingsDraft = ReturnType<typeof useSettingsDraft>;
 
@@ -80,9 +81,14 @@ export function useSettingsDraft() {
     await save();
     setChecking(true);
     setChecks(null);
+    const firstRun = !s?.onboarded;
+    if (firstRun) setupStep('check');
     try {
-      setChecks(await bridge.core.testConnection());
+      const res = await bridge.core.testConnection();
+      setChecks(res);
+      if (firstRun && res.some((c) => !c.ok)) setupStep('check', 'check');
     } catch (e) {
+      if (firstRun) setupStep('check', 'check');
       setError((e as Error).message);
     } finally {
       setChecking(false);

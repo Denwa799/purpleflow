@@ -57,6 +57,7 @@ const bridge: PurpleFlowBridge = {
     return () => ipcRenderer.removeListener('app:go', h);
   },
   testNotification: () => ipcRenderer.invoke('notify:test'),
+  setupStep: (step, reason) => ipcRenderer.send('usage:setup', step, reason),
   update: {
     state: () => ipcRenderer.invoke('update:state'),
     onState(fn) {

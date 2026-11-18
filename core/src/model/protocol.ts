@@ -17,14 +17,35 @@ import type {
 } from './run.js';
 import type { PrFollowupItem } from './pr.js';
 
+/** Чем закончился прогон — для статистики; message — тот же исход словами для человека. */
+export type FinishReason =
+  | 'done'
+  | 'user_stop'
+  | 'paused'
+  | 'unqueued'
+  | 'start_failed'
+  | 'stage_failed'
+  | 'plan_invalid'
+  | 'no_checks'
+  | 'checks_red'
+  | 'limit_stop'
+  | 'cancelled';
+
 export type CoreEvent =
   | { type: 'stage.started'; runId: string; stage: StageId; attempt: number }
   | { type: 'agent.output'; runId: string; stage: StageId; text: string }
   | { type: 'tests.result'; runId: string; result: TestResult }
   | { type: 'review.result'; runId: string; result: ReviewResult }
-  | { type: 'gate.waiting'; runId: string; gate: GateId; message?: string }
+  | {
+      type: 'gate.waiting';
+      runId: string;
+      gate: GateId;
+      message?: string;
+      /** Ворота limit: кончились попытки реализации или исполнитель и ревьюер ходят по кругу. */
+      limit?: { cause: 'attempts' | 'loop'; attempts: number; max: number };
+    }
   | { type: 'stage.failed'; runId: string; stage: StageId; error: string }
-  | { type: 'run.finished'; runId: string; status: RunStatus; message?: string }
+  | { type: 'run.finished'; runId: string; status: RunStatus; message?: string; reason?: FinishReason }
   /** Кадр браузера агента визуальной проверки (JPEG base64); null — трансляция закончилась. */
   | { type: 'visual.frame'; runId: string; frame: { data: string; url: string; width: number; height: number } | null }
   /** Приложение прогона для ручной проверки во вкладке «Браузер». */

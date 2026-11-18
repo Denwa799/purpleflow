@@ -35,7 +35,7 @@ interface StoredSettings {
   /** Экран входа при первом запуске уже показан: вошли или нажали «Пропустить». */
   authPrompted: boolean;
   /**
-   * Отправлять разработчикам очищенные отчёты об ошибках и анонимную статистику использования.
+   * Отправлять разработчикам очищенные отчёты об ошибках и статистику шагов (при входе через PurpleSchool — вместе с аккаунтом).
    * Один выключатель: без статистики не понять, на каком шаге и как часто случается ошибка.
    */
   diagnostics: boolean;
@@ -184,9 +184,18 @@ export function errorReportsAllowed(): boolean {
   return s.onboarded && s.diagnostics;
 }
 
+/**
+ * Статистика шагов идёт и до конца настройки: экран входа сразу предупреждает о ней, а без этих событий не видно,
+ * где люди бросают настройку. Только installId, версия, ОС и имя шага; выключатель — на вкладке «Приложение».
+ */
 export function usageEventsAllowed(): boolean {
+  return load().diagnostics;
+}
+
+/** Первый запуск на этой машине: настройка не пройдена и статистика ещё не заводила installId. */
+export function usageFirstLaunch(): boolean {
   const s = load();
-  return s.onboarded && s.diagnostics;
+  return !s.onboarded && !s.usageInstallId;
 }
 
 export function usageInstallId(): string {

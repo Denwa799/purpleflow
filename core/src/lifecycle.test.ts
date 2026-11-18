@@ -9,13 +9,13 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { emptyUsage, type AgentResult, type AgentRunOptions } from './agents/common.js';
 import { restore } from './engine.js';
-import { decide } from './gates.js';
+import { decide, waitGate } from './gates.js';
 import { Orchestrator } from './orchestrator.js';
 import { copyEnvFiles, cloneDeps } from './services/workspace.js';
 import { stageFinish } from './stages/finish.js';
 import { stageImplement } from './stages/implement.js';
 import { stageReview } from './stages/review.js';
-import type { CoreSettings, RunFile } from './types.js';
+import type { CoreEvent, CoreSettings, RunFile } from './types.js';
 
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'prompts');
 const unix = { skip: process.platform === 'win32', timeout: 60_000 };
@@ -320,6 +320,8 @@ test('очередь: лимит соблюдается, снятие и зап�
     return okReply('Готово');
   };
   const { core, k, repo, until } = setup(t, claude, 1);
+  const finished: CoreEvent[] = [];
+  core.on((e) => e.type === 'run.finished' && finished.push(e));
   const a = (await start(core, repo)).runId!;
   await until(a, () => seen.length === 1);
   const b = (await start(core, repo, { task: 'Вторая' })).runId!;
@@ -331,6 +333,11 @@ test('очередь: лимит соблюдается, снятие и зап�
   await core.dispatch({ type: 'run.stop', runId: b });
   assert.equal(k.mustLoad(b).status, 'stopped');
   assert.match(k.mustLoad(b).message!, /Снят с очереди/);
+  assert.deepEqual(
+    finished.map((e) => e.type === 'run.finished' && e.reason),
+    ['unqueued'],
+    'причина — для статистики',
+  );
 
   // «Продолжить» запускает снятый без оглядки на лимит.
   await core.dispatch({ type: 'run.resume', runId: b });
@@ -347,11 +354,14 @@ test('очередь: лимит соблюдается, снятие и зап�
 
 test('запуск из очереди: проект на другой ветке — прогон стоит с причиной; «Продолжить» её повторяет', unix, async (t) => {
   const { core, k, g, save, until } = setup(t);
+  const finished: CoreEvent[] = [];
+  core.on((e) => e.type === 'run.finished' && finished.push(e));
   g('branch', 'purpleflow/x');
   const run = save({ status: 'queued', workspace: 'branch', branch: 'purpleflow/x', next: 'implement' });
   await core.settingsChanged();
   const r = await until(run.id, (x) => x.status === 'stopped');
   assert.match(r.message!, /Не удалось начать прогон: Проект сейчас на ветке main/);
+  assert.ok(finished.some((e) => e.type === 'run.finished' && e.runId === run.id && e.reason === 'start_failed'));
   await assert.rejects(core.dispatch({ type: 'run.resume', runId: run.id }), /Переключитесь на purpleflow\/x/);
   assert.equal(k.mustLoad(run.id).status, 'stopped');
 });
@@ -537,9 +547,23 @@ test('попытки исчерпаны: ещё попытка с прошлой
   await decide(k, toVisual.id, 'accept');
   assert.equal(k.mustLoad(toVisual.id).next, 'visual');
 
+  const events: CoreEvent[] = [];
+  k.on((e) => events.push(e));
   const stop = save({ status: 'waiting', next: 'limit' });
   await decide(k, stop.id, 'cancel');
   assert.equal(k.mustLoad(stop.id).status, 'stopped');
+  assert.ok(events.some((e) => e.type === 'run.finished' && e.runId === stop.id && e.reason === 'limit_stop'));
+
+  // Ворота limit сообщают причину и попытки — для статистики: кончились попытки или исполнитель с ревьюером ходят по кругу.
+  const loop = save({ status: 'running', next: 'implement', implAttemptsUsed: 2, implAttemptsLimit: 3, stuck: { items: [] } });
+  waitGate(k, loop, 'limit');
+  const out = save({ status: 'running', next: 'implement', implAttemptsUsed: 3, implAttemptsLimit: 3 });
+  waitGate(k, out, 'limit');
+  const limits = events.flatMap((e) => (e.type === 'gate.waiting' && e.gate === 'limit' ? [e.limit] : []));
+  assert.deepEqual(limits, [
+    { cause: 'loop', attempts: 2, max: 3 },
+    { cause: 'attempts', attempts: 3, max: 3 },
+  ]);
 });
 
 test('отмена на плане: прогон отменён, фоновые проверки прекращены', unix, async (t) => {

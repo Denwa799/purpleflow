@@ -292,7 +292,7 @@ export async function launchQueued(k: Kernel, run: RunFile) {
     run.status = 'stopped';
     run.message = `Не удалось начать прогон: ${(e as Error).message}`;
     k.save(run);
-    k.emit({ type: 'run.finished', runId: run.id, status: 'stopped', message: run.message });
+    k.emit({ type: 'run.finished', runId: run.id, status: 'stopped', message: run.message, reason: 'start_failed' });
     return;
   } finally {
     k.preparing.delete(run.id);
@@ -359,7 +359,7 @@ export async function stop(k: Kernel, id: string) {
     r.status = 'stopped';
     r.message = 'Снят с очереди. «Продолжить» запустит его сразу.';
     k.save(r);
-    k.emit({ type: 'run.finished', runId: id, status: 'stopped', message: r.message });
+    k.emit({ type: 'run.finished', runId: id, status: 'stopped', message: r.message, reason: 'unqueued' });
     return;
   }
   // Фоновые исходные проверки гибнут вместе с группой процессов — их итог больше не годится в эталон.
@@ -378,7 +378,7 @@ export async function stop(k: Kernel, id: string) {
     r.status = 'stopped';
     r.message = 'Остановлено пользователем';
     k.save(r);
-    k.emit({ type: 'run.finished', runId: id, status: 'stopped', message: r.message });
+    k.emit({ type: 'run.finished', runId: id, status: 'stopped', message: r.message, reason: 'user_stop' });
   }
 }
 

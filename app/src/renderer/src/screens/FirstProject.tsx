@@ -1,7 +1,7 @@
 // Первый проект: выбрать папку, просканировать нейросетью (команды и знания) и подключить — три шага до первой задачи.
 import { ArrowRight, BookText, Check, FolderGit2, FolderOpen, ScanSearch, TerminalSquare, TriangleAlert, Zap } from 'lucide-react';
 import type { AgentKind } from '@purpleflow/core';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Mark } from '../components/Sidebar';
 import { Button } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
@@ -10,6 +10,7 @@ import { useStore } from '../lib/store';
 import { enabledList } from '../lib/tools';
 import { CmdChips, NotRepoNote, type LoadedProject, loadProject, saveLoaded } from './projects/common';
 import { AgentSwitch } from './settings/parts';
+import { setupStep } from '../lib/setupUsage';
 
 type Job = 'idle' | 'busy' | 'done' | 'error';
 
@@ -35,6 +36,8 @@ export function FirstProjectScreen() {
   const [error, setError] = useState<string | null>(null);
   // Сканирование, начатое для прошлой папки, не должно перезаписать команды новой.
   const current = useRef<string | null>(null);
+  // Первый проект — следующий шаг после настройки: здесь его подключают или откладывают.
+  useEffect(() => setupStep('project'), []);
 
   const pick = async () => {
     setPicking(true);
@@ -43,6 +46,7 @@ export function FirstProjectScreen() {
       const dir = await bridge.pickFolder('Папка проекта');
       if (dir) await open(dir);
     } catch (e) {
+      setupStep('project', 'project');
       setError(cleanErr(e));
     } finally {
       setPicking(false);
@@ -60,6 +64,7 @@ export function FirstProjectScreen() {
       setProfileJob('idle');
       setScanError(null);
     } catch (e) {
+      setupStep('project', 'project');
       setError(cleanErr(e));
     }
   };
@@ -107,8 +112,10 @@ export function FirstProjectScreen() {
     setError(null);
     try {
       await saveLoaded({ ...p, path: p.info.path });
+      setupStep('project_added');
       go({ name: 'new', project: p.info.path });
     } catch (e) {
+      setupStep('project', 'project');
       setError(cleanErr(e));
     } finally {
       setConnecting(false);
@@ -234,7 +241,13 @@ export function FirstProjectScreen() {
           </Step>
         </ol>
 
-        <button className="link fp-skip" onClick={() => go({ name: 'new' })}>
+        <button
+          className="link fp-skip"
+          onClick={() => {
+            setupStep('project_skipped');
+            go({ name: 'new' });
+          }}
+        >
           Пропустить — подключу проект позже
         </button>
       </div>

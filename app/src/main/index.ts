@@ -18,7 +18,7 @@ import {
   type MenuItemConstructorOptions,
   type UtilityProcess,
 } from 'electron';
-import type { CoreCommand, CoreEvent } from '@purpleflow/core';
+import type { CoreCommand, CoreEvent, RunFile } from '@purpleflow/core';
 import type { CoreMethod, HostMessage, HostRequest, SettingsPatch } from '../shared/ipc';
 import { coreSettings, publicSettings, seenVersion, setSeenVersion, updateSettings } from './settings';
 import { releases } from './releases';
@@ -28,7 +28,17 @@ import { proxyModels } from './models';
 import { isLocalUrl, isSameDocument, isWebUrl } from '../shared/urls';
 import type { UpdateState } from '../shared/update';
 import { errorReportingActive, initErrorReporting } from './error-reporting';
-import { flushUsageEvents, recordUsage, recordUsageCommand, recordUsageEvent, startUsageEvents, syncUsageEvents } from './usage-events';
+import {
+  flushUsageEvents,
+  recordRunStart,
+  recordSetup,
+  recordUsage,
+  recordUsageCommand,
+  recordUsageEvent,
+  startUsageEvents,
+  syncUsageEvents,
+  usageRecording,
+} from './usage-events';
 import { checkForUpdatesNow, downloadUpdate, installUpdate, startUpdater, updateState } from './updater';
 
 // Отдельный профиль для тестов и разработки.
@@ -320,11 +330,25 @@ const handle = (channel: string, fn: (e: IpcMainInvokeEvent, ...args: never[]) =
     return fn(e, ...(args as never[]));
   });
 
+const getRun = (id: string) => callHost('getRun', [id]).catch(() => null) as Promise<RunFile | null>;
+
 handle('core:call', async (_e, method: CoreMethod, args: unknown[]) => {
+  const cmd = method === 'dispatch' ? (args[0] as CoreCommand) : null;
+  // На каких воротах стоял прогон — узнаём до решения: после него прогон уже ушёл дальше.
+  const gate = cmd && cmd.type.startsWith('gate.') && 'runId' in cmd && usageRecording() ? (await getRun(cmd.runId))?.next : undefined;
   const result = await callHost(method, args);
   // После успеха: отклонённая команда в статистику не попадает.
-  if (method === 'dispatch') recordUsageCommand(args[0] as CoreCommand);
+  if (cmd) {
+    recordUsageCommand(cmd, { gate });
+    // Агент, модель и пресет — по самому прогону: ядро могло пересадить роль с выключенного CLI.
+    if (cmd.type === 'run.start' && usageRecording())
+      void getRun((result as { runId: string }).runId).then((run) => run && recordRunStart(run, Boolean(coreSettings().proxy.baseUrl)));
+  }
   return result;
+});
+// Шаги настройки из окна: проверку шага и причины делает usageFromSetup.
+ipcMain.on('usage:setup', (e, step: unknown, reason: unknown) => {
+  if (e.sender === win?.webContents) recordSetup(step, reason);
 });
 handle('settings:get', () => publicSettings());
 ipcMain.on('app:error-reports:get', (e) => {

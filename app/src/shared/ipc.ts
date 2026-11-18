@@ -3,6 +3,7 @@ import type { CoreApi, AgentKind, Efforts, Models, CoreEvent, Role, ToolName } f
 import type { UpdateState } from './update';
 import type { ProxyModels } from './models';
 import type { Release } from './releases';
+import type { SetupFailReason, SetupStep } from './usage-events';
 
 export type { ChangeDocs, CoreApi } from '@purpleflow/core';
 
@@ -256,6 +257,8 @@ export interface PurpleFlowBridge {
   onChime(fn: () => void): () => void;
   onGo(fn: (runId: string) => void): () => void;
   testNotification(): Promise<void>;
+  /** Шаг настройки для статистики; с reason — шаг не удался. Неизвестные шаги и причины main отбрасывает. */
+  setupStep(step: SetupStep, reason?: SetupFailReason): void;
   /** Автообновление: состояние и шаги, которые решает пользователь. */
   update: {
     state(): Promise<UpdateState>;

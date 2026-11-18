@@ -1,21 +1,9 @@
 // Пресеты быстрой настройки: модели по уровням и роли по пресетам. Чистая логика — без React, её проверяют тесты.
-import type { AgentKind, Models, Role } from '@purpleflow/core';
+import type { AgentKind, Models } from '@purpleflow/core';
+import { presetFromTiers, TIERS, type Agents, type PresetId, type Slot, type Tier, type Tiers } from '../../../shared/presets';
 
-export type Agents = Record<Role, AgentKind> & { visual?: AgentKind; manager?: AgentKind; scan?: AgentKind };
-export type PresetId = 'economy' | 'optimal' | 'max';
-export type Tier = 'low' | 'mid' | 'high' | 'max';
-export type Tiers = Record<Tier, string>;
-
-/**
- * Модели по уровням. Имена — те, что принимает и CLI, и AI-прокси PurpleSchool:
- * у claude алиасы CLI, у codex — линейка gpt-6 ступень в ступень: haiku → luna, sonnet → terra, opus → sol, Fable → astra.
- */
-const TIERS: Record<AgentKind, Record<Tier, string>> = {
-  claude: { low: 'haiku', mid: 'sonnet', high: 'opus', max: 'claude-fable-5-2' },
-  codex: { low: 'gpt-6-luna', mid: 'gpt-6.1-terra', high: 'gpt-6-sol', max: 'gpt-6-astra' },
-  // У opencode ступени выбирает человек из моделей своих провайдеров (opencodeTiers); с AI-прокси по умолчанию — линейка прокси.
-  opencode: { low: '', mid: '', high: '', max: '' },
-};
+export { PRESET_TIERS, presetFromTiers, presetOf, TIERS } from '../../../shared/presets';
+export type { Agents, PresetId, Slot, Tier, Tiers } from '../../../shared/presets';
 
 export const TIER_ORDER: Tier[] = ['low', 'mid', 'high', 'max'];
 
@@ -67,18 +55,6 @@ export function opencodeTiers(proxy: boolean, saved: Tiers | null = loadOpencode
   return proxy ? { ...TIERS.codex } : { ...TIERS.opencode };
 }
 
-export type Slot = Role | 'visual' | 'manager' | 'scan';
-/**
- * Уровень модели по ролям. Все роли — на основном агенте, и от пресета к пресету все растут на ступень:
- * сильнее всех — планировщик и ревьюер (от плана и проверки зависит качество), за ними — исполнитель и менеджер,
- * ниже — визуальная проверка и сканирование.
- */
-export const PRESET_TIERS: Record<PresetId, Record<Slot, Tier>> = {
-  economy: { planner: 'mid', executor: 'low', reviewer: 'mid', visual: 'low', manager: 'low', scan: 'low' },
-  optimal: { planner: 'high', executor: 'mid', reviewer: 'high', visual: 'low', manager: 'mid', scan: 'low' },
-  max: { planner: 'max', executor: 'high', reviewer: 'max', visual: 'mid', manager: 'high', scan: 'mid' },
-};
-
 export const ROLE_TITLE: Record<Slot, string> = {
   planner: 'Планировщик',
   executor: 'Исполнитель',
@@ -93,32 +69,8 @@ export const ROLE_TITLE: Record<Slot, string> = {
  * opencode — ступени, выбранные человеком (custom), иначе линейка прокси или модель из его настроек.
  */
 export function buildPreset(main: AgentKind, preset: PresetId, proxy = false, custom?: Tiers): { agents: Agents; models: Models } {
-  const p = { tiers: PRESET_TIERS[preset] };
   const t = main === 'opencode' ? fillTiers(custom ?? opencodeTiers(proxy)) : TIERS[main];
-  // Ревью той же моделью находит меньше. Если уровни дали исполнителю модель ревьюера (две ступени на одной модели),
-  // на ступень ниже уходит исполнитель, а не ревьюер: проверять должна модель не слабее автора кода.
-  const order: Tier[] = ['max', 'high', 'mid', 'low'];
-  const reviewer = t[p.tiers.reviewer];
-  let executor = t[p.tiers.executor];
-  if (executor === reviewer)
-    executor =
-      order
-        .slice(order.indexOf(p.tiers.executor))
-        .map((x) => t[x])
-        .find((m) => m !== reviewer) ?? executor;
-  // Менеджер на одной ступени с исполнителем — и на той же модели.
-  const manager = p.tiers.manager === p.tiers.executor ? executor : t[p.tiers.manager];
-  return {
-    agents: { planner: main, executor: main, reviewer: main, visual: main, manager: main, scan: main },
-    models: {
-      planner: t[p.tiers.planner],
-      executor,
-      reviewer,
-      visual: t[p.tiers.visual],
-      manager,
-      scan: t[p.tiers.scan],
-    },
-  };
+  return presetFromTiers(main, preset, t);
 }
 
 /**

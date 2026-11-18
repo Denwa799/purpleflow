@@ -104,7 +104,13 @@ export async function decide(
       r.finishedAt = new Date().toISOString();
     }
     k.save(r);
-    k.emit({ type: 'run.finished', runId: id, status: r.status, message: r.message });
+    k.emit({
+      type: 'run.finished',
+      runId: id,
+      status: r.status,
+      message: r.message,
+      reason: gate === 'limit' ? 'limit_stop' : 'cancelled',
+    });
     return;
   }
 
@@ -184,7 +190,11 @@ export function waitGate(k: Kernel, run: RunFile, gate: GateId, message?: string
   run.message = message;
   k.save(run);
   k.log(run, c.amber(`◆ ${STAGE_TITLES[gate]}: ждём решения человека`) + '\n');
-  k.emit({ type: 'gate.waiting', runId: run.id, gate, message });
+  const limit =
+    gate === 'limit'
+      ? { cause: run.stuck ? ('loop' as const) : ('attempts' as const), attempts: run.implAttemptsUsed, max: run.implAttemptsLimit }
+      : undefined;
+  k.emit({ type: 'gate.waiting', runId: run.id, gate, message, ...(limit ? { limit } : {}) });
   if (gate === 'gate2') {
     void summarizeChanges(k, run.id).catch(traced('summarizeChanges'));
     void mapFilesToPlan(k, run.id).catch(traced('mapFilesToPlan'));

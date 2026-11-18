@@ -105,7 +105,7 @@ export async function stageFinish(k: Kernel, run: RunFile) {
     );
   }
   k.emit({ type: 'run.updated', run });
-  k.emit({ type: 'run.finished', runId: run.id, status: 'finished' });
+  k.emit({ type: 'run.finished', runId: run.id, status: 'finished', reason: 'done' });
   // Уроки для следующих прогонов — в фоне, коммит уже сделан.
   void learn(k, run).catch(traced('learn'));
 }

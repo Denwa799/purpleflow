@@ -170,7 +170,7 @@ export function applyPending(k: Kernel, run: RunFile): boolean {
   }
   k.save(run);
   if (pause) {
-    k.markStopped(run, `Пауза по просьбе человека перед стадией «${STAGE_TITLES[run.next]}». «Продолжить» — с того же места.`);
+    k.markStopped(run, `Пауза по просьбе человека перед стадией «${STAGE_TITLES[run.next]}». «Продолжить» — с того же места.`, 'paused');
     return true;
   }
   return false;

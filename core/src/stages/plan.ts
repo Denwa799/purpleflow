@@ -172,6 +172,7 @@ export async function stagePlan(k: Kernel, run: RunFile) {
   k.markStopped(
     run,
     `План не прошёл openspec validate после ${PLAN_RETRIES + 1} попыток. Исправьте файлы вручную или нажмите «Продолжить».`,
+    'plan_invalid',
   );
 }
 

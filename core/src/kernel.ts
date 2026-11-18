@@ -14,7 +14,7 @@ import { type BasePrep, type CoreOptions, type Listener, StopSignal, type Tools 
 import { STAGE_TITLES, isGate } from './stage-info.js';
 import { RunStore } from './store.js';
 import { setTraceFile } from './trace.js';
-import type { CoreEvent, PreviewState, ReviewItem, RunFile, StageAttempt, StageId } from './types.js';
+import type { CoreEvent, FinishReason, PreviewState, ReviewItem, RunFile, StageAttempt, StageId } from './types.js';
 import { AGENT_KINDS, enabledAgents, type AgentKind } from './types.js';
 
 /** Операции движка, которые нужны стадиям и сервисам; связываются в Orchestrator, чтобы модули не зависели от движка. */
@@ -146,14 +146,14 @@ export class Kernel {
     if (this.stopping.has(run.id)) throw new StopSignal();
   }
 
-  markStopped(run: RunFile, message: string) {
+  markStopped(run: RunFile, message: string, reason: FinishReason = 'user_stop') {
     for (const a of run.attempts)
       if (a.status === 'running' && !isGate(a.stage)) Object.assign(a, { status: 'stopped', endedAt: new Date().toISOString() });
     run.status = 'stopped';
     run.message = message;
     this.save(run);
     this.log(run, c.amber(`■ ${message}`) + '\n');
-    this.emit({ type: 'run.finished', runId: run.id, status: 'stopped', message });
+    this.emit({ type: 'run.finished', runId: run.id, status: 'stopped', message, reason });
   }
 
   fail(run: RunFile, error: string) {
@@ -165,7 +165,7 @@ export class Kernel {
     this.save(run);
     this.log(run, c.coral(`✗ ${error}`) + '\n');
     this.emit({ type: 'stage.failed', runId: run.id, stage, error });
-    this.emit({ type: 'run.finished', runId: run.id, status: 'stopped', message: error });
+    this.emit({ type: 'run.finished', runId: run.id, status: 'stopped', message: error, reason: 'stage_failed' });
   }
 
   /**
