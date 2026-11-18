@@ -78,3 +78,15 @@ export function applyMention(text: string, t: MentionToken, value: string): { te
   const rest = text.slice(t.end).replace(/^ /, '');
   return { text: text.slice(0, t.start) + insert + rest, caret: t.start + insert.length };
 }
+
+/** Перетащили или выбрали файл в дереве: «@путь » в позицию курсора, с пробелом перед упоминанием, если его нет. */
+export function insertMention(text: string, caret: number, rel: string): { text: string; caret: number } {
+  const at = Math.max(0, Math.min(caret, text.length));
+  const before = text.slice(0, at);
+  const after = text.slice(at);
+  const insert = `${before && !/\s$/.test(before) ? ' ' : ''}@${rel}${/^\s/.test(after) ? '' : ' '}`;
+  return { text: before + insert + after, caret: at + insert.length };
+}
+
+/** Тип данных перетаскивания пути из дерева файлов чата. */
+export const PATH_DRAG = 'application/x-purpleflow-path';

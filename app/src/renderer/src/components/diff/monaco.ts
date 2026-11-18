@@ -56,7 +56,8 @@ interface TsApi {
     foldingRanges: false,
     diagnostics: false,
     selectionRanges: false,
-    // tokens не трогаем: это подсветка JSON, она работает без воркера.
+    // Подсветка JSON работает без воркера. Настройка заменяется целиком: без явного true подсветка выключится.
+    tokens: true,
     documentFormattingEdits: false,
     documentRangeFormattingEdits: false,
   };
@@ -105,29 +106,4 @@ monaco.editor.defineTheme('purpleflow-night', {
     'editorWidget.background': '#1a1b1fee',
   },
 });
-const LANG: Record<string, string> = {
-  ts: 'typescript',
-  tsx: 'typescript',
-  js: 'javascript',
-  jsx: 'javascript',
-  mjs: 'javascript',
-  cjs: 'javascript',
-  json: 'json',
-  md: 'markdown',
-  css: 'css',
-  scss: 'scss',
-  html: 'html',
-  py: 'python',
-  go: 'go',
-  rs: 'rust',
-  yml: 'yaml',
-  yaml: 'yaml',
-  sh: 'shell',
-  java: 'java',
-  kt: 'kotlin',
-  rb: 'ruby',
-  php: 'php',
-  sql: 'sql',
-  vue: 'html',
-};
-export const langOf = (p: string) => LANG[p.split('.').pop()?.toLowerCase() ?? ''] ?? 'plaintext';
+export { langOf } from '../../lib/lang';

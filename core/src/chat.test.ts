@@ -488,3 +488,33 @@ test('чат: отказ codex в MCP — разрешение на ход ил�
   assert.deepEqual(calls[4].mcpApprove, [{ server: 'cognify', tool: 'cognify_status' }]);
   assert.deepEqual(after.mcpAllow, [{ server: 'cognify', tool: 'cognify_status' }]);
 });
+
+test('readChatFile: только внутри проекта, двоичный — без содержимого, большой — обрезан', async () => {
+  const { readChatFile } = await import('./services/chat.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-read-'));
+  const proj = path.join(dir, 'proj');
+  fs.mkdirSync(path.join(proj, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(proj, 'src', 'a.ts'), 'export const a = 1;\n');
+  fs.writeFileSync(path.join(proj, 'img.bin'), Buffer.from([1, 0, 2]));
+  fs.writeFileSync(path.join(proj, 'big.txt'), 'x'.repeat(600 * 1024));
+  fs.writeFileSync(path.join(dir, 'secret.txt'), 'нельзя');
+  fs.symlinkSync(path.join(dir, 'secret.txt'), path.join(proj, 'link.txt'));
+  try {
+    assert.equal(readChatFile(proj, 'src/a.ts').text, 'export const a = 1;\n');
+    assert.deepEqual(readChatFile(proj, 'img.bin'), { text: '', truncated: false, binary: true, size: 3 });
+    const big = readChatFile(proj, 'big.txt');
+    assert.equal(big.truncated, true);
+    assert.equal(big.text.length, 512 * 1024);
+    assert.throws(() => readChatFile(proj, '../secret.txt'), /вне папки/);
+    assert.throws(() => readChatFile(proj, 'link.txt'), /вне папки/);
+    assert.throws(() => readChatFile(proj, 'src'), /не файл/);
+    fs.writeFileSync(path.join(proj, 'pic.png'), Buffer.from([137, 80, 78, 71]));
+    const pic = readChatFile(proj, 'pic.png');
+    assert.equal(pic.media?.mime, 'image/png');
+    assert.deepEqual([...pic.media!.data!], [137, 80, 78, 71]);
+    fs.writeFileSync(path.join(proj, 'huge.png'), Buffer.alloc(26 * 1024 * 1024));
+    assert.deepEqual(readChatFile(proj, 'huge.png').media, { mime: 'image/png', tooBig: true });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

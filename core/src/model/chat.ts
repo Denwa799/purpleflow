@@ -151,3 +151,13 @@ export interface ChatSummary {
   /** Чем закончился последний ход: ok — ответил, error — ошибка или остановлен, null — сообщений ещё нет. */
   last: 'ok' | 'error' | null;
 }
+
+/** Файл проекта для вкладки «Файлы» чата. */
+export interface ChatFileContent {
+  text: string;
+  truncated: boolean;
+  binary: boolean;
+  size: number;
+  /** Картинка или видео — байтами, окно покажет их через blob-URL; tooBig — больше предела, не отдаём. */
+  media?: { mime: string; data?: Uint8Array; tooBig?: boolean };
+}

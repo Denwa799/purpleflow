@@ -153,6 +153,81 @@ test('чат: «@» подставляет файл проекта, «/» — с
   }
 });
 
+test('чат: вкладка «Файлы» — дерево проекта, содержимое файла по клику, «@путь» перетаскиванием и кнопкой «+»', async () => {
+  const box = makeSandbox();
+  // Картинка 1×1 — вкладка показывает её, а не «двоичный файл».
+  fs.writeFileSync(
+    path.join(box.repo, 'pixel.png'),
+    Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'),
+  );
+  box.git('add', 'pixel.png');
+  const l = await launch(box);
+  const { page } = l;
+  try {
+    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('menuitem', { name: /Чат/ }).click();
+    await page.getByRole('button', { name: 'Проект', exact: true }).click();
+    await page.getByRole('option', { name: /Выбрать папку/ }).click();
+    const input = page.locator('.chat-compose textarea');
+    await input.fill('привет');
+    await input.press('Enter');
+    await expect(page.locator('.chat-msg.is-assistant')).toBeVisible();
+
+    // Панель справа свёрнута в полосу — разворачиваем и открываем «Файлы».
+    await page.getByTitle('Развернуть код и браузер').click();
+    await page.locator('.chat-side .pilltabs button', { hasText: 'Файлы' }).click();
+    const tree = page.getByRole('tree', { name: 'Файлы проекта' });
+    const src = tree.getByRole('treeitem', { name: 'src' });
+    await src.getByRole('button', { name: 'src', exact: true }).click();
+    const math = src.getByRole('treeitem', { name: 'math.js' }).getByRole('button', { name: 'math.js', exact: true });
+    await math.dragTo(input);
+    await expect(input).toHaveValue('@src/math.js ');
+    // Папку — тоже перетаскиванием; файл — ещё и кликом.
+    await src.getByRole('button', { name: 'src', exact: true }).first().dragTo(input);
+    await expect(input).toHaveValue('@src/math.js @src ');
+    // «+» при наведении — в контекст; клик по файлу — его содержимое.
+    await page.getByRole('textbox', { name: 'Найти файл' }).fill('math');
+    const hit = page.getByRole('list', { name: 'Найденные файлы' }).getByRole('listitem', { name: 'src/math.js' });
+    await hit.hover();
+    await hit.getByRole('button', { name: 'Добавить в контекст: src/math.js' }).click();
+    await expect(input).toHaveValue('@src/math.js @src @src/math.js ');
+    await hit.getByRole('button', { name: 'src/math.js', exact: true }).click();
+    await expect(page.locator('.chat-file-view')).toContainText('export const add');
+    // Подсветка есть: ключевое слово — отдельным токеном с цветом.
+    await expect(page.locator('.chat-file-view .view-line span[class*="mtk"]').filter({ hasText: 'export' })).not.toHaveClass(/mtk1\b/);
+    if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-files.png') });
+    await page.getByRole('button', { name: 'Файлы', exact: true }).last().click();
+    await expect(page.getByRole('textbox', { name: 'Найти файл' })).toBeVisible();
+    // JSON тоже подсвечен: ключи — строками, не простым текстом.
+    await page.getByRole('textbox', { name: 'Найти файл' }).fill('package');
+    await page
+      .getByRole('list', { name: 'Найденные файлы' })
+      .getByRole('listitem', { name: 'package.json' })
+      .getByRole('button', { name: 'package.json', exact: true })
+      .click();
+    await expect(page.locator('.chat-file-view .view-line span[class*="mtk"]').filter({ hasText: '"name"' })).not.toHaveClass(/mtk1\b/);
+    await page.getByRole('button', { name: 'Файлы', exact: true }).last().click();
+    await page.getByRole('textbox', { name: 'Найти файл' }).fill('pixel');
+    await page
+      .getByRole('list', { name: 'Найденные файлы' })
+      .getByRole('listitem', { name: 'pixel.png' })
+      .getByRole('button', { name: 'pixel.png', exact: true })
+      .click();
+    const img = page.getByRole('img', { name: 'pixel.png' });
+    await expect(img).toBeVisible();
+    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(1);
+    await page.getByRole('button', { name: 'Файлы', exact: true }).last().click();
+
+    await input.fill('@src/math.js что тут?');
+    await input.press('Enter');
+    await expect.poll(() => box.calls().at(-1)?.prompt ?? '').toContain(`- ${path.join(box.repo, 'src', 'math.js')}`);
+    expect(l.errors).toEqual([]);
+  } finally {
+    await quit(l);
+    box.cleanup();
+  }
+});
+
 test('чат: уровень рассуждений рядом с моделью уходит claude флагом --effort', async () => {
   const box = makeSandbox();
   const l = await launch(box);

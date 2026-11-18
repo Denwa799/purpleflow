@@ -13,6 +13,7 @@ import { shortPath } from '../lib/format';
 import { enabledList } from '../lib/tools';
 import { EFFORT_LEVELS, effortOf, effortOptions } from '../lib/effort';
 import { formatPick, insertPick, type PickedElement } from '../lib/pickElement';
+import { PATH_DRAG, insertMention } from '../lib/mentions';
 import { ChatSide, ChatSideRail, useChatChanged, useSideWidth, type ChatPane } from './ChatSide';
 import { bridge, cleanErr } from '../lib/api';
 
@@ -61,7 +62,7 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
   const [pane, setPaneState] = useState<ChatPane | null>(() => {
     try {
       const v = localStorage.getItem(PANE_KEY);
-      return v === 'session' || v === 'code' || v === 'run' || v === 'browser' ? v : null;
+      return v === 'session' || v === 'files' || v === 'code' || v === 'run' || v === 'browser' ? v : null;
     } catch {
       return null;
     }
@@ -271,6 +272,15 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
   const mention = useMentions({ text, setText, input, projectPath });
 
   /** Элемент, указанный во вкладке «Браузер»: описание — в поле ввода, курсор — после него, чтобы дописать просьбу. */
+  const mentionPath = (rel: string) => {
+    const el = input.current;
+    const r = insertMention(text, el && document.activeElement === el ? el.selectionStart : text.length, rel);
+    setText(r.text);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(r.caret, r.caret);
+    });
+  };
   const onPick = (el: PickedElement) => {
     setText((t) => insertPick(t, formatPick(el)));
     requestAnimationFrame(() => {
@@ -287,7 +297,7 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
     return paths;
   }, [projects, draft.projectPath]);
   // Без проекта вкладок «Код» и «Запуск» нет — остаётся браузер.
-  const sidePane: ChatPane | null = (pane === 'code' || pane === 'run') && !chat?.projectPath ? 'browser' : pane;
+  const sidePane: ChatPane | null = (pane === 'files' || pane === 'code' || pane === 'run') && !chat?.projectPath ? 'browser' : pane;
   const toolOk = (a: AgentKind) => Boolean(state.tools?.[a]?.path && !state.tools[a].error);
 
   return (
@@ -418,7 +428,10 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
-                if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+                // Файл или папка из вкладки «Файлы» — упоминание, а не вложение.
+                const rel = e.dataTransfer.getData(PATH_DRAG);
+                if (rel) mentionPath(rel);
+                else if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
               }}
             >
               {mention.menu}
@@ -559,6 +572,7 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
             pane={sidePane}
             model={shownModel}
             onPick={onPick}
+            onMention={mentionPath}
             onPane={setPane}
             changed={changed}
             width={side.width}

@@ -1797,3 +1797,141 @@ body.is-side-resizing webview {
   margin: -6px -8px -6px 0;
   font-size: var(--fs-12);
 }
+
+/* ——— Вкладка «Файлы»: дерево проекта, перетаскивание в поле ввода ——— */
+.chat-tree-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: var(--bg-3);
+  color: var(--text-3);
+}
+.chat-tree-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--fs-13);
+}
+.chat-tree-hint {
+  margin: 0 0 var(--s-2);
+  font-size: var(--fs-12);
+}
+.chat-tree {
+  display: flex;
+  flex-direction: column;
+}
+.chat-tree-row {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding-right: 4px;
+  border-radius: 7px;
+  cursor: grab;
+}
+.chat-tree-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  text-align: left;
+  cursor: inherit;
+}
+.chat-tree-open > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-tree-open svg {
+  flex: none;
+  color: var(--text-3);
+}
+.chat-tree-row.is-dir .chat-tree-open svg:nth-child(2) {
+  color: var(--accent-hi);
+}
+.chat-tree-row:hover {
+  background: var(--bg-3);
+}
+.chat-tree-row:hover .chat-tree-open {
+  color: var(--text-1);
+}
+.chat-tree-add {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--text-3);
+  opacity: 0;
+}
+.chat-tree-row:hover .chat-tree-add,
+.chat-tree-add:focus-visible {
+  opacity: 1;
+}
+.chat-tree-add:hover {
+  background: var(--bg-5);
+  color: var(--text-1);
+}
+.chat-file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-file-view {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--bg-1);
+}
+.chat-tree-pad {
+  flex: none;
+  width: 13px;
+}
+.chat-tree > .chat-tree-row {
+  padding-left: 8px;
+}
+.chat-files-pane {
+  overflow: hidden;
+}
+.chat-files-pane .chat-tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.chat-media-view {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: var(--s-4);
+  border-radius: 12px;
+  /* Шахматка — видно прозрачность PNG и SVG. */
+  background:
+    repeating-conic-gradient(#ffffff08 0 25%, transparent 0 50%) 0 0 / 16px 16px,
+    var(--bg-1);
+}
+.chat-media-view img,
+.chat-media-view video {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 6px;
+}

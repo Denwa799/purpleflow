@@ -10,7 +10,17 @@ import type { Kernel } from '../kernel.js';
 import { killGroup } from '../proc.js';
 import { writeAtomic } from '../store.js';
 import { applyStep, partsText, settleParts, type ChatAnswer } from '../chatparts.js';
-import type { AgentKind, ChatFile, ChatMessage, ChatSkill, ChatSummary, DiffFile, NextPartDraft, PreviewState } from '../types.js';
+import type {
+  AgentKind,
+  ChatFile,
+  ChatFileContent,
+  ChatMessage,
+  ChatSkill,
+  ChatSummary,
+  DiffFile,
+  NextPartDraft,
+  PreviewState,
+} from '../types.js';
 import { effortFor, enabledAgent } from '../types.js';
 import { PROXY_DEFAULT_MODEL } from '../agents/opencode.js';
 import { agentModel, service, serviceAgent } from './agents.js';
@@ -514,6 +524,56 @@ export async function listChatFiles(k: Kernel, projectPath: string): Promise<str
     }
   }
   return walkFiles(projectPath);
+}
+
+const MAX_VIEW = 512 * 1024;
+const MEDIA: Record<string, { mime: string; max: number }> = {
+  png: { mime: 'image/png', max: 25 },
+  jpg: { mime: 'image/jpeg', max: 25 },
+  jpeg: { mime: 'image/jpeg', max: 25 },
+  gif: { mime: 'image/gif', max: 25 },
+  webp: { mime: 'image/webp', max: 25 },
+  avif: { mime: 'image/avif', max: 25 },
+  bmp: { mime: 'image/bmp', max: 25 },
+  ico: { mime: 'image/x-icon', max: 25 },
+  svg: { mime: 'image/svg+xml', max: 25 },
+  mp4: { mime: 'video/mp4', max: 100 },
+  m4v: { mime: 'video/mp4', max: 100 },
+  webm: { mime: 'video/webm', max: 100 },
+  mov: { mime: 'video/quicktime', max: 100 },
+  ogv: { mime: 'video/ogg', max: 100 },
+};
+
+/**
+ * Файл проекта для просмотра во вкладке «Файлы» чата: только внутри папки проекта (и после разворота ссылок).
+ * Текст — до 512 КБ; картинки — до 25 МБ, видео — до 100 МБ; прочий двоичный — без содержимого.
+ */
+export function readChatFile(projectPath: string, rel: string): ChatFileContent {
+  const root = fs.realpathSync(projectPath);
+  const abs = fs.realpathSync(path.resolve(root, rel));
+  if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error('Файл вне папки проекта');
+  const st = fs.statSync(abs);
+  if (!st.isFile()) throw new Error('Это не файл');
+  const media = MEDIA[path.extname(abs).slice(1).toLowerCase()];
+  if (media) {
+    const tooBig = st.size > media.max * 1024 * 1024;
+    return {
+      text: '',
+      truncated: false,
+      binary: true,
+      size: st.size,
+      media: { mime: media.mime, ...(tooBig ? { tooBig } : { data: new Uint8Array(fs.readFileSync(abs)) }) },
+    };
+  }
+  const fd = fs.openSync(abs, 'r');
+  try {
+    const buf = Buffer.alloc(Math.min(st.size, MAX_VIEW));
+    fs.readSync(fd, buf, 0, buf.length, 0);
+    if (buf.subarray(0, 8000).includes(0)) return { text: '', truncated: false, binary: true, size: st.size };
+    return { text: buf.toString('utf8'), truncated: st.size > MAX_VIEW, binary: false, size: st.size };
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 /** Модель чата по умолчанию для агента: та, что в настройках у роли конвейера с этим агентом. Пусто — решает сам CLI. */

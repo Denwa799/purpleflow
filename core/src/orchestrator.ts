@@ -353,6 +353,9 @@ export class Orchestrator implements CoreApi {
   listChatFiles(projectPath: string) {
     return chat.listChatFiles(this.kernel, projectPath);
   }
+  async readChatFile(projectPath: string, rel: string) {
+    return chat.readChatFile(projectPath, rel);
+  }
   /** Сжатие идёт в фоне, как ход: результат приходит событиями chat.updated. */
   async compactChat(id: string): Promise<void> {
     const run = chat.compactChat(this.kernel, id);

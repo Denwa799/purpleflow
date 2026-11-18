@@ -225,6 +225,7 @@ export const CORE_METHODS: Record<CoreMethod, true> = {
   getChatDiff: true,
   getChatChangedFiles: true,
   listChatFiles: true,
+  readChatFile: true,
   listChatSkills: true,
   chatDefaultModel: true,
   listOpencodeModels: true,

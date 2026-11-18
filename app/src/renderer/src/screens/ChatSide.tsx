@@ -1,5 +1,6 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Activity, CircleAlert, FileCode2, Globe, PanelRightClose, Play, RefreshCw } from 'lucide-react';
+import { Activity, CircleAlert, FileCode2, FolderTree, Globe, PanelRightClose, Play, RefreshCw } from 'lucide-react';
+import { ChatFiles } from './ChatFiles';
 import { ChatRunPane } from './ChatRunPane';
 import { chatSession } from '../lib/chatSession';
 import type { PickedElement } from '../lib/pickElement';
@@ -11,7 +12,7 @@ import { PillTabs } from '../components/PillTabs';
 import { Button, Empty } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
 
-export type ChatPane = 'session' | 'code' | 'run' | 'browser';
+export type ChatPane = 'session' | 'files' | 'code' | 'run' | 'browser';
 
 /** Изменённые файлы проекта чата — счётчик на кнопке «Код»; обновляется после каждого хода агента. */
 export function useChatChanged(chat: ChatFile | null, busy: boolean): string[] | null {
@@ -97,8 +98,11 @@ export function ChatSide({
   onResetWidth,
   model,
   onPick,
+  onMention,
 }: {
   chat: ChatFile;
+  /** Файл или папка из вкладки «Файлы» — «@путь» в поле ввода. */
+  onMention: (path: string) => void;
   /** Выбранная модель: своя у чата или по умолчанию. */
   model: string;
   /** Элемент, указанный во вкладке «Браузер», — в поле ввода чата. */
@@ -139,6 +143,7 @@ export function ChatSide({
             { id: 'session', label: 'Сессия', icon: <Activity size={15} /> },
             ...(chat.projectPath
               ? [
+                  { id: 'files' as const, label: 'Файлы', icon: <FolderTree size={15} /> },
                   {
                     id: 'code' as const,
                     label: 'Код',
@@ -180,6 +185,11 @@ export function ChatSide({
       </div>
       <div className="chat-side-body" hidden={pane !== 'session'}>
         {pane === 'session' && <ChatSessionPane chat={chat} model={model} busy={busy} />}
+      </div>
+      <div className="chat-side-body" hidden={pane !== 'files'}>
+        {chat.projectPath && pane === 'files' && (
+          <ChatFiles projectPath={chat.projectPath} refresh={busy ? 'busy' : chat.updatedAt} onMention={onMention} />
+        )}
       </div>
       <div className="chat-side-body" hidden={pane !== 'code'}>
         {chat.projectPath && <ChatCode chat={chat} busy={busy} />}
