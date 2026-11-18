@@ -1,5 +1,6 @@
 // Проекты: команды, знания, окружение, статистика.
 
+import type { ForgeRef } from './pr.js';
 import type { RunMode, StageId, Workspace } from './run.js';
 
 export interface ProjectCommands {
@@ -44,10 +45,22 @@ export interface ProjectConfig {
   workspace?: Workspace;
   /** Несколько репозиториев в одной папке: прогон берёт их все, агенты и команды работают из верхней папки. */
   multiRepo?: MultiRepo;
+  /** Провайдер Pull/Merge Request и хост; без него провайдер определяется по origin для github.com и gitlab.com. */
+  forge?: ForgeRef;
   /** Знания о проекте для всех агентов: профиль (стек, структура, соглашения) и уроки прошлых прогонов. */
   knowledge?: ProjectKnowledge;
   notes: { setup: string; lint: string; test: string; run?: string };
   updatedAt: string;
+}
+
+/** Результат `detectForge`: что видно по origin и что уже сохранено в настройках проекта. */
+export interface ForgeDetectionInfo {
+  remote: string | null;
+  host: string | null;
+  suggested: ForgeRef | null;
+  /** Хост точно известен (github.com, gitlab.com) — подтверждать не нужно. */
+  confirmed: boolean;
+  saved: ForgeRef | null;
 }
 
 /** Заготовка следующей части большой задачи: текст, проект, вложения, от какой ветки начать. */
@@ -94,7 +107,11 @@ export interface DetectedProject extends ProjectCommands {
 }
 
 /** Сохранение настроек проекта: multiRepo не передан — остаётся прежним, null — проект снова из одного репозитория. */
-export type ProjectConfigInput = Omit<ProjectConfig, 'updatedAt' | 'multiRepo'> & { multiRepo?: MultiRepo | null };
+export type ProjectConfigInput = Omit<ProjectConfig, 'updatedAt' | 'multiRepo' | 'forge'> & {
+  multiRepo?: MultiRepo | null;
+  /** undefined оставляет прежний провайдер PR/MR, null сбрасывает к автоопределению по origin. */
+  forge?: ForgeRef | null;
+};
 
 /** Проект в списке «Проекты». */
 export interface ProjectListItem {

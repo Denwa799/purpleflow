@@ -5,7 +5,7 @@ import path from 'node:path';
 import { addUsage, c, emptyUsage, type AgentResult } from '../agents/common.js';
 import { prependPath } from '../env.js';
 import { Git } from '../git.js';
-import { prReadiness } from '../github.js';
+import { detectForge, normalizeHost, originOf, resolveForge } from '../forge.js';
 import { isRunBranch } from '../ids.js';
 import { parseJsonReply } from '../json.js';
 import type { Kernel } from '../kernel.js';
@@ -18,6 +18,8 @@ import { traced } from '../trace.js';
 import type {
   AiCommands,
   EnvCheck,
+  ForgeDetectionInfo,
+  ForgeRef,
   ModeSuggestion,
   NextPartDraft,
   ProjectBranches,
@@ -34,7 +36,6 @@ import type {
 } from '../types.js';
 import { enabledAgent } from '../types.js';
 import { service } from './agents.js';
-import { ghBin } from './pr.js';
 import { getChangeDocs } from './runs.js';
 import { prepareApp } from './workspace.js';
 import { realPath, reposBlock } from './repos.js';
@@ -452,7 +453,10 @@ export async function projectOverview(k: Kernel, repo: string): Promise<ProjectO
     runProc(tools.git, ['remote', 'get-url', 'origin'], { cwd: repo, env: k.opts.env, timeoutMs: 10_000 })
       .then((x) => (x.code === 0 ? x.stdout.trim() : null))
       .catch(() => null),
-    prReadiness(ghBin(k), tools.git, repo, k.opts.env).catch((e) => String((e as Error).message)),
+    resolveForge(k, repo).then(
+      (x) => x.reason,
+      (e) => String((e as Error).message),
+    ),
   ]);
   return { branch, dirty, remote, prReady: pr };
 }
@@ -494,6 +498,14 @@ export function projectOfRoot(k: Kernel, dir: string): string | null {
   return hit?.[0] ?? null;
 }
 
+/** Провайдер из формы: хост без схемы, пути и пробелов; пустой хост — ошибка, чтобы не стереть сохранённое молча. */
+function cleanForge(f: ForgeRef): ForgeRef {
+  const host = normalizeHost(f.host);
+  if (f.kind !== 'github' && f.kind !== 'gitlab') throw new Error('Неизвестный провайдер: выберите GitHub или GitLab');
+  if (!host) throw new Error('Укажите хост провайдера, например gitlab.company.ru (или сбросьте провайдер)');
+  return { kind: f.kind, host };
+}
+
 export function saveProjectConfig(k: Kernel, repo: string, cfg: ProjectConfigInput): ProjectConfig {
   const prev = getProjectConfig(k, repo);
   const multi = cfg.multiRepo === undefined ? prev?.multiRepo : cfg.multiRepo;
@@ -519,11 +531,20 @@ export function saveProjectConfig(k: Kernel, repo: string, cfg: ProjectConfigInp
       : undefined,
     notes: cfg.notes,
     // Знания собираются отдельно — сохранение команд их не трогает.
+    // undefined — не трогаем (сохранение команд из старых окон), null — сброс к автоопределению.
+    forge: cfg.forge === undefined ? prev?.forge : cfg.forge === null ? undefined : cleanForge(cfg.forge),
     knowledge: cfg.knowledge ?? prev?.knowledge,
     updatedAt: new Date().toISOString(),
   };
   k.store.writeProject(path.resolve(repo), full);
   return full;
+}
+
+/** Что видно по origin проекта и какой провайдер уже сохранён — для блока «Pull / Merge Request» в настройках. */
+export async function detectProjectForge(k: Kernel, dir: string): Promise<ForgeDetectionInfo> {
+  const remote = await originOf(k, dir).catch(() => null);
+  const det = detectForge(remote);
+  return { remote, host: det.host, suggested: det.suggested, confirmed: det.confirmed, saved: getProjectConfig(k, dir)?.forge ?? null };
 }
 
 /**

@@ -1,5 +1,5 @@
 // Общее для экранов проектов и «Новой задачи»: загрузка и сохранение команд проекта, выбор проекта, режимы работы.
-import type { DetectedProject, MultiRepo, ProjectConfig, ProjectListItem, RelatedRepo, Workspace } from '@purpleflow/core';
+import type { DetectedProject, ForgeRef, MultiRepo, ProjectConfig, ProjectListItem, RelatedRepo, Workspace } from '@purpleflow/core';
 import { Check, ChevronDown, FolderGit2, FolderOpen, Minus, Plus, Settings2, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { shortPath } from '../../lib/format';
@@ -28,6 +28,8 @@ export interface LoadedProject {
   related?: RelatedRepo[];
   /** Проект из нескольких репозиториев: верхняя папка и участники (этот репозиторий — основной). */
   multi?: MultiRepo;
+  /** Сохранённый провайдер PR/MR; пусто — определяется по origin. */
+  forge?: ForgeRef | null;
 }
 export const projectName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
 /** Имя проекта в списках: у проекта из нескольких репозиториев — его верхняя папка. */
@@ -52,6 +54,7 @@ export async function loadProject(dir: string): Promise<LoadedProject> {
       quickTest: cfg.quickTestCommand ?? '',
       prepare: cfg.prepareCommand ?? '',
       related: cfg.relatedRepos ?? [],
+      forge: cfg.forge ?? null,
     };
   }
   const from = det.detectedFrom ? `по ${det.detectedFrom}` : '';
@@ -70,6 +73,8 @@ export function saveLoaded(
     path: string;
     /** Не передан — участники проекта остаются прежними; null — проект снова из одного репозитория. */
     multi?: MultiRepo | null;
+    /** undefined — не менять сохранённый провайдер, null — сбросить к автоопределению. */
+    forge?: ForgeRef | null;
   },
 ) {
   return bridge.core.saveProjectConfig(p.path, {
@@ -83,6 +88,7 @@ export function saveLoaded(
     visualNotes: p.visualNotes,
     envFiles: p.envFiles,
     relatedRepos: p.related,
+    forge: p.forge,
     workspace: p.workspace,
     notes: { setup: p.notes.setup, lint: p.notes.lint, test: p.notes.test, run: p.notes.run },
     ...(p.multi !== undefined ? { multiRepo: p.multi } : {}),

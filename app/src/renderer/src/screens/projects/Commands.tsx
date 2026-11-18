@@ -1,5 +1,5 @@
 // Вкладка «Команды и окружение»: команды проекта, где работать по умолчанию, файлы окружения, проверка окружения.
-import type { CommandIssue, EnvCheck, RelatedRepo, Workspace } from '@purpleflow/core';
+import type { CommandIssue, EnvCheck, ForgeDetectionInfo, ForgeRef, RelatedRepo, Workspace } from '@purpleflow/core';
 import {
   Check,
   DatabaseZap,
@@ -7,6 +7,7 @@ import {
   FolderGit2,
   FolderSearch,
   GitBranch,
+  GitPullRequest,
   Globe,
   KeyRound,
   MonitorPlay,
@@ -49,6 +50,8 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
       .then((d) => setNested(d.nested ?? []))
       .catch(() => setNested([]));
   }, [root]);
+  const [forge, setForge] = useState<ForgeRef | null>(p.forge ?? null);
+  const [forgeTouched, setForgeTouched] = useState(false);
   const [saved, setSavedState] = useState<'saved' | 'draft' | 'dirty'>(p.cfg ? 'saved' : 'draft');
   const [issues, setIssues] = useState<Record<string, CommandIssue[]>>({});
   const [aiBusy, setAiBusy] = useState(false);
@@ -110,11 +113,13 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
         related,
         // Сняли все галочки — проект снова из одного репозитория.
         ...(root ? { multi: members.length ? { root, repos: members } : null } : {}),
+        forge: forgeTouched ? (forge && forge.host.trim() ? forge : null) : undefined,
         envFiles: envFiles
           .split(/[,\n]/)
           .map((f) => f.trim())
           .filter(Boolean),
       });
+      setForgeTouched(false);
       setSaved('saved');
       onSaved();
     } catch (e) {
@@ -357,6 +362,15 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
             </span>
           </div>
         </div>
+        <ForgeRow
+          repo={repo}
+          forge={forge}
+          onChange={(f) => {
+            setForge(f);
+            setForgeTouched(true);
+            touch();
+          }}
+        />
         <div className={`cmd-row ${aiBusy ? 'is-loading' : ''}`}>
           <span className="cmd-icon">
             <KeyRound size={17} />
@@ -398,6 +412,95 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
         )}
       </div>
     </section>
+  );
+}
+/** Провайдер Pull / Merge Request: «Авто» — по origin для github.com и gitlab.com, self-hosted GitLab подтверждается явно. */
+function ForgeRow({ repo, forge, onChange }: { repo: string; forge: ForgeRef | null; onChange: (f: ForgeRef | null) => void }) {
+  const [det, setDet] = useState<ForgeDetectionInfo | null>(null);
+  useEffect(() => {
+    let off = false;
+    void bridge.core
+      .detectForge(repo)
+      .then((d) => !off && setDet(d))
+      .catch(() => !off && setDet(null));
+    return () => {
+      off = true;
+    };
+  }, [repo]);
+  const mode = forge?.kind ?? 'auto';
+  const sugg = det?.suggested ?? null;
+  const pending = !forge && sugg && !det?.confirmed;
+  const modes: { id: 'auto' | 'github' | 'gitlab'; title: string }[] = [
+    { id: 'auto', title: 'Авто' },
+    { id: 'github', title: 'GitHub' },
+    { id: 'gitlab', title: 'GitLab' },
+  ];
+  const pick = (id: 'auto' | 'github' | 'gitlab') => {
+    if (id === 'auto') onChange(null);
+    else if (id === 'github') onChange({ kind: 'github', host: 'github.com' });
+    else onChange({ kind: 'gitlab', host: forge?.kind === 'gitlab' ? forge.host : sugg?.kind === 'gitlab' ? sugg.host : 'gitlab.com' });
+  };
+  return (
+    <div className="cmd-row">
+      <span className="cmd-icon">
+        <GitPullRequest size={17} />
+      </span>
+      <div className="cmd-label">
+        <strong>Pull / Merge Request</strong>
+        <span>Где создавать PR или MR. Для каждого проекта свой хост — можно работать с несколькими GitLab сразу</span>
+      </div>
+      <div className="cmd-field">
+        <div className="segmented small" role="radiogroup">
+          {modes.map((m) => (
+            <button
+              key={m.id}
+              role="radio"
+              aria-checked={mode === m.id}
+              className={mode === m.id ? 'is-on' : ''}
+              onClick={() => pick(m.id)}
+            >
+              {m.title}
+            </button>
+          ))}
+        </div>
+        {forge?.kind === 'gitlab' && (
+          <Input
+            mono
+            placeholder="gitlab.company.ru"
+            value={forge.host}
+            onChange={(e) => onChange({ kind: 'gitlab', host: e.target.value })}
+          />
+        )}
+        {pending && sugg && (
+          <span className="cmd-note">
+            Адрес origin — {det?.host}. Похоже на {sugg.kind === 'gitlab' ? 'GitLab' : 'GitHub'}, но для своего сервера хост нужно
+            подтвердить.{' '}
+            <button className="link" onClick={() => onChange(sugg)}>
+              Подтвердить {sugg.host}
+            </button>
+          </span>
+        )}
+        {!forge && !sugg && det?.host && (
+          <span className="cmd-note">Хост {det.host} не распознан — выберите GitHub или GitLab. Влить локально можно и без этого.</span>
+        )}
+        {!forge && det?.confirmed && sugg && (
+          <span className="cmd-note">
+            Определено по origin: {sugg.kind === 'gitlab' ? 'GitLab' : 'GitHub'}, {sugg.host}.
+          </span>
+        )}
+        {forge?.kind === 'gitlab' && (
+          <span className="cmd-note">
+            Войдите в GitLab CLI один раз: <code>glab auth login --hostname {forge.host.trim() || 'хост'}</code>. Сертификаты — из
+            системного хранилища (или <code>NODE_EXTRA_CA_CERTS</code>).
+          </span>
+        )}
+        {forge?.kind === 'github' && (
+          <span className="cmd-note">
+            Войдите в GitHub CLI: <code>gh auth login</code>.
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 /** Проверка окружения: приложение поднимается, вход и разделы из инструкции работают — до того, как запускать задачи. */

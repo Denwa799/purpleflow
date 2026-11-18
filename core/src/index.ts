@@ -11,3 +11,4 @@ export { codexArgs } from './agents/codex.js';
 export { Git } from './git.js';
 export { stagesOf } from './modes.js';
 export * from './route.js';
+export { detectForge, parseRemote } from './forge.js';

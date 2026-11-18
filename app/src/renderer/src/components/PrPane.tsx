@@ -36,7 +36,7 @@ const REVIEW_STATE: Record<string, string> = {
 };
 
 /**
- * Вкладка «Pull Request»: PR прогона, замечания ревьюеров и упавшие проверки CI.
+ * Вкладка «Pull Request»: PR/MR прогона, замечания ревьюеров и упавшие проверки CI.
  * Данные — по кнопке «Обновить» (и при открытии вкладки), без фонового опроса.
  */
 export function PrPane({ run, runId, onStarted }: { run: RunFile; runId: string; onStarted: () => void }) {
@@ -281,7 +281,7 @@ export function PrPane({ run, runId, onStarted }: { run: RunFile; runId: string;
                           href={c.url}
                           target="_blank"
                           rel="noreferrer"
-                          title="Открыть на GitHub"
+                          title={`Открыть в ${run.pr!.kind === 'gitlab' ? 'GitLab' : 'GitHub'}`}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <ExternalLink size={13} />
@@ -290,7 +290,8 @@ export function PrPane({ run, runId, onStarted }: { run: RunFile; runId: string;
                     </div>
                     {c.kind === 'check' ? (
                       <p className="muted pr-check-hint">
-                        Исполнитель получит хвост лога упавшего job{c.url?.includes('/actions/') ? '' : ' (если это GitHub Actions)'}.
+                        Исполнитель получит хвост лога упавшего job
+                        {c.url?.includes('/actions/') || c.url?.includes('/-/jobs/') ? '' : ' (если это GitHub Actions или GitLab CI)'}.
                       </p>
                     ) : (
                       <Markdown source={c.body} className="pr-md" />
@@ -333,7 +334,7 @@ export function PrPane({ run, runId, onStarted }: { run: RunFile; runId: string;
                 <div className="pr-action-row">
                   <span className="muted">
                     Новый круг в этом прогоне: реализация → проверки → ревью → приёмка → коммит и push в ветку PR. Отвечать в обсуждениях —
-                    на GitHub.
+                    в {run.pr.kind === 'gitlab' ? 'GitLab' : 'GitHub'}.
                   </span>
                   <Button
                     tone={st?.behind || st?.conflicts ? 'ghost' : 'quiet'}

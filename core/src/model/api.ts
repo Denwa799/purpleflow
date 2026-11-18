@@ -7,6 +7,7 @@ import type {
   CommandIssue,
   EnvCheck,
   NextPartDraft,
+  ForgeDetectionInfo,
   ProjectBranches,
   ProjectConfig,
   ProjectConfigInput,
@@ -79,6 +80,8 @@ export interface CoreApi {
   stopPreview(id: string): Promise<void>;
   getPreview(id: string): Promise<PreviewState>;
   saveProjectConfig(dir: string, cfg: ProjectConfigInput): Promise<ProjectConfig>;
+  /** Провайдер PR/MR по origin проекта и сохранённые настройки. */
+  detectForge(dir: string): Promise<ForgeDetectionInfo>;
   listProjects(): Promise<ProjectListItem[]>;
   projectOverview(dir: string): Promise<ProjectOverview>;
   forgetProject(dir: string): Promise<void>;

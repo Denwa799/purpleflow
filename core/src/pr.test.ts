@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { Kernel } from './kernel.js';
+import { detectProjectForge, getProjectConfig, saveProjectConfig } from './services/projects.js';
 import { getDiff, getChangedFiles } from './services/runs.js';
 import {
   getPrDetails,
@@ -57,7 +58,9 @@ function setup(t: { after: (fn: () => void) => void }) {
   const g = at(repo);
   at(remote)('init', '-q', '--bare', '-b', 'main');
   g('init', '-q', '-b', 'main');
-  g('remote', 'add', 'origin', remote);
+  // Адрес origin — настоящий (по нему определяется провайдер), а push уходит в локальный bare-remote.
+  g('remote', 'add', 'origin', 'https://github.com/acme/app.git');
+  g('config', 'remote.origin.pushurl', remote);
   fs.writeFileSync(path.join(repo, 'a.txt'), 'a\n');
   g('add', '-A');
   g('commit', '-qm', 'init');
@@ -91,6 +94,7 @@ function setup(t: { after: (fn: () => void) => void }) {
     path.join(bin, 'gh'),
     `#!/bin/sh
 echo "$*" >> "${calls}"
+[ -n "$GITLAB_TOKEN" ] && echo leaked >> "${calls}-leak"
 case "$1 $2" in
   "pr create") echo "${URL_}" ;;
   "pr view") cat "${view}" ;;
@@ -135,6 +139,9 @@ esac
   return {
     k,
     g,
+    root,
+    bin,
+    at,
     gw: at(wt),
     wt,
     repo,
@@ -153,6 +160,7 @@ test('openPr: ветка на origin, описание из прогона, по
   await openPr(k, 'run-1', 'main');
   const r = k.mustLoad('run-1');
   assert.deepEqual([r.pr?.url, r.pr?.number, r.pr?.base], [URL_, 7, 'main']);
+  assert.deepEqual([r.pr?.kind, r.pr?.host], ['github', 'github.com'], 'провайдер записан в прогон');
   assert.ok(remoteGit('rev-parse', 'purpleflow/x'), 'ветка отправлена');
   assert.ok(calls().some((c) => c.startsWith('pr create') && c.includes('--head purpleflow/x')));
   await assert.rejects(openPr(k, 'run-1', 'main'), /уже открыт/);
@@ -242,6 +250,8 @@ test('prFollowup: удалённую при уборке копию создаё
 test('updateBranch без конфликтов: дальше проверки, дифф прогона не включает влитое из базы', unix, async (t) => {
   const { k, withPr, g, drives } = setup(t);
   withPr();
+  // updateBranch делает fetch: подставляем локальный remote вместо адреса на публичном хосте.
+  g('remote', 'set-url', 'origin', g('config', 'remote.origin.pushurl'));
   await assert.rejects(updateBranch(k, 'run-1'), /уже содержит всё/);
 
   fs.writeFileSync(path.join(k.mustLoad('run-1').projectPath, 'c.txt'), 'из базы\n');
@@ -267,6 +277,8 @@ test('updateBranch без конфликтов: дальше проверки, �
 test('updateBranch с конфликтом: разрешать будет исполнитель', unix, async (t) => {
   const { k, withPr, g, gw, wt } = setup(t);
   withPr();
+  // updateBranch делает fetch: подставляем локальный remote вместо адреса на публичном хосте.
+  g('remote', 'set-url', 'origin', g('config', 'remote.origin.pushurl'));
   fs.writeFileSync(path.join(wt, 'a.txt'), 'из задачи\n');
   gw('add', '-A');
   gw('commit', '-qm', 'правка a');
@@ -308,4 +320,257 @@ test('merge в режиме «Ветка»: проект уходит с вет�
   k.store.save({ ...k.mustLoad('run-1'), merged: undefined });
   await merge(k, 'run-1', 'dev');
   assert.equal(g('branch', '--show-current'), 'purpleflow/x');
+});
+
+test('старый прогон с pr без kind обрабатывается как GitHub', unix, async (t) => {
+  const { k, withPr, calls } = setup(t);
+  withPr();
+  assert.equal(k.mustLoad('run-1').pr?.kind, undefined);
+  assert.equal((await getPrStatus(k, 'run-1'))?.number, 7);
+  await mergePrOf(k, 'run-1');
+  assert.ok(calls().includes(`pr merge ${URL_} --merge`));
+});
+
+test('prReady: неподтверждённый хост — причина с подсказкой про локальное слияние', unix, async (t) => {
+  const { k, g, repo } = setup(t);
+  g('remote', 'set-url', 'origin', 'git@git.company.ru:team/app.git');
+  const why = await prReady(k, 'run-1');
+  assert.match(why ?? '', /git\.company\.ru не настроен/);
+  assert.match(why ?? '', /локально/);
+  await assert.rejects(openPr(k, 'run-1', 'main'), /не настроен/);
+  assert.ok(repo);
+});
+
+// GitLab: тот же прогон, но origin — bare-remote в каталоге gitlab.com, а в PATH фейковый glab.
+function setupGitlab(t: { after: (fn: () => void) => void }) {
+  const s = setup(t);
+  const remote = path.join(s.root, 'gitlab.com', 'acme', 'app.git');
+  fs.mkdirSync(remote, { recursive: true });
+  s.at(remote)('init', '-q', '--bare', '-b', 'main');
+  s.g('remote', 'set-url', 'origin', 'https://gitlab.com/acme/app.git');
+  s.g('config', 'remote.origin.pushurl', remote);
+  s.g('push', '-q', 'origin', 'main');
+  const mr = path.join(s.root, 'mr.json');
+  const jobs = path.join(s.root, 'jobs.json');
+  const MR_URL = 'https://gitlab.com/acme/app/-/merge_requests/3';
+  const mrJson = (over: object = {}) =>
+    JSON.stringify({
+      iid: 3,
+      title: 'MR',
+      web_url: MR_URL,
+      state: 'opened',
+      detailed_merge_status: 'mergeable',
+      head_pipeline: { id: 1 },
+      ...over,
+    });
+  fs.writeFileSync(mr, mrJson());
+  fs.writeFileSync(jobs, JSON.stringify([{ id: 9, name: 'test', status: 'failed', web_url: 'https://gitlab.com/acme/app/-/jobs/9' }]));
+  fs.writeFileSync(
+    path.join(s.root, 'discussions.json'),
+    JSON.stringify([
+      {
+        id: 'd1',
+        individual_note: true,
+        notes: [{ id: 1, body: 'Поправь', author: { username: 'ann' }, created_at: '2026-01-01T00:00:00Z' }],
+      },
+    ]),
+  );
+  const calls = path.join(s.root, 'glab-calls');
+  fs.writeFileSync(
+    path.join(s.bin, 'glab'),
+    `#!/bin/sh
+echo "$*" >> "${calls}"
+case "$*" in
+  *"auth status"*) ;;
+  *"-X POST"*merge_requests*) echo '{"web_url":"${MR_URL}","iid":3}' ;;
+  *"-X PUT"*"/merge"*) echo '{}' ;;
+  *"/jobs/9/trace"*) printf 'упал тест\\n' ;;
+  *"pipelines/1/jobs"*) cat "${jobs}" ;;
+  *"/discussions"*) cat "${s.root}/discussions.json" ;;
+  *merge_requests/3*) cat "${mr}" ;;
+esac
+`,
+    { mode: 0o755 },
+  );
+  return {
+    ...s,
+    MR_URL,
+    leaked: () => fs.existsSync(`${calls}-leak`),
+    glabCalls: () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : []),
+    setMr: (over: object) => fs.writeFileSync(mr, mrJson(over)),
+    withMr: () =>
+      s.k.store.save({
+        ...s.k.mustLoad('run-1'),
+        pr: { url: MR_URL, number: 3, base: 'main', createdAt: '2026-01-01', kind: 'gitlab', host: 'gitlab.com' },
+      }),
+  };
+}
+
+test('GitLab: openPr создаёт MR и пишет провайдера в прогон', unix, async (t) => {
+  const { k, glabCalls, MR_URL } = setupGitlab(t);
+  assert.equal(await prReady(k, 'run-1'), null);
+  await openPr(k, 'run-1', 'main');
+  const r = k.mustLoad('run-1');
+  assert.deepEqual([r.pr?.url, r.pr?.number, r.pr?.kind, r.pr?.host], [MR_URL, 3, 'gitlab', 'gitlab.com']);
+  assert.ok(
+    glabCalls().some(
+      (c) => c.includes('--hostname gitlab.com') && c.includes('projects/acme%2Fapp/merge_requests') && c.includes('-X POST'),
+    ),
+  );
+});
+
+test('GitLab: упавший job — в замечаниях, followup получает хвост лога, слияние отмечает прогон', unix, async (t) => {
+  const { k, withMr, setMr, drives, glabCalls } = setupGitlab(t);
+  withMr();
+  const d = await getPrDetails(k, 'run-1');
+  assert.deepEqual(
+    d?.comments.map((c) => c.kind),
+    ['check', 'comment'],
+  );
+  assert.equal(d?.status.failedChecks?.[0].url, 'https://gitlab.com/acme/app/-/jobs/9');
+  const items = [
+    { id: '1', kind: 'check', author: 'CI', body: 'test', at: '', url: 'https://gitlab.com/acme/app/-/jobs/9' },
+  ] as unknown as PrFollowupItem[];
+  await prFollowup(k, 'run-1', items);
+  assert.match(k.mustLoad('run-1').feedback!.text, /Упала проверка CI «test»[\s\S]*упал тест/);
+  assert.equal(drives.length, 1);
+
+  k.store.save({ ...k.mustLoad('run-1'), status: 'finished' });
+  setMr({ state: 'merged', merge_commit_sha: 'abc' });
+  await mergePrOf(k, 'run-1');
+  assert.ok(glabCalls().some((c) => c.includes('-X PUT') && c.endsWith('/merge')));
+  assert.deepEqual([k.mustLoad('run-1').merged?.into, k.mustLoad('run-1').merged?.commit], ['main', 'abc']);
+});
+
+test('два проекта на разных self-hosted хостах: каждый вызов glab несёт свой --hostname', unix, async (t) => {
+  const { k, g, repo, root: dir, at, glabCalls } = setupGitlab(t);
+  const repo2 = path.join(dir, 'repo2');
+  fs.mkdirSync(repo2);
+  at(repo2)('init', '-q', '-b', 'main');
+  at(repo2)('remote', 'add', 'origin', 'git@git.beta.ru:team/other.git');
+  g('remote', 'set-url', 'origin', 'git@git.alpha.ru:team/app.git');
+  k.store.writeProject(repo, { forge: { kind: 'gitlab', host: 'git.alpha.ru' } } as never);
+  k.store.writeProject(repo2, { forge: { kind: 'gitlab', host: 'git.beta.ru' } } as never);
+  k.store.save({ ...k.mustLoad('run-1'), id: 'run-2', projectPath: repo2 });
+  assert.equal(await prReady(k, 'run-1'), null);
+  assert.equal(await prReady(k, 'run-2'), null);
+  const calls = glabCalls();
+  assert.ok(calls.includes('auth status --hostname git.alpha.ru'));
+  assert.ok(calls.includes('auth status --hostname git.beta.ru'));
+});
+
+test('GitLab: неподтверждённый хост — причина, локальное слияние работает', unix, async (t) => {
+  const { k, g } = setupGitlab(t);
+  g('remote', 'set-url', 'origin', 'git@gitlab.company.ru:team/app.git');
+  assert.match((await prReady(k, 'run-1')) ?? '', /gitlab\.company\.ru не настроен/);
+  await assert.rejects(openPr(k, 'run-1', 'main'), /не настроен/);
+  g('remote', 'set-url', 'origin', 'https://gitlab.com/acme/app.git');
+  await merge(k, 'run-1', 'main');
+  assert.ok(k.mustLoad('run-1').merged);
+});
+
+const baseCfg = { setupCommand: '', lintCommand: '', testCommand: '', notes: { setup: '', lint: '', test: '' } };
+
+test('saveProjectConfig: провайдер — нормализация хоста, undefined сохраняет прежнее, null сбрасывает', unix, async (t) => {
+  const { k, repo } = setup(t);
+  assert.equal(getProjectConfig(k, repo)?.forge, undefined);
+  saveProjectConfig(k, repo, { ...baseCfg, forge: { kind: 'gitlab', host: ' https://GitLab.Company.ru/ ' } });
+  assert.deepEqual(getProjectConfig(k, repo)?.forge, { kind: 'gitlab', host: 'gitlab.company.ru' });
+  // Сохранение команд без forge (старое окно, правка команд) подтверждённый провайдер не стирает.
+  saveProjectConfig(k, repo, { ...baseCfg, testCommand: 'npm test' });
+  assert.deepEqual(getProjectConfig(k, repo)?.forge, { kind: 'gitlab', host: 'gitlab.company.ru' });
+  assert.equal(getProjectConfig(k, repo)?.testCommand, 'npm test');
+  // Пустой хост — ошибка, сохранённый провайдер остаётся.
+  assert.throws(() => saveProjectConfig(k, repo, { ...baseCfg, forge: { kind: 'gitlab', host: 'https://' } }), /хост/);
+  assert.deepEqual(getProjectConfig(k, repo)?.forge, { kind: 'gitlab', host: 'gitlab.company.ru' });
+  saveProjectConfig(k, repo, { ...baseCfg, forge: { kind: 'github', host: 'github.com' } });
+  saveProjectConfig(k, repo, { ...baseCfg, forge: null });
+  assert.equal(getProjectConfig(k, repo)?.forge, undefined);
+});
+
+test('старые настройки проекта без forge читаются, провайдер определяется по origin', unix, async (t) => {
+  const { k, repo } = setup(t);
+  k.store.writeProject(repo, { ...baseCfg, updatedAt: '2025-01-01T00:00:00.000Z' });
+  assert.equal(getProjectConfig(k, repo)?.forge, undefined);
+  const d = await detectProjectForge(k, repo);
+  assert.equal(d.saved, null);
+  assert.equal(d.confirmed, true);
+  assert.deepEqual(d.suggested, { kind: 'github', host: 'github.com' });
+});
+
+test('detectProjectForge: gitlab.com подтверждён, self-hosted — предложение, неизвестный хост — без предложения', unix, async (t) => {
+  const { k, g, repo } = setup(t);
+  g('remote', 'set-url', 'origin', 'https://gitlab.com/a/b.git');
+  let d = await detectProjectForge(k, repo);
+  assert.deepEqual(d.suggested, { kind: 'gitlab', host: 'gitlab.com' });
+  assert.equal(d.confirmed, true);
+  g('remote', 'set-url', 'origin', 'git@gitlab.company.ru:a/b.git');
+  d = await detectProjectForge(k, repo);
+  assert.deepEqual(d.suggested, { kind: 'gitlab', host: 'gitlab.company.ru' });
+  assert.equal(d.confirmed, false);
+  assert.equal(d.remote, 'git@gitlab.company.ru:a/b.git');
+  g('remote', 'set-url', 'origin', 'git@git.company.ru:a/b.git');
+  d = await detectProjectForge(k, repo);
+  assert.equal(d.suggested, null);
+  assert.equal(d.host, 'git.company.ru');
+  saveProjectConfig(k, repo, { ...baseCfg, forge: { kind: 'gitlab', host: 'git.company.ru' } });
+  assert.deepEqual((await detectProjectForge(k, repo)).saved, { kind: 'gitlab', host: 'git.company.ru' });
+});
+
+test(
+  'GitLab: два инстанса одновременно — статусы не смешиваются, у каждого свой --hostname, глобальные токены не передаются',
+  unix,
+  async (t) => {
+    const { k, root: dir, MR_URL, glabCalls, leaked } = setupGitlab(t);
+    const run1 = k.mustLoad('run-1');
+    k.store.save({ ...run1, pr: { url: MR_URL, number: 3, base: 'main', createdAt: '', kind: 'gitlab', host: 'git.alpha.ru' } });
+    k.store.save({
+      ...run1,
+      id: 'run-2',
+      pr: {
+        url: 'https://git.beta.ru/team/x/-/merge_requests/3',
+        number: 3,
+        base: 'main',
+        createdAt: '',
+        kind: 'gitlab',
+        host: 'git.beta.ru',
+      },
+    });
+    // Настройки проекта поменялись после создания MR — статус всё равно у хоста из run.pr.
+    k.store.writeProject(run1.projectPath, { forge: { kind: 'gitlab', host: 'git.beta.ru' } } as never);
+    const prev = process.env.GITLAB_TOKEN;
+    k.opts.env.GITLAB_TOKEN = 'secret-for-gitlab-com';
+    try {
+      const [a, b] = await Promise.all([getPrStatus(k, 'run-1'), getPrStatus(k, 'run-2')]);
+      assert.equal(a?.url, MR_URL);
+      assert.ok(b);
+    } finally {
+      delete k.opts.env.GITLAB_TOKEN;
+      if (prev !== undefined) process.env.GITLAB_TOKEN = prev;
+    }
+    const calls = glabCalls().filter((c) => c.startsWith('api'));
+    assert.ok(calls.some((c) => c.includes('--hostname git.alpha.ru')));
+    assert.ok(calls.some((c) => c.includes('--hostname git.beta.ru')));
+    assert.ok(calls.every((c) => c.includes('--hostname git.alpha.ru') || c.includes('--hostname git.beta.ru')));
+    assert.ok(!calls.some((c) => c.includes('gitlab.com') && c.includes('--hostname gitlab.com')));
+    assert.equal(leaked(), false, 'GITLAB_TOKEN не должен доходить до glab');
+    void dir;
+  },
+);
+
+test('GitLab: хост в настройках не совпадает с origin — причина, MR не создаётся', unix, async (t) => {
+  const { k, g, repo } = setupGitlab(t);
+  g('remote', 'set-url', 'origin', 'git@gitlab.beta.ru:team/app.git');
+  k.store.writeProject(repo, { forge: { kind: 'gitlab', host: 'gitlab.alpha.ru' } } as never);
+  assert.match((await prReady(k, 'run-1')) ?? '', /gitlab\.beta\.ru.*не совпадает.*gitlab\.alpha\.ru/);
+  await assert.rejects(openPr(k, 'run-1', 'main'), /не совпадает/);
+});
+
+test('GitLab: слияние fast-forward без merge_commit_sha — коммит берётся из sha', unix, async (t) => {
+  const { k, withMr, setMr } = setupGitlab(t);
+  withMr();
+  k.store.save({ ...k.mustLoad('run-1'), status: 'finished' });
+  setMr({ state: 'merged', merge_commit_sha: null, squash_commit_sha: null, sha: 'ff00ff' });
+  await mergePrOf(k, 'run-1');
+  assert.equal(k.mustLoad('run-1').merged?.commit, 'ff00ff');
 });

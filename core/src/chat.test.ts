@@ -203,7 +203,8 @@ test('чат: сообщение во время ответа встаёт в о
   const core = makeCore({ claude });
   const chat = await core.createChat({ agent: 'claude' });
   const until = async (pred: () => boolean) => {
-    for (let i = 0; i < 200 && !pred(); i++) await new Promise((r) => setTimeout(r, 10));
+    // Запас по времени: при полном прогоне набора машина занята, и ожидание в 2 с проваливалось.
+    for (let i = 0; i < 1500 && !pred(); i++) await new Promise((r) => setTimeout(r, 10));
     assert.ok(pred(), 'не дождались');
   };
 

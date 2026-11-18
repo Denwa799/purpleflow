@@ -1,4 +1,5 @@
 // Pull Request через GitHub CLI (gh): отправка ветки, создание PR, статус проверок CI, слияние.
+import type { Forge } from './forge.js';
 import { run } from './proc.js';
 import type { PrComment, PrStatus } from './types.js';
 
@@ -10,12 +11,9 @@ async function gh(bin: string, cwd: string, env: NodeJS.ProcessEnv, args: string
   return r.stdout.trim();
 }
 
-/** Можно ли создать PR: есть gh, он авторизован и у проекта есть удалённый репозиторий origin на GitHub. */
-export async function prReadiness(ghBin: string | null, gitBin: string, repo: string, env: NodeJS.ProcessEnv): Promise<string | null> {
+/** Можно ли создать PR: есть gh и он авторизован. Принадлежность origin к GitHub проверяет `resolveForge`. */
+export async function prReadiness(ghBin: string | null, repo: string, env: NodeJS.ProcessEnv): Promise<string | null> {
   if (!ghBin) return 'Нужен GitHub CLI: brew install gh, затем gh auth login';
-  const remote = await run(gitBin, ['remote', 'get-url', 'origin'], { cwd: repo, env, timeoutMs: 10_000 });
-  if (remote.code !== 0) return 'У проекта нет удалённого репозитория origin';
-  if (!/github\.com[:/]/i.test(remote.stdout)) return 'origin не на GitHub — PR создаётся только для GitHub';
   const auth = await run(ghBin, ['auth', 'status'], { cwd: repo, env, timeoutMs: 20_000 });
   if (auth.code !== 0) return 'GitHub CLI не авторизован: выполните gh auth login';
   return null;
@@ -229,4 +227,26 @@ export async function failedJobLog(ghBin: string, repo: string, env: NodeJS.Proc
     .map((l) => l.replace(/^[^\t]*\t[^\t]*\t\S+Z\s?/, ''))
     .filter((l) => l.trim());
   return lines.slice(-120).join('\n');
+}
+
+/** Провайдер GitHub: те же вызовы `gh`, что и раньше, под общим интерфейсом `Forge`. */
+export function githubForge(bin: string | null, env: NodeJS.ProcessEnv, host = 'github.com'): Forge {
+  const need = (): string => {
+    if (!bin) throw new Error('Нужен GitHub CLI: brew install gh, затем gh auth login');
+    return bin;
+  };
+  return {
+    kind: 'github',
+    host,
+    readiness: (repo) => prReadiness(bin, repo, env),
+    create: (repo, o) => createPr(need(), repo, env, o),
+    status: (repo, url) => prStatus(need(), repo, env, url),
+    merge: (repo, url) => mergePr(need(), repo, env, url),
+    comments: (repo, url) => prComments(need(), repo, env, url),
+    failedJobLog: (repo, checkUrl) => failedJobLog(need(), repo, env, checkUrl),
+    parseUrl: (url) => {
+      const p = parsePrUrl(url);
+      return p ? { project: `${p.owner}/${p.name}`, number: p.number } : null;
+    },
+  };
 }

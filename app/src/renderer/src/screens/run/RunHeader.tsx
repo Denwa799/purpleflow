@@ -179,7 +179,7 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
     void bridge.core
       .prReady(runId)
       .then(setPrWhy)
-      .catch(() => setPrWhy('Не удалось проверить GitHub CLI'));
+      .catch(() => setPrWhy('Не удалось проверить готовность к PR/MR'));
   }, [runId, run.merged, run.pr]);
 
   // Открытый PR: статус проверок CI — при открытии прогона и после обновления на вкладке «Pull Request», без фонового опроса.
@@ -238,13 +238,27 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
     const merged = pr?.state === 'MERGED' || Boolean(run.merged);
     return (
       <span className="merge-inline">
-        <a className={`chip pr-chip ci-${ciState}`} href={run.pr.url} target="_blank" rel="noreferrer" title="Открыть PR на GitHub">
-          <GitPullRequest size={12} /> {run.root ? `${run.root.main} ` : ''}PR #{run.pr.number} → {run.pr.base}
+        <a
+          className={`chip pr-chip ci-${ciState}`}
+          href={run.pr.url}
+          target="_blank"
+          rel="noreferrer"
+          title={`Открыть ${run.pr.kind === 'gitlab' ? 'MR' : 'PR'} в ${run.pr.kind === 'gitlab' ? 'GitLab' : 'GitHub'}`}
+        >
+          <GitPullRequest size={12} /> {run.root ? `${run.root.main} ` : ''}
+          {run.pr.kind === 'gitlab' ? `MR !${run.pr.number}` : `PR #${run.pr.number}`} → {run.pr.base}
           {!merged && <span className="pr-ci">· {ciText}</span>}
         </a>
         {extraPrs.map((x) => (
-          <a key={x.rel} className="chip pr-chip" href={x.pr!.url} target="_blank" rel="noreferrer" title={`PR в ${x.rel} — на GitHub`}>
-            <GitPullRequest size={12} /> {x.rel} #{x.pr!.number}
+          <a
+            key={x.rel}
+            className="chip pr-chip"
+            href={x.pr!.url}
+            target="_blank"
+            rel="noreferrer"
+            title={`${x.pr!.kind === 'gitlab' ? 'MR' : 'PR'} в ${x.rel}`}
+          >
+            <GitPullRequest size={12} /> {x.rel} {x.pr!.kind === 'gitlab' ? `!${x.pr!.number}` : `#${x.pr!.number}`}
           </a>
         ))}
         {merged ? (
@@ -262,14 +276,16 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
             disabled={!pr || pr.conflicts || ciState === 'failed' || ciState === 'pending'}
             title={
               pr?.conflicts
-                ? 'Конфликт с базовой веткой — разрешите на GitHub'
+                ? `Конфликт с базовой веткой — разрешите в ${run.pr.kind === 'gitlab' ? 'GitLab' : 'GitHub'}`
                 : ciState === 'failed'
                   ? 'Проверки CI упали'
                   : ciState === 'pending'
                     ? 'Ждём проверки CI'
                     : pr?.blocked
-                      ? 'GitHub может потребовать ревью или обязательные проверки'
-                      : 'gh pr merge --merge'
+                      ? `${run.pr.kind === 'gitlab' ? 'GitLab' : 'GitHub'} может потребовать ревью или обязательные проверки`
+                      : run.pr.kind === 'gitlab'
+                        ? 'glab api: слияние MR'
+                        : 'gh pr merge --merge'
             }
             onClick={() => void act('prMerge')}
           >
@@ -329,7 +345,7 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
       <Select<string>
         className="merge-target"
         mono
-        title="Ветка, в которую влить результат или открыть PR"
+        title="Ветка, в которую влить результат или открыть MR/PR"
         ariaLabel="Ветка, в которую влить"
         value={target}
         minWidth={220}
@@ -347,12 +363,12 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
         title={
           prWhy ??
           (changed.length
-            ? `Отправить ветку и открыть PR в каждом изменённом репозитории: ${[run.root?.main, ...changed.map((x) => x.rel)].join(', ')}`
-            : 'Отправить ветку на GitHub и открыть Pull Request с описанием из прогона')
+            ? `Отправить ветку и открыть MR/PR в каждом изменённом репозитории: ${[run.root?.main, ...changed.map((x) => x.rel)].join(', ')}`
+            : 'Отправить ветку в origin и открыть MR/PR с описанием из прогона')
         }
         onClick={() => void act('pr')}
       >
-        Создать PR
+        Создать MR/PR
       </Button>
       <Button
         tone="approve"
@@ -364,7 +380,7 @@ export function MergeControl({ run, runId }: { run: RunFile; runId: string }) {
         title={
           changed.length
             ? `Влить локально в ${target} во всех изменённых репозиториях: ${[run.root?.main, ...changed.map((x) => x.rel)].join(', ')}`
-            : `Влить локально в ${target}, без GitHub`
+            : `Влить локально в ${target}, без MR/PR`
         }
       >
         {target ? `Влить в ${target}` : 'Влить'}

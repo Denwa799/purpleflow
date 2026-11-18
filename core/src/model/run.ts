@@ -1,7 +1,7 @@
 // Состояние прогона (run.json): стадии, попытки, проверки, ревью, вмешательства человека.
 
 import type { AgentKind, Models, Role } from './settings.js';
-import type { PrFollowupItem } from './pr.js';
+import type { ForgeKind, PrFollowupItem } from './pr.js';
 
 export type StageId =
   'baseline' | 'clarify' | 'gate0' | 'plan' | 'gate1' | 'implement' | 'tests' | 'visual' | 'review' | 'gate2' | 'limit' | 'finish';
@@ -210,7 +210,7 @@ export interface RunRepo {
   /** Коммит прогона; равен baseCommit — изменений в репозитории нет. */
   commit?: string;
   merged?: { into: string; commit: string; at: string };
-  pr?: { url: string; number: number; base: string };
+  pr?: { url: string; number: number; base: string; kind?: ForgeKind; host?: string };
 }
 
 export interface RunFile {
@@ -316,8 +316,8 @@ export interface RunFile {
   titleFromPlan?: boolean;
   /** Рабочая копия удалена при очистке хранилища: run.json живёт только в данных приложения. */
   worktreeRemoved?: boolean;
-  /** Pull Request ветки прогона на GitHub. */
-  pr?: { url: string; number: number; base: string; createdAt: string };
+  /** Pull/Merge Request ветки прогона. Без kind и host — старый прогон: GitHub. */
+  pr?: { url: string; number: number; base: string; createdAt: string; kind?: ForgeKind; host?: string };
   /** Ветка purpleflow/<id> влита человеком из приложения. */
   merged?: { into: string; commit: string; at: string };
   /** Доработка по замечаниям PR: номер текущего круга (первый — исходная реализация) и коммит, от которого считается дифф круга. */
