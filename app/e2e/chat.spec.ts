@@ -216,6 +216,49 @@ test('проект: кнопка «Чат» открывает новый чат
   }
 });
 
+test('боковая панель: «Проекты» раскрывает последние проекты и «Все проекты»', async () => {
+  const box = makeSandbox();
+  // Подключённый проект — как после настройки команд.
+  fs.mkdirSync(path.join(box.profile, 'data'), { recursive: true });
+  fs.writeFileSync(
+    path.join(box.profile, 'data', 'projects.json'),
+    JSON.stringify({
+      [box.repo]: {
+        setupCommand: '',
+        lintCommand: '',
+        testCommand: '',
+        notes: { setup: '', lint: '', test: '' },
+        updatedAt: new Date().toISOString(),
+      },
+    }),
+  );
+  const l = await launch(box);
+  const { page } = l;
+  try {
+    const projects = page.getByRole('button', { name: 'Проекты', exact: true });
+    await expect(projects).toHaveAttribute('aria-haspopup', 'menu');
+    await projects.click();
+    const menu = page.getByRole('menu', { name: 'Последние проекты' });
+    await menu.getByRole('menuitem', { name: /demo/ }).click();
+    await expect(page.getByRole('tab', { name: 'Обзор' })).toBeVisible();
+    await expect(menu).toHaveCount(0);
+    if (process.env.PURPLEFLOW_SHOTS) {
+      await projects.click();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: path.join(box.root, '..', 'pf-side-projects.png') });
+      await page.locator('.side-create-scrim').click();
+    }
+
+    await projects.click();
+    await menu.getByRole('menuitem', { name: 'Все проекты' }).click();
+    await expect(page.getByRole('button', { name: 'Открыть папку…' })).toBeVisible();
+    expect(l.errors).toEqual([]);
+  } finally {
+    await quit(l);
+    box.cleanup();
+  }
+});
+
 test('чат: «Указать элемент» в браузере вставляет описание элемента в поле ввода', async () => {
   const page0 = `<!doctype html><html><body style="margin:0;font:16px sans-serif">
     <main><section class="hero"><a class="btn btn-primary" href="/signup" style="display:inline-block;margin:120px;padding:20px 40px;background:#fcc">Создать</a></section></main>

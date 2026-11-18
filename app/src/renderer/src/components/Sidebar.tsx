@@ -12,13 +12,14 @@ import {
   Settings,
   Workflow,
 } from 'lucide-react';
-import type { ChatSummary, RunSummary } from '@purpleflow/core';
+import type { ChatSummary, ProjectListItem, RunSummary } from '@purpleflow/core';
 import { useActions, useStore } from '../lib/store';
 import { shortPath } from '../lib/format';
 import { MODES } from '../lib/stages';
 import { shownTools, toolNeeded } from '../lib/tools';
 import { bridge } from '../lib/api';
 import { openWhatsNew, useUpdateState } from '../lib/update';
+import { recentProjects } from '../lib/recentProjects';
 import { UpdateButton, updatePending } from './WhatsNew';
 
 const STATUS_WORD: Record<RunSummary['status'], string> = {
@@ -72,13 +73,20 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const update = useUpdateState();
   const groups = useMemo(() => groupItems(state.runs, state.chats), [state.runs, state.chats]);
   // Пока не подключён ни один проект — кнопка «Как начать?» открывает онбординг первого проекта.
-  const [noProjects, setNoProjects] = useState(false);
+  const [projects, setProjects] = useState<ProjectListItem[] | null>(null);
   useEffect(() => {
     void bridge.core
       .listProjects()
-      .then((l) => setNoProjects(l.length === 0))
+      .then(setProjects)
       .catch(() => {});
   }, [v.name, state.runs]);
+  const noProjects = projects?.length === 0;
+  const recent = useMemo(() => recentProjects(projects ?? [], state.chats), [projects, state.chats]);
+  const [projMenu, setProjMenu] = useState(false);
+  const openProject = (path: string | null) => {
+    setProjMenu(false);
+    go(path ? { name: 'project', path } : { name: 'projects' });
+  };
   const waiting = state.runs.filter((r) => r.status === 'waiting').length;
   const toggleTitle = `${collapsed ? 'Показать' : 'Скрыть'} панель (${bridge.platform === 'darwin' ? '⌘' : 'Ctrl+'}B)`;
   const [menu, setMenu] = useState(false);
@@ -159,12 +167,51 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           </>
         )}
       </div>
-      <button
-        className={`side-link side-projects ${v.name === 'projects' || v.name === 'project' ? 'is-on' : ''}`}
-        onClick={() => go({ name: 'projects' })}
-      >
-        <FolderGit2 size={16} /> Проекты
-      </button>
+      <div className="side-create">
+        <button
+          className={`side-new ${v.name === 'projects' || v.name === 'project' ? 'is-on' : ''}`}
+          aria-haspopup={recent.length ? 'menu' : undefined}
+          aria-expanded={recent.length ? projMenu : undefined}
+          // Проектов ещё нет — сразу на список, там «Открыть папку…».
+          onClick={() => (recent.length ? setProjMenu(!projMenu) : go({ name: 'projects' }))}
+        >
+          <FolderGit2 size={16} /> Проекты
+          {recent.length > 0 && <ChevronDown size={14} className={`side-new-chev ${projMenu ? 'is-open' : ''}`} />}
+        </button>
+        {projMenu && (
+          <>
+            <div className="side-create-scrim" onClick={() => setProjMenu(false)} />
+            <div className="side-create-menu side-projects-menu" role="menu" aria-label="Последние проекты">
+              {recent.map((p) => (
+                <button
+                  key={p.path}
+                  role="menuitem"
+                  className={v.name === 'project' && v.path === p.path ? 'is-on' : ''}
+                  title={p.root ?? p.path}
+                  onClick={() => openProject(p.path)}
+                >
+                  <span className="side-kind">
+                    <FolderGit2 size={14} />
+                  </span>
+                  <span className="side-project-name">
+                    <strong>{projectName(p.root ?? p.path)}</strong>
+                    <small>{shortPath(p.root ?? p.path)}</small>
+                  </span>
+                  {p.active > 0 && (
+                    <span className="side-project-active" title="Идут, ждут решения или в очереди">
+                      {p.active}
+                    </span>
+                  )}
+                </button>
+              ))}
+              <div className="side-menu-sep" />
+              <button role="menuitem" className="side-projects-all" onClick={() => openProject(null)}>
+                Все проекты
+              </button>
+            </div>
+          </>
+        )}
+      </div>
 
       <nav className="side-list" aria-label="История">
         {!state.runsLoaded && (
