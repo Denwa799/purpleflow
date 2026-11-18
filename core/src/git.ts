@@ -478,6 +478,62 @@ export class Git {
     };
   }
 
+  /** Коммиты всех веток для графа: сверху новые, дети выше родителей. */
+  async graphLog(repo: string, limit: number): Promise<{ hash: string; parents: string[]; author: string; at: string; subject: string }[]> {
+    const r = await run(
+      this.bin,
+      [
+        'log',
+        '--branches',
+        '--remotes=origin',
+        '--tags',
+        'HEAD',
+        '--topo-order',
+        `-n${limit}`,
+        '--format=%H%x1f%P%x1f%an%x1f%aI%x1f%s%x1e',
+      ],
+      { cwd: repo, env: this.env, timeoutMs: 30_000 },
+    );
+    // Пустой репозиторий (без коммитов) — git log падает, графа просто нет.
+    if (r.code !== 0) return [];
+    return r.stdout
+      .split('\x1e')
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .map((x) => {
+        const [hash, parents, author, at, subject] = x.split('\x1f');
+        return { hash, parents: parents ? parents.split(' ') : [], author, at, subject: subject ?? '' };
+      });
+  }
+
+  /** Ветки (локальные и origin) и теги: имя, коммит, дата. */
+  async refList(repo: string): Promise<{ ref: string; hash: string; at: string }[]> {
+    const out = await this.git(repo, [
+      'for-each-ref',
+      '--sort=-committerdate',
+      '--format=%(refname)%09%(objectname)%09%(*objectname)%09%(committerdate:iso-strict)',
+      'refs/heads',
+      'refs/remotes/origin',
+      'refs/tags',
+    ]);
+    return out
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => {
+        const [ref, obj, peeled, at] = l.split('\t');
+        // У аннотированного тега коммит — разыменованный объект.
+        return { ref, hash: peeled || obj, at: at ?? '' };
+      });
+  }
+
+  /** Сколько коммитов b впереди и позади a. */
+  async aheadBehind(repo: string, a: string, b: string): Promise<{ ahead: number; behind: number } | null> {
+    const r = await run(this.bin, ['rev-list', '--left-right', '--count', `${a}...${b}`], { cwd: repo, env: this.env, timeoutMs: 20_000 });
+    if (r.code !== 0) return null;
+    const [behind, ahead] = r.stdout.trim().split(/\s+/).map(Number);
+    return { ahead, behind };
+  }
+
   /** Коммит ветки или другой ссылки. */
   async revParse(repo: string, ref: string): Promise<string> {
     return (await this.git(repo, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).trim();

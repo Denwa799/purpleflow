@@ -24,6 +24,7 @@ import { detectNode, installNode } from './services/node.js';
 import { installTool } from './services/setup.js';
 import { answer } from './stages/plan.js';
 import { getVisualShot } from './stages/visual.js';
+import { gitCommitDiff, gitGraph } from './services/gitview.js';
 import type {
   AgentKind,
   ChangeDocs,
@@ -352,6 +353,12 @@ export class Orchestrator implements CoreApi {
   }
   listChatFiles(projectPath: string) {
     return chat.listChatFiles(this.kernel, projectPath);
+  }
+  getGitGraph(projectPath: string, limit?: number) {
+    return gitGraph(this.kernel, projectPath, limit);
+  }
+  getGitCommitDiff(projectPath: string, hash: string) {
+    return gitCommitDiff(this.kernel, projectPath, hash);
   }
   async readChatFile(projectPath: string, rel: string) {
     return chat.readChatFile(projectPath, rel);

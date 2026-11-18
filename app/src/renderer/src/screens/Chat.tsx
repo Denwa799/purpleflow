@@ -62,7 +62,7 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
   const [pane, setPaneState] = useState<ChatPane | null>(() => {
     try {
       const v = localStorage.getItem(PANE_KEY);
-      return v === 'session' || v === 'files' || v === 'code' || v === 'run' || v === 'browser' ? v : null;
+      return v === 'session' || v === 'files' || v === 'code' || v === 'git' || v === 'run' || v === 'browser' ? v : null;
     } catch {
       return null;
     }
@@ -297,7 +297,8 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
     return paths;
   }, [projects, draft.projectPath]);
   // Без проекта вкладок «Код» и «Запуск» нет — остаётся браузер.
-  const sidePane: ChatPane | null = (pane === 'files' || pane === 'code' || pane === 'run') && !chat?.projectPath ? 'browser' : pane;
+  const sidePane: ChatPane | null =
+    (pane === 'files' || pane === 'code' || pane === 'git' || pane === 'run') && !chat?.projectPath ? 'browser' : pane;
   const toolOk = (a: AgentKind) => Boolean(state.tools?.[a]?.path && !state.tools[a].error);
 
   return (

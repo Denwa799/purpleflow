@@ -1,5 +1,6 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Activity, CircleAlert, FileCode2, FolderTree, Globe, PanelRightClose, Play, RefreshCw } from 'lucide-react';
+import { Activity, CircleAlert, FileCode2, FolderTree, GitBranch, Globe, PanelRightClose, Play, RefreshCw } from 'lucide-react';
+import { GitView } from '../components/GitView';
 import { ChatFiles } from './ChatFiles';
 import { ChatRunPane } from './ChatRunPane';
 import { chatSession } from '../lib/chatSession';
@@ -12,7 +13,7 @@ import { PillTabs } from '../components/PillTabs';
 import { Button, Empty } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
 
-export type ChatPane = 'session' | 'files' | 'code' | 'run' | 'browser';
+export type ChatPane = 'session' | 'files' | 'code' | 'git' | 'run' | 'browser';
 
 /** Изменённые файлы проекта чата — счётчик на кнопке «Код»; обновляется после каждого хода агента. */
 export function useChatChanged(chat: ChatFile | null, busy: boolean): string[] | null {
@@ -150,6 +151,7 @@ export function ChatSide({
                     icon: <FileCode2 size={15} />,
                     extra: changed?.length ? <span className="tab-badge">{changed.length}</span> : undefined,
                   },
+                  { id: 'git' as const, label: 'Git', icon: <GitBranch size={15} /> },
                   {
                     id: 'run' as const,
                     label: 'Запуск',
@@ -193,6 +195,13 @@ export function ChatSide({
       </div>
       <div className="chat-side-body" hidden={pane !== 'code'}>
         {chat.projectPath && <ChatCode chat={chat} busy={busy} />}
+      </div>
+      <div className="chat-side-body" hidden={pane !== 'git'}>
+        {chat.projectPath && pane === 'git' && (
+          <div className="chat-code">
+            <GitView projectPath={chat.projectPath} refresh={busy ? 'busy' : chat.updatedAt} />
+          </div>
+        )}
       </div>
       <div className="chat-side-body" hidden={pane !== 'run'}>
         {chat.projectPath && pane === 'run' && (

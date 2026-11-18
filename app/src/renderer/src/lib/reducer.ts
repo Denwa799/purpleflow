@@ -2,7 +2,7 @@
 import type { ChatFile, ChatSummary, RunFile, RunSummary, ToolInfo, ToolName, NextPartDraft } from '@purpleflow/core';
 import type { PublicSettings } from '../../../shared/ipc';
 
-export type ProjectTab = 'overview' | 'commands' | 'knowledge';
+export type ProjectTab = 'overview' | 'commands' | 'knowledge' | 'git';
 export type SettingsTab = 'account' | 'stats' | 'tools' | 'models' | 'window';
 export type View =
   | { name: 'new'; project?: string; draft?: NextPartDraft }

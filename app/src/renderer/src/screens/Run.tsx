@@ -1,5 +1,17 @@
 // Экран прогона: шапка, чат менеджера, вкладки (таймлайн с деталями стадий, лог, браузер, код, PR) и панель решения на гейте.
-import { MousePointerClick, TriangleAlert } from 'lucide-react';
+import {
+  ChartGantt,
+  FileCode2,
+  FolderTree,
+  GitBranch,
+  GitPullRequest,
+  Globe,
+  MousePointerClick,
+  ScrollText,
+  TriangleAlert,
+} from 'lucide-react';
+import { GitView } from '../components/GitView';
+import { ChatFiles } from './ChatFiles';
 import { useEffect, useRef, useState } from 'react';
 import { AgentScreen, BrowserPane, useAgentScreen, usePreview } from '../components/BrowserPane';
 import { PillTabs } from '../components/PillTabs';
@@ -20,7 +32,7 @@ import { useStageDrawer } from './run/useStageDrawer';
 import { MergeCheckNote, useMergeCheck } from './run/MergeCheckNote';
 import { currentStage, unstableText, withPicked } from './run/util';
 
-type View = 'timeline' | 'log' | 'browser' | 'code' | 'pr';
+type View = 'timeline' | 'log' | 'browser' | 'code' | 'files' | 'git' | 'pr';
 
 /** Решения на гейте: после них детали (план, дифф) сворачиваются и снова виден весь таймлайн. */
 const GATE_ACTIONS = ['approve', 'reject', 'cancel', 'accept', 'fix', 'skip'];
@@ -197,11 +209,12 @@ export function RunScreen({ runId }: { runId: string }) {
                 if (v !== 'timeline') d.reset();
               }}
               items={[
-                { id: 'timeline', label: 'Таймлайн' },
-                { id: 'log', label: 'Лог' },
+                { id: 'timeline', label: 'Таймлайн', icon: <ChartGantt size={15} /> },
+                { id: 'log', label: 'Лог', icon: <ScrollText size={15} /> },
                 {
                   id: 'browser',
                   label: 'Браузер',
+                  icon: <Globe size={15} />,
                   extra: agentScreen.live ? (
                     <span className="tab-dot is-live" title="Агент работает в браузере" />
                   ) : preview.state.status === 'ready' ? (
@@ -210,12 +223,20 @@ export function RunScreen({ runId }: { runId: string }) {
                     <span className="tab-live" />
                   ) : undefined,
                 },
-                { id: 'code', label: 'Код', extra: changed?.length ? <span className="tab-badge">{changed.length}</span> : undefined },
+                {
+                  id: 'code',
+                  label: 'Код',
+                  icon: <FileCode2 size={15} />,
+                  extra: changed?.length ? <span className="tab-badge">{changed.length}</span> : undefined,
+                },
+                { id: 'files', label: 'Файлы', icon: <FolderTree size={15} /> },
+                { id: 'git', label: 'Git', icon: <GitBranch size={15} /> },
                 ...(run.pr
                   ? [
                       {
                         id: 'pr' as const,
                         label: 'Pull Request',
+                        icon: <GitPullRequest size={15} />,
                         extra: run.prRound && run.status !== 'finished' ? <span className="tab-live" /> : undefined,
                       },
                     ]
@@ -287,6 +308,19 @@ export function RunScreen({ runId }: { runId: string }) {
                     : undefined
                 }
               />
+            )}
+            {/* Файлы рабочей копии прогона — только просмотр: писать агенту здесь некому, кроме менеджера. */}
+            {view === 'files' && (
+              <div className="pane run-files">
+                <ChatFiles projectPath={run.root?.dir ?? run.worktreePath} refresh={run.updatedAt ?? ''} />
+              </div>
+            )}
+            {view === 'git' && (
+              <div className="pane run-files">
+                <div className="chat-code">
+                  <GitView projectPath={run.projectPath} refresh={run.updatedAt ?? ''} focus={run.branch} />
+                </div>
+              </div>
             )}
             {view === 'pr' && run.pr && (
               <div className="pane">

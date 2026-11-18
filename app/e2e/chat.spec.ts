@@ -188,7 +188,6 @@ test('чат: вкладка «Файлы» — дерево проекта, с�
     // «+» при наведении — в контекст; клик по файлу — его содержимое.
     await page.getByRole('textbox', { name: 'Найти файл' }).fill('math');
     const hit = page.getByRole('list', { name: 'Найденные файлы' }).getByRole('listitem', { name: 'src/math.js' });
-    await hit.hover();
     await hit.getByRole('button', { name: 'Добавить в контекст: src/math.js' }).click();
     await expect(input).toHaveValue('@src/math.js @src @src/math.js ');
     await hit.getByRole('button', { name: 'src/math.js', exact: true }).click();
@@ -221,6 +220,69 @@ test('чат: вкладка «Файлы» — дерево проекта, с�
     await input.fill('@src/math.js что тут?');
     await input.press('Enter');
     await expect.poll(() => box.calls().at(-1)?.prompt ?? '').toContain(`- ${path.join(box.repo, 'src', 'math.js')}`);
+    expect(l.errors).toEqual([]);
+  } finally {
+    await quit(l);
+    box.cleanup();
+  }
+});
+
+test('Git (просмотр): ветки, история с графом и дифф коммита — на странице проекта и в чате', async () => {
+  const box = makeSandbox();
+  // Ветка с одним коммитом поверх main и слияние — чтобы в графе были две линии.
+  box.git('checkout', '-qb', 'feature');
+  fs.writeFileSync(path.join(box.repo, 'src/feature.js'), 'export const f = 1;\n');
+  box.git('add', '-A');
+  box.git('commit', '-qm', 'Фича');
+  box.git('checkout', '-q', 'main');
+  fs.writeFileSync(path.join(box.repo, 'src/math.js'), 'export const add = (a, b) => a + b + 0;\n');
+  box.git('commit', '-qam', 'Правка в main');
+  box.git('checkout', '-qb', 'later');
+  fs.writeFileSync(path.join(box.repo, 'later.txt'), 'потом\n');
+  box.git('add', '-A');
+  box.git('commit', '-qm', 'Позже');
+  box.git('checkout', '-q', 'main');
+  const l = await launch(box);
+  const { page } = l;
+  try {
+    await page.getByRole('button', { name: 'Проекты', exact: true }).click();
+    await page.getByRole('button', { name: 'Открыть папку…' }).click();
+    await page.getByRole('tab', { name: 'Git' }).click();
+    const log = page.getByRole('list', { name: 'История коммитов' });
+    await expect(log.getByRole('listitem')).toHaveCount(4);
+    // Первый коммит репозитория — внизу: родители ниже детей.
+    await expect(log.getByRole('listitem').last()).toContainText('Начало');
+    await expect(page.locator('.git-graph circle')).toHaveCount(4);
+
+    // Ветки: текущая, отставание и опережение относительно main.
+    await page.getByRole('button', { name: /main · веток: 3/ }).click();
+    const branches = page.getByRole('list', { name: 'Ветки' });
+    await expect(branches.getByRole('listitem').filter({ hasText: 'later' })).toContainText('↑1 ↓0');
+    await expect(branches.getByRole('listitem').filter({ hasText: 'feature' })).toContainText('↑1 ↓1');
+    await branches
+      .getByRole('listitem')
+      .filter({ hasText: 'feature' })
+      .getByRole('button', { name: /feature/ })
+      .click();
+    await expect(log.locator('.git-row.is-marked')).toContainText('Фича');
+    if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-git.png') });
+
+    // Коммит — его дифф.
+    await log.getByRole('listitem').filter({ hasText: 'Правка в main' }).click();
+    await expect(page.locator('.git-commit-title')).toHaveText('Правка в main');
+    await expect(page.locator('.git-diff')).toContainText('math.js');
+    await page.getByRole('button', { name: 'История' }).click();
+    await expect(log).toBeVisible();
+
+    // В чате — та же вкладка.
+    await page.getByRole('button', { name: 'Чат', exact: true }).click();
+    const input = page.locator('.chat-compose textarea');
+    await input.fill('привет');
+    await input.press('Enter');
+    await expect(page.locator('.chat-msg.is-assistant')).toBeVisible();
+    await page.getByTitle('Развернуть код и браузер').click();
+    await page.locator('.chat-side .pilltabs button', { hasText: 'Git' }).click();
+    await expect(page.locator('.chat-side').getByRole('list', { name: 'История коммитов' }).getByRole('listitem')).toHaveCount(4);
     expect(l.errors).toEqual([]);
   } finally {
     await quit(l);

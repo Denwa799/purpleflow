@@ -82,6 +82,29 @@ test('приёмка: дифф показывает изменение, возв
   await expect(l.page.locator('.monaco-diff-editor').getByText('mul', { exact: false }).first()).toBeVisible();
 });
 
+test('прогон: «Файлы» — рабочая копия агента, «Git» — ветка прогона с названием задачи', async () => {
+  const page = l.page;
+  await startRun(page, 'Быстрая правка', 'Добавь функцию mul в src/math.js');
+  await expect(accept(page)).toBeVisible({ timeout: 60_000 });
+
+  // Файлы — из рабочей копии прогона: правка агента видна, хотя в проекте её нет. Только просмотр — без «+».
+  await page.getByRole('tab', { name: 'Файлы' }).click();
+  await page.getByRole('textbox', { name: 'Найти файл' }).fill('math');
+  const hit = page.getByRole('list', { name: 'Найденные файлы' }).getByRole('listitem', { name: 'src/math.js' });
+  await expect(hit.getByRole('button', { name: /Добавить в контекст/ })).toHaveCount(0);
+  await hit.getByRole('button', { name: 'src/math.js', exact: true }).click();
+  await expect(page.locator('.chat-file-view')).toContainText('mul');
+
+  // Git — ветка прогона подсвечена, в списке веток подписана задачей.
+  await page.getByRole('tab', { name: 'Git' }).click();
+  await expect(page.locator('.git-row.is-marked')).toBeVisible();
+  await page.getByRole('button', { name: /веток: 2/ }).click();
+  if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-run-git.png') });
+  await expect(page.getByRole('list', { name: 'Ветки' }).getByRole('listitem').filter({ hasText: 'purpleflow/' })).toContainText(
+    'Добавь функцию mul',
+  );
+});
+
 test('менеджер прогона отвечает на вопрос', async () => {
   await startRun(l.page, 'Быстрая правка', 'Добавь функцию mul в src/math.js');
   await expect(accept(l.page)).toBeVisible({ timeout: 60_000 });

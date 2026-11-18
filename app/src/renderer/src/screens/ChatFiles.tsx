@@ -15,6 +15,7 @@ const drag = (path: string) => (e: DragEvent) => {
   e.dataTransfer.effectAllowed = 'copy';
 };
 
+/** onMention нет — только просмотр (прогон): без «+» и перетаскивания. */
 export function ChatFiles({
   projectPath,
   refresh,
@@ -22,7 +23,7 @@ export function ChatFiles({
 }: {
   projectPath: string;
   refresh: string;
-  onMention: (path: string) => void;
+  onMention?: (path: string) => void;
 }) {
   const [files, setFiles] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +65,8 @@ export function ChatFiles({
         <div
           className={`chat-tree-row ${dir ? 'is-dir' : ''}`}
           style={{ paddingLeft: 8 + depth * 14 }}
-          draggable
-          onDragStart={drag(n.path)}
+          draggable={Boolean(onMention)}
+          onDragStart={onMention ? drag(n.path) : undefined}
           title={n.path}
         >
           <button type="button" className="chat-tree-open" onClick={() => (dir ? toggle(n.path) : setViewing(n.path))}>
@@ -73,7 +74,7 @@ export function ChatFiles({
             {dir ? <Folder size={14} /> : <File size={14} />}
             <span>{n.name}</span>
           </button>
-          <AddButton path={n.path} onMention={onMention} />
+          {onMention && <AddButton path={n.path} onMention={onMention} />}
         </div>
         {dir && isOpen && <div role="group">{n.children!.map((c) => row(c, depth + 1))}</div>}
       </div>
@@ -108,12 +109,20 @@ export function ChatFiles({
       ) : found ? (
         <div className="chat-tree" role="list" aria-label="Найденные файлы">
           {found.map((f) => (
-            <div key={f} role="listitem" aria-label={f} className="chat-tree-row" draggable onDragStart={drag(f)} title={f}>
+            <div
+              key={f}
+              role="listitem"
+              aria-label={f}
+              className="chat-tree-row"
+              draggable={Boolean(onMention)}
+              onDragStart={onMention ? drag(f) : undefined}
+              title={f}
+            >
               <button type="button" className="chat-tree-open" onClick={() => setViewing(f)}>
                 <File size={14} />
                 <span>{f}</span>
               </button>
-              <AddButton path={f} onMention={onMention} />
+              {onMention && <AddButton path={f} onMention={onMention} />}
             </div>
           ))}
           {!found.length && <p className="muted chat-tree-hint">Ничего не нашлось</p>}
@@ -153,7 +162,7 @@ function FileView({
   projectPath: string;
   path: string;
   onBack: () => void;
-  onMention: (path: string) => void;
+  onMention?: (path: string) => void;
 }) {
   const [content, setContent] = useState<Content | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -179,9 +188,11 @@ function FileView({
         <code className="chat-file-path" title={path}>
           {path}
         </code>
-        <Button tone="quiet" icon={<Plus size={14} />} onClick={() => onMention(path)}>
-          В контекст
-        </Button>
+        {onMention && (
+          <Button tone="quiet" icon={<Plus size={14} />} onClick={() => onMention(path)}>
+            В контекст
+          </Button>
+        )}
       </div>
       {error ? (
         <Empty icon={<CircleAlert />} title="Не удалось открыть файл">

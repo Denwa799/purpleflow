@@ -9,6 +9,7 @@ import { CommandsPanel } from './Commands';
 import { KnowledgeView } from './Knowledge';
 import { Overview } from './Overview';
 import { type LoadedProject, loadProject, projectName } from './common';
+import { GitView } from '../../components/GitView';
 import { cleanErr } from '../../lib/api';
 
 // ——— Страница проекта ———
@@ -66,6 +67,7 @@ export function ProjectScreen({ path, initialTab }: { path: string; initialTab?:
               extra: repo && (!p?.cfg || dirty) ? <span className="tab-dot" title="Не сохранены" /> : undefined,
             },
             { id: 'knowledge', label: 'Знания о проекте', disabled: !repo },
+            { id: 'git', label: 'Git', disabled: !repo },
           ]}
         />
       </div>
@@ -93,6 +95,11 @@ export function ProjectScreen({ path, initialTab }: { path: string; initialTab?:
               {repo && (tab === 'commands' || commandsOpened.current) && (
                 <div className={`project-tab ${tab === 'commands' ? 'step-enter' : ''}`} hidden={tab !== 'commands'}>
                   <CommandsPanel p={p} onSaved={() => void reload()} onDirty={setDirty} />
+                </div>
+              )}
+              {repo && tab === 'git' && (
+                <div className="project-tab step-enter project-git">
+                  <GitView projectPath={p.info.path} />
                 </div>
               )}
               {repo && tab === 'knowledge' && (

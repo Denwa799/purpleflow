@@ -1935,3 +1935,217 @@ body.is-side-resizing webview {
   max-height: 100%;
   border-radius: 6px;
 }
+
+/* ——— Вкладка «Git»: ветки, граф истории, дифф коммита ——— */
+.git-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.git-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) 0;
+  font-size: var(--fs-12);
+}
+.git-branches-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--text-1);
+  font-size: var(--fs-13);
+}
+.git-branches-toggle:hover {
+  background: var(--bg-3);
+}
+.git-branches {
+  flex: none;
+  max-height: 40%;
+  overflow-y: auto;
+  margin-bottom: var(--s-2);
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--bg-1);
+}
+.git-branch {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: var(--fs-12);
+}
+.git-branch:hover {
+  background: var(--bg-3);
+}
+.git-branch-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-1);
+}
+.git-branch-main span:not(.git-chip) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-branch.is-current .git-branch-main svg {
+  color: var(--accent-hi);
+}
+.git-chip {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--bg-4);
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 16px;
+}
+.git-branch-run {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 45%;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--accent-wash);
+  color: var(--accent-hi);
+  font-size: 11px;
+  line-height: 18px;
+}
+.git-branch-run span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-ab,
+.git-branch-at {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.git-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.git-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  height: 30px;
+  padding-right: 8px;
+  border-radius: 7px;
+  text-align: left;
+  font-size: var(--fs-13);
+}
+.git-row:hover {
+  background: var(--bg-3);
+}
+.git-row.is-marked {
+  background: var(--accent-wash);
+}
+.git-graph {
+  flex: none;
+  overflow: visible;
+}
+.git-graph path {
+  fill: none;
+  stroke-width: 1.6;
+}
+.git-row.is-head .git-graph circle {
+  stroke: var(--text-1);
+  stroke-width: 1.5;
+}
+.git-subject {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.git-msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-1);
+}
+.git-ref {
+  flex: none;
+  max-width: 180px;
+  overflow: hidden;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--accent-wash);
+  color: var(--accent-hi);
+  font: 500 10.5px/17px var(--font-mono, ui-monospace, monospace);
+  text-overflow: ellipsis;
+}
+.git-ref.is-remote {
+  background: var(--bg-4);
+  color: var(--text-2);
+}
+.git-ref.is-tag {
+  background: #e0a45822;
+  color: #e0a458;
+}
+.git-ref.is-current {
+  background: var(--accent);
+  color: #fff;
+}
+.git-meta {
+  flex: none;
+  max-width: 34%;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-hash {
+  flex: none;
+  font-size: 11px;
+}
+.git-more {
+  display: block;
+  margin: var(--s-2) auto;
+  padding: 4px 12px;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: var(--fs-12);
+}
+.git-more:hover {
+  background: var(--bg-3);
+}
+.git-commit-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-1);
+  font-size: var(--fs-13);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-commit-meta {
+  flex: none;
+  margin: 0 0 var(--s-2);
+  font-size: var(--fs-12);
+}
+.git-diff {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}

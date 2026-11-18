@@ -1107,3 +1107,14 @@
   align-self: flex-start;
   font-size: var(--fs-12);
 }
+
+/* Вкладка «Git» на странице проекта: своя высота — история и дифф прокручиваются внутри. */
+.project-git {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 230px);
+  min-height: 420px;
+  padding: 0 var(--s-4) var(--s-4);
+  border-radius: 18px;
+  background: var(--bg-2);
+}

@@ -518,3 +518,60 @@ test('readChatFile: только внутри проекта, двоичный �
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('Git (просмотр): ветки с отставанием от main, история с родителями и ссылками, дифф коммита и первого коммита', async () => {
+  const repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pf-gitview-')));
+  const git = (...a: string[]) => execFileSync('git', a, { cwd: repo, encoding: 'utf8' }).trim();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 't@t');
+  git('config', 'user.name', 't');
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'один\n');
+  git('add', '.');
+  git('commit', '-qm', 'первый');
+  git('checkout', '-qb', 'feature');
+  fs.writeFileSync(path.join(repo, 'b.txt'), 'фича\n');
+  git('add', '.');
+  git('commit', '-qm', 'фича');
+  git('checkout', '-q', 'main');
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'два\n');
+  git('commit', '-qam', 'правка main');
+  git('tag', '-a', 'v1', '-m', 'v1');
+  git('merge', '-q', '--no-ff', 'feature', '-m', 'слияние');
+  git('checkout', '-qb', 'later');
+  fs.writeFileSync(path.join(repo, 'c.txt'), 'потом\n');
+  git('add', '.');
+  git('commit', '-qm', 'позже');
+  git('checkout', '-q', 'main');
+  const core = makeCore({});
+  try {
+    const g = await core.getGitGraph(repo);
+    assert.equal(g.current, 'main');
+    assert.equal(g.base, 'main');
+    // Дети выше родителей; порядок параллельных веток — любой из допустимых.
+    const by = (s: string) => g.commits.find((c) => c.subject === s)!;
+    assert.deepEqual([g.commits[0].subject, g.commits[1].subject, g.commits[4].subject], ['позже', 'слияние', 'первый']);
+    const merge = by('слияние');
+    assert.equal(merge.parents.length, 2);
+    assert.deepEqual(merge.refs, ['main']);
+    assert.deepEqual(by('правка main').refs, ['tag: v1']);
+    const later = g.branches.find((b) => b.name === 'later')!;
+    assert.deepEqual([later.ahead, later.behind], [1, 0]);
+    assert.equal(g.branches.find((b) => b.name === 'main')!.ahead, undefined);
+    assert.equal(g.more, false);
+    assert.equal((await core.getGitGraph(repo, 2)).more, true);
+
+    const d = await core.getGitCommitDiff(repo, by('правка main').hash);
+    assert.deepEqual(
+      d.map((f) => [f.path, f.status, f.original, f.modified]),
+      [['a.txt', 'M', 'один\n', 'два\n']],
+    );
+    const first = await core.getGitCommitDiff(repo, by('первый').hash);
+    assert.deepEqual(
+      first.map((f) => [f.path, f.status]),
+      [['a.txt', 'A']],
+    );
+    await assert.rejects(core.getGitCommitDiff(repo, 'HEAD; rm -rf'), /Неверный коммит/);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
