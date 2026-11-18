@@ -19,7 +19,8 @@ export function App() {
   const v = state.view;
   const viewKey =
     v.name === 'chat'
-      ? `chat:${v.chatId ?? 'new'}`
+      ? // Новый чат из разных проектов — разные экраны: иначе проект первого так и останется выбранным.
+        `chat:${v.chatId ?? `new:${v.project ?? ''}`}`
       : v.name === 'run'
         ? `run:${v.runId}`
         : v.name === 'project'

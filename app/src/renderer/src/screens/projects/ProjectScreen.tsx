@@ -1,5 +1,5 @@
 // Страница проекта с вкладками «Обзор», «Команды и окружение», «Знания о проекте».
-import { Plus, TriangleAlert } from 'lucide-react';
+import { MessageSquare, Plus, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { PillTabs } from '../../components/PillTabs';
 import { Button, Topbar } from '../../components/ui';
@@ -45,6 +45,9 @@ export function ProjectScreen({ path, initialTab }: { path: string; initialTab?:
           </span>
         }
       >
+        <Button tone="ghost" icon={<MessageSquare size={15} />} onClick={() => go({ name: 'chat', project: path })}>
+          Чат
+        </Button>
         <Button tone="primary" icon={<Plus size={15} />} disabled={!repo} onClick={() => go({ name: 'new', project: path })}>
           Новая задача
         </Button>

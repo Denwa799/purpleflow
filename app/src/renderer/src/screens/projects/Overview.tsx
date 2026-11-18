@@ -1,6 +1,6 @@
 // Вкладка «Обзор»: ветка, origin, готовность к PR, статистика и прогоны проекта.
 import type { ProjectKnowledge, ProjectOverview, ProjectStats } from '@purpleflow/core';
-import { GitBranch, GitPullRequest, TriangleAlert } from 'lucide-react';
+import { GitBranch, GitPullRequest, MessageSquare, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '../../components/ui';
 import { shortPath, tokens, when } from '../../lib/format';
@@ -28,6 +28,8 @@ export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: 
       .catch(() => {});
   }, [repo, p.info.isRepo]);
   const runs = state.runs.filter((r) => r.projectPath === repo);
+  // Чат проекта из нескольких репозиториев открывают на верхней папке — он тоже этого проекта.
+  const chats = state.chats.filter((c) => c.projectPath === repo || (p.multi && c.projectPath === p.multi.root));
   const sections = (k?.profile?.match(/^##\s/gm) ?? []).length;
 
   if (!p.info.isRepo) {
@@ -167,6 +169,27 @@ export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: 
           <p className="muted">Прогонов в этом проекте ещё не было.</p>
         )}
       </section>
+
+      {chats.length > 0 && (
+        <section className="panel overview-runs overview-chats">
+          <header className="overview-runs-head">
+            <h3>Чаты</h3>
+            <span className="muted">{chats.length}</span>
+          </header>
+          <ul className="run-list">
+            {chats.slice(0, 8).map((c) => (
+              <li key={c.id}>
+                <button className="side-run" onClick={() => go({ name: 'chat', chatId: c.id })}>
+                  <MessageSquare size={14} className="muted" />
+                  <span className="side-run-title">{c.title}</span>
+                  <span className="run-list-mode">{c.agent}</span>
+                  <time className="muted">{when(c.updatedAt)}</time>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {p.cfg && (
         <div className="overview-forget">

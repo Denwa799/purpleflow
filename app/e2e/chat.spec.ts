@@ -153,6 +153,37 @@ test('чат: «@» подставляет файл проекта, «/» — с
   }
 });
 
+test('проект: кнопка «Чат» открывает новый чат с этим проектом, а на «Обзоре» — чаты проекта', async () => {
+  const box = makeSandbox();
+  const l = await launch(box);
+  const { page } = l;
+  try {
+    await page.getByRole('button', { name: 'Проекты' }).click();
+    await page.getByRole('button', { name: 'Открыть папку…' }).click();
+    await page.getByRole('button', { name: 'Чат', exact: true }).click();
+    // Проект уже выбран — не нужно искать его в списке.
+    await expect(page.getByRole('button', { name: 'Проект', exact: true })).toContainText('demo');
+    await expect(page.getByRole('heading', { name: /Спросите о demo/ })).toBeVisible();
+
+    const input = page.locator('.chat-compose textarea');
+    await input.fill('что тут?');
+    await input.press('Enter');
+    await expect(page.locator('.chat-msg.is-user')).toContainText('что тут?');
+
+    await page.getByRole('button', { name: 'Проекты' }).click();
+    await page.getByRole('button', { name: 'Открыть папку…' }).click();
+    await page.getByRole('tab', { name: 'Обзор' }).click();
+    const chats = page.locator('.overview-chats');
+    await expect(chats.getByRole('button')).toHaveCount(1);
+    await chats.getByRole('button').click();
+    await expect(page.locator('.chat-msg.is-user')).toContainText('что тут?');
+    expect(l.errors).toEqual([]);
+  } finally {
+    await quit(l);
+    box.cleanup();
+  }
+});
+
 test('чат: «Указать элемент» в браузере вставляет описание элемента в поле ввода', async () => {
   const page0 = `<!doctype html><html><body style="margin:0;font:16px sans-serif">
     <main><section class="hero"><a class="btn btn-primary" href="/signup" style="display:inline-block;margin:120px;padding:20px 40px;background:#fcc">Создать</a></section></main>
