@@ -67,6 +67,32 @@ test('route: какие действия управления доступны �
 
 // ——— Конвейер целиком: настоящие git, openspec и тесты, фейковые агенты ———
 
+test(
+  'loadLoginShellEnv: прокси и сертификаты приложения доходят до агентов, ключи сессии — нет',
+  { skip: process.platform === 'win32' },
+  (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-shell-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    // «Шелл» выполняет команду как есть: -ilc и rc-файлы здесь не важны, важно, с каким окружением его запустили.
+    const shell = path.join(dir, 'sh');
+    fs.writeFileSync(shell, '#!/bin/sh\nexec /bin/sh -c "$2"\n', { mode: 0o755 });
+    const env = loadLoginShellEnv({
+      SHELL: shell,
+      HOME: dir,
+      HTTPS_PROXY: 'http://127.0.0.1:8899',
+      no_proxy: 'localhost',
+      NODE_EXTRA_CA_CERTS: '/etc/corp.pem',
+      ANTHROPIC_API_KEY: 'sk-из-чужой-сессии',
+      GITHUB_TOKEN: 'ghp_x',
+    });
+    assert.equal(env.HTTPS_PROXY, 'http://127.0.0.1:8899');
+    assert.equal(env.no_proxy, 'localhost');
+    assert.equal(env.NODE_EXTRA_CA_CERTS, '/etc/corp.pem');
+    assert.equal(env.ANTHROPIC_API_KEY, undefined);
+    assert.equal(env.GITHUB_TOKEN, undefined);
+  },
+);
+
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'prompts');
 // openspec — devDependency ядра: интеграционные тесты не зависят от глобальной установки.
 const env = prependPath(

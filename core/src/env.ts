@@ -13,13 +13,34 @@ const MARK = '__PURPLEFLOW_ENV__';
  * Приложение, запущенное из Finder/Dock, получает урезанный PATH (/usr/bin:/bin…).
  * Берём окружение login+interactive шелла пользователя — так же, как это делают shell-env/fix-path.
  */
+const BASE_VARS = ['HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', '__CF_USER_TEXT_ENCODING'];
+
+/**
+ * Сеть приложения: прокси и корпоративные сертификаты, с которыми его запустили (`open -a PurpleFlow --env HTTPS_PROXY=…`,
+ * `launchctl setenv`). Это не ключи сессии — агентам без них API недоступен (403 по региону, обрыв TLS).
+ * Шелл получает их на старте, поэтому ~/.zshrc по-прежнему может переопределить.
+ */
+export const NETWORK_VARS = [
+  'HTTPS_PROXY',
+  'HTTP_PROXY',
+  'ALL_PROXY',
+  'NO_PROXY',
+  'https_proxy',
+  'http_proxy',
+  'all_proxy',
+  'no_proxy',
+  'NODE_EXTRA_CA_CERTS',
+  'SSL_CERT_FILE',
+  'SSL_CERT_DIR',
+];
+
 export function loadLoginShellEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   if (isWin) return withExtraPath(stripSessionEnv({ ...base }));
   const shell = base.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash');
   // Шелл стартует с минимальным окружением — как при запуске из Finder. Иначе приложение,
   // запущенное из чужого терминала (например, из сессии Claude Code), унаследует её ключи и токены.
   const clean: NodeJS.ProcessEnv = {};
-  for (const k of ['HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', '__CF_USER_TEXT_ENCODING']) {
+  for (const k of [...BASE_VARS, ...NETWORK_VARS]) {
     if (base[k]) clean[k] = base[k];
   }
   clean.PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
