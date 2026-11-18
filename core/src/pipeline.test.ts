@@ -793,8 +793,10 @@ test(
       review: () => ({ blocking: [], notes: [] }),
     });
     const sandboxes: string[] = [];
-    const codex = (async (o: { prompt: string; cwd: string; systemPrompt?: string; sandbox: string }) => {
+    const efforts: (string | undefined)[] = [];
+    const codex = (async (o: { prompt: string; cwd: string; systemPrompt?: string; sandbox: string; effort?: string }) => {
       sandboxes.push(o.sandbox);
+      efforts.push(o.effort);
       return fake.fn(o);
     }) as never;
     // codex «установлен» (скрипт отвечает версией), claude — нет.
@@ -805,6 +807,8 @@ test(
       proxy: { baseUrl: '', apiKey: '' },
       models: { planner: '', executor: '', reviewer: '' },
       agents: { planner: 'codex', executor: 'codex', reviewer: 'codex' },
+      // max у codex нет — исполнитель идёт без флага, как в CLI.
+      efforts: { planner: 'high', executor: 'max', reviewer: 'low' },
       agentTimeoutMin: 5,
       testTimeoutMin: 2,
       maxParallel: 2,
@@ -836,12 +840,15 @@ test(
       } as never,
     });
     assert.equal((await core.getRun(runId))!.visual, undefined, 'без claude визуальной проверки нет');
+    assert.deepEqual((await core.getRun(runId))!.efforts, { planner: 'high', reviewer: 'low' });
     await untilGate(core, runId, 'gate1');
     await core.dispatch({ type: 'gate.approve', runId });
     await untilGate(core, runId, 'gate2');
     const chat = await core.askManager(runId, 'Как дела?');
     assert.equal(chat.at(-1)!.text, 'Всё идёт по плану.');
     assert.equal(sandboxes.at(-1), 'read-only');
+    assert.ok(efforts.includes('high') && efforts.includes('low'));
+    assert.ok(!efforts.includes('max'));
   },
 );
 

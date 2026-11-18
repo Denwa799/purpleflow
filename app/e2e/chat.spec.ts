@@ -153,6 +153,38 @@ test('чат: «@» подставляет файл проекта, «/» — с
   }
 });
 
+test('чат: уровень рассуждений рядом с моделью уходит claude флагом --effort', async () => {
+  const box = makeSandbox();
+  const l = await launch(box);
+  const { page } = l;
+  try {
+    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('menuitem', { name: /Чат/ }).click();
+    const effort = page.getByRole('button', { name: 'Уровень рассуждений' });
+    // По умолчанию — как в CLI: флаг не передаётся.
+    await expect(effort).toContainText('как в CLI');
+    await effort.click();
+    await page.getByRole('option', { name: /^high/ }).click();
+    await expect(effort).toContainText('high');
+    if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-effort.png') });
+
+    const input = page.locator('.chat-compose textarea');
+    await input.fill('подумай');
+    await input.press('Enter');
+    await expect(page.locator('.chat-msg.is-user')).toContainText('подумай');
+    await expect.poll(() => box.calls().at(-1)?.args.join(' ') ?? '').toContain('--effort high');
+
+    // В настройках — тот же выбор у каждой роли на claude.
+    await page.getByRole('button', { name: 'Настройки' }).click();
+    await page.getByRole('tab', { name: 'Модели' }).click();
+    await expect(page.getByRole('button', { name: 'Уровень рассуждений: Исполнитель' })).toContainText('как в CLI');
+    expect(l.errors).toEqual([]);
+  } finally {
+    await quit(l);
+    box.cleanup();
+  }
+});
+
 test('проект: кнопка «Чат» открывает новый чат с этим проектом, а на «Обзоре» — чаты проекта', async () => {
   const box = makeSandbox();
   const l = await launch(box);

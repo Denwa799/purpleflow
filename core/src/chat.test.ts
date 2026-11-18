@@ -424,3 +424,31 @@ test('чат: «Сжать контекст» — /compact в той же сес
   await core.updateChat(chat.id, { agent: 'codex' });
   await assert.rejects(core.compactChat(chat.id), /codex сжимает/);
 });
+
+test('чат: уровень рассуждений уходит агенту и записывается в ответ; новый агент без такого уровня — как в CLI', async () => {
+  const calls: AgentRunOptions[] = [];
+  const reply = async (o: AgentRunOptions) => {
+    calls.push(o);
+    o.onStep?.({ kind: 'text', text: 'Ок', delta: true });
+    return { ok: true, text: 'Ок', usage: emptyUsage() };
+  };
+  const core = makeCore({ claude: reply, codex: reply });
+  const chat = await core.createChat({ agent: 'claude', effort: 'max' });
+  assert.equal(chat.effort, 'max');
+  await core.sendChat(chat.id, 'Вопрос');
+  let after = await untilIdle(core, chat.id);
+  assert.equal(calls[0].effort, 'max');
+  assert.equal(after.messages.at(-1)!.effort, 'max');
+
+  // max у codex нет — уровень сбрасывается, флаг не передаётся.
+  assert.equal((await core.updateChat(chat.id, { agent: 'codex' })).effort, undefined);
+  await core.sendChat(chat.id, 'Ещё');
+  after = await untilIdle(core, chat.id);
+  assert.equal(calls[1].effort, undefined);
+  assert.equal(after.messages.at(-1)!.effort, undefined);
+
+  assert.equal((await core.updateChat(chat.id, { effort: 'low' })).effort, 'low');
+  assert.equal((await core.updateChat(chat.id, { effort: '' })).effort, undefined);
+  // Неизвестный уровень не сохраняется.
+  assert.equal((await core.updateChat(chat.id, { effort: 'ultra' })).effort, undefined);
+});

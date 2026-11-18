@@ -91,6 +91,8 @@ export interface ChatMessage {
   usage?: TokenUsage;
   /** Модель, которая ответила (из события запуска CLI). */
   model?: string;
+  /** С каким уровнем рассуждений дан ответ; нет — как в CLI. */
+  effort?: string;
   /** Сколько ходов модели занял ответ. */
   turns?: number;
   durationMs?: number;
@@ -122,6 +124,8 @@ export interface ChatFile {
   agent: AgentKind;
   /** Пусто — модель по умолчанию для этого агента из настроек. */
   model: string;
+  /** Уровень рассуждений; нет — как в настройках CLI (флаг не передаётся). */
+  effort?: string;
   /** Разрешить агенту менять файлы проекта; выключено — только чтение. */
   edits: boolean;
   /** Сессия CLI, которую продолжает следующий ход: claude --resume или codex exec resume. */

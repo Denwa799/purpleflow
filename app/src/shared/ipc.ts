@@ -1,5 +1,5 @@
 // Контракт IPC: мост окна (preload), сообщения main ↔ utilityProcess ядра. Сам API ядра — CoreApi в @purpleflow/core.
-import type { CoreApi, AgentKind, Models, CoreEvent, Role, ToolName } from '@purpleflow/core';
+import type { CoreApi, AgentKind, Efforts, Models, CoreEvent, Role, ToolName } from '@purpleflow/core';
 import type { UpdateState } from './update';
 import type { ProxyModels } from './models';
 import type { Release } from './releases';
@@ -12,6 +12,7 @@ export interface PublicSettings {
   /** enabled — ключ подставляется агентам; выключенный ключ хранится, но не используется. */
   proxy: { baseUrl: string; codexBaseUrl: string; hasKey: boolean; enabled: boolean };
   models: Models;
+  efforts: Efforts;
   agents: Record<Role, AgentKind> & { visual?: AgentKind; manager?: AgentKind; scan?: AgentKind };
   /** Включённые CLI: выключенный не выполняет ни одной роли, хотя бы один включён. */
   enabledAgents: AgentKind[];
@@ -37,6 +38,7 @@ export interface SettingsPatch {
   toolPaths?: Partial<Record<ToolName, string>>;
   proxy?: { baseUrl?: string; codexBaseUrl?: string; apiKey?: string; enabled?: boolean };
   models?: Partial<Models>;
+  efforts?: Efforts;
   agents?: Partial<Record<Role, AgentKind>> & { visual?: AgentKind; manager?: AgentKind; scan?: AgentKind };
   enabledAgents?: AgentKind[];
   agentTimeoutMin?: number;

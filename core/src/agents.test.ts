@@ -117,6 +117,16 @@ test('codexArgs: новый запуск и продолжение; промпт
   assert.ok(!resumed.includes('sandbox_workspace_write.network_access=true'));
 });
 
+test('effort: claude --effort, codex model_reasoning_effort; без уровня флага нет', () => {
+  const c = claudeArgs({ model: 'opus', effort: 'xhigh' });
+  assert.equal(c[c.indexOf('--effort') + 1], 'xhigh');
+  assert.ok(!claudeArgs({}).includes('--effort'));
+  const x = codexArgs({ cwd: '/w', sandbox: 'read-only', effort: 'high' }, { lastFile: '/l' });
+  assert.ok(x.includes('model_reasoning_effort="high"'));
+  assert.equal(x.at(-1), '-');
+  assert.ok(!codexArgs({ cwd: '/w', sandbox: 'read-only' }, { lastFile: '/l' }).some((a) => a.includes('reasoning')));
+});
+
 test('addUsage: стоимость остаётся неизвестной, если её не сообщали', () => {
   const a = addUsage(emptyUsage(), { input: 2, output: 3 });
   assert.equal(a.costUsd, undefined);

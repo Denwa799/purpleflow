@@ -28,8 +28,8 @@ import { stageClarify, stagePlan } from './stages/plan.js';
 import { stageReview } from './stages/review.js';
 import { stageVisual } from './stages/visual.js';
 import { traced } from './trace.js';
-import type { AgentKind, GateId, Role, RunFile, StartRunInput } from './types.js';
-import { DEFAULT_AGENTS, enabledAgent } from './types.js';
+import type { AgentKind, Efforts, GateId, Role, RunFile, StartRunInput } from './types.js';
+import { DEFAULT_AGENTS, effortFor, enabledAgent } from './types.js';
 
 /** После перезапуска приложения: прогоны, оборванные посреди стадии, помечаются остановленными. */
 export async function recover(k: Kernel): Promise<void> {
@@ -91,6 +91,12 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
   };
   const models = { ...s.models };
   for (const r of Object.keys(roles) as Role[]) if (roles[r] !== (s.agents?.[r] ?? DEFAULT_AGENTS[r])) models[r] = '';
+  // Уровень рассуждений — только тот, что понимает агент роли (у роли, переехавшей на другой CLI, его может не быть).
+  const efforts: Efforts = {};
+  for (const r of Object.keys(roles) as Role[]) {
+    const e = effortFor(roles[r], s.efforts?.[r]);
+    if (e) efforts[r] = e;
+  }
   const visualAgent = enabledAgent(s, s.agents?.visual ?? 'claude');
   if (visualAgent !== (s.agents?.visual ?? 'claude')) models.visual = '';
   const tools = await k.tools(['git', 'openspec', ...new Set(Object.values(roles))]);
@@ -194,6 +200,7 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
     // В режиме «ветка» зависимости — уже установленные пользователем; подготовку не запускаем.
     prepared: workspace === 'branch' || !input.setupCommand?.trim(),
     models,
+    ...(Object.keys(efforts).length ? { efforts } : {}),
     agents: { ...roles, ...(s.agents?.visual || visualAgent !== 'claude' ? { visual: visualAgent } : {}) },
     status: queued ? 'queued' : 'running',
     next: MODE_FIRST[mode],

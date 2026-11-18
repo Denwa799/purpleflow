@@ -33,10 +33,28 @@ export type Role = 'planner' | 'executor' | 'reviewer';
 export type AgentKind = 'claude' | 'codex' | 'opencode';
 
 /**
+ * Уровни рассуждений (effort), которые понимает CLI агента: claude --effort, codex -c model_reasoning_effort.
+ * У opencode уровни свои у каждого провайдера — списка нет, выбор не показываем.
+ */
+export const EFFORTS: Record<AgentKind, readonly string[]> = {
+  claude: ['low', 'medium', 'high', 'xhigh', 'max'],
+  codex: ['low', 'medium', 'high', 'xhigh'],
+  opencode: [],
+};
+
+/** Уровень, если агент его понимает; иначе undefined — флаг не передаётся, решает CLI. */
+export function effortFor(agent: AgentKind, effort: string | undefined): string | undefined {
+  return effort && EFFORTS[agent].includes(effort) ? effort : undefined;
+}
+
+/**
  * Модели ролей; visual — модель claude для визуальной проверки (пусто — как у исполнителя-claude),
  * manager — модель менеджера прогона, scan — модель сканирования проекта (пусто — как у служебных вызовов).
  */
 export type Models = Record<Role, string> & { visual?: string; manager?: string; scan?: string };
+
+/** Уровень рассуждений по ролям; нет — как в настройках CLI. */
+export type Efforts = Partial<Record<Role, string>>;
 
 export const DEFAULT_AGENTS: Record<Role, AgentKind> = { planner: 'claude', executor: 'claude', reviewer: 'codex' };
 
@@ -74,6 +92,7 @@ export interface CoreSettings {
     apiKey: string;
   };
   models: Models;
+  efforts?: Efforts;
   /** Агент на роль; по умолчанию планировщик и исполнитель — claude, ревьюер — codex. */
   agents?: Agents;
   /** Какими CLI пользоваться: выключенный не запускается, даже если установлен. Пусто или не задано — claude и codex. */

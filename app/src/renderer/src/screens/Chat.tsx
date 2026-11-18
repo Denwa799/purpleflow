@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { ArrowUp, Clock, FileText, FolderOpen, FolderPlus, ListTodo, Paperclip, Square, Trash2, X } from 'lucide-react';
+import { ArrowUp, Brain, Clock, FileText, FolderOpen, FolderPlus, ListTodo, Paperclip, Square, Trash2, X } from 'lucide-react';
 import type { AgentKind, ChatFile, ChatMessage, ProjectListItem } from '@purpleflow/core';
 import { AssistantMessage } from './ChatAnswer';
 import { useMentions } from './ChatMentions';
@@ -11,6 +11,7 @@ import { trialModelOf, trialOptions, useTrialLock } from '../lib/trial';
 import { onCoreEvent, useStore } from '../lib/store';
 import { shortPath } from '../lib/format';
 import { enabledList } from '../lib/tools';
+import { EFFORT_LEVELS, effortOf, effortOptions } from '../lib/effort';
 import { formatPick, insertPick, type PickedElement } from '../lib/pickElement';
 import { ChatSide, ChatSideRail, useChatChanged, useSideWidth, type ChatPane } from './ChatSide';
 import { bridge, cleanErr } from '../lib/api';
@@ -38,7 +39,7 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(Boolean(chatId));
   // Черновик нового чата: проект, агент, модель и правки до первого сообщения.
-  const [draft, setDraft] = useState<{ projectPath?: string; agent: AgentKind; model: string; edits: boolean }>(() => ({
+  const [draft, setDraft] = useState<{ projectPath?: string; agent: AgentKind; model: string; effort?: string; edits: boolean }>(() => ({
     projectPath: initialProject,
     agent: settings?.agents.executor ?? 'claude',
     model: '',
@@ -152,7 +153,7 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
   const enabled = enabledList(settings?.enabledAgents);
   const raw = chat ?? draft;
   const conf = enabled.includes(raw.agent) ? raw : { ...raw, agent: enabled[0], model: '' };
-  const setConf = async (patch: Partial<Pick<ChatFile, 'agent' | 'model' | 'edits'>>) => {
+  const setConf = async (patch: Partial<Pick<ChatFile, 'agent' | 'model' | 'effort' | 'edits'>>) => {
     setError(null);
     if (!chat) return setDraft((d) => ({ ...d, ...patch, ...(patch.agent && patch.model === undefined ? { model: '' } : {}) }));
     try {
@@ -502,6 +503,19 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
                   disabled={busy}
                   onPick={(agent, model) => void setConf(agent === conf.agent ? { model } : { agent, model })}
                 />
+                {EFFORT_LEVELS[conf.agent].length > 0 && (
+                  <Select<string>
+                    className={`chat-effort${effortOf(conf.agent, conf.effort) ? '' : ' is-default'}`}
+                    ariaLabel="Уровень рассуждений"
+                    title="Уровень рассуждений (effort): выше — дольше и дороже, но тщательнее"
+                    icon={<Brain size={14} />}
+                    value={effortOf(conf.agent, conf.effort)}
+                    minWidth={280}
+                    disabled={busy}
+                    onChange={(effort) => void setConf({ effort })}
+                    options={effortOptions(conf.agent)}
+                  />
+                )}
                 <span className="chat-compose-end">
                   {busy && (
                     <button

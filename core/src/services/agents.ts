@@ -6,7 +6,7 @@ import { addUsage, type AgentResult } from '../agents/common.js';
 import { prependPath } from '../env.js';
 import type { Kernel } from '../kernel.js';
 import type { AgentKind, Role, RunFile } from '../types.js';
-import { AGENT_KINDS, DEFAULT_AGENTS, enabledAgents } from '../types.js';
+import { AGENT_KINDS, DEFAULT_AGENTS, effortFor, enabledAgents } from '../types.js';
 import { knowledgeBlock, relatedRepos } from './projects.js';
 import { workDir } from './repos.js';
 
@@ -171,6 +171,7 @@ export async function runRole(
     ...(o.onOutput ? { onOutput: o.onOutput } : {}),
   };
   const model = run.models[role] || undefined;
+  const effort = effortFor(agent, run.efforts?.[role]);
   // Знания о проекте (профиль и уроки) — всем ролям; в продолжении сессии они уже в контексте.
   const systemPrompt = o.resume ? o.systemPrompt : `${o.systemPrompt ?? ''}${knowledgeBlock(k, run)}` || undefined;
   if (agent === 'opencode') {
@@ -181,6 +182,7 @@ export async function runRole(
       // В продолжении системный промпт уже в начале сессии: opencode дописал бы его в сообщение ещё раз.
       systemPrompt: o.resume ? undefined : systemPrompt,
       model,
+      effort,
       readOnly: o.readOnly,
       images: o.images,
       resumeSession: o.resume,
@@ -193,6 +195,7 @@ export async function runRole(
       prompt: o.prompt,
       systemPrompt,
       model,
+      effort,
       sandbox: o.readOnly ? 'read-only' : 'workspace-write',
       images: o.images,
       outputSchema: o.outputSchema,
@@ -209,6 +212,7 @@ export async function runRole(
     prompt,
     systemPrompt,
     model,
+    effort,
     addDirs: dirs.length ? dirs : undefined,
     sessionId: o.sessionId,
     resume: o.resume,

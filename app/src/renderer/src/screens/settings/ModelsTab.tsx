@@ -1,7 +1,9 @@
 // Вкладка «Модели»: агент и модель для каждой роли, таймауты и параллельные прогоны.
-import { ExternalLink, Wand2 } from 'lucide-react';
+import { Brain, ExternalLink, Wand2 } from 'lucide-react';
 import { useState } from 'react';
 import { ModelInput } from '../../components/ModelInput';
+import { Select } from '../../components/Dropdown';
+import { EFFORT_LEVELS, effortOf, effortOptions } from '../../lib/effort';
 import { QuickSetup } from '../../components/QuickSetup';
 import { Button, Field, NumberInput } from '../../components/ui';
 import { isTrialSetup, trialSetup } from '../../lib/presets';
@@ -25,6 +27,8 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
   const {
     models,
     setModels,
+    efforts,
+    setEfforts,
     agents,
     setAgents,
     pickAgent,
@@ -113,6 +117,18 @@ export function ModelsTab({ draft }: { draft: SettingsDraft }) {
                 value={models[r.id]}
                 onChange={(v) => setModels({ ...models, [r.id]: v })}
               />
+              {EFFORT_LEVELS[agent].length > 0 && (
+                <Select<string>
+                  className="role-effort"
+                  ariaLabel={`Уровень рассуждений: ${r.title}`}
+                  title="Уровень рассуждений (effort): выше — дольше и дороже, но тщательнее"
+                  icon={<Brain size={14} />}
+                  value={effortOf(agent, efforts[r.id])}
+                  minWidth={280}
+                  onChange={(v) => setEfforts({ ...efforts, [r.id]: v || undefined })}
+                  options={effortOptions(agent)}
+                />
+              )}
             </div>
           );
         })}

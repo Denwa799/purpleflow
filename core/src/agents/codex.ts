@@ -43,7 +43,7 @@ export function codexProxyBase(p: NonNullable<AgentRunOptions['proxy']>): string
  * Прокси подключаем отдельным провайдером через -c, не трогая ~/.codex/config.toml.
  */
 export function codexArgs(
-  o: Pick<CodexOptions, 'cwd' | 'model' | 'sandbox' | 'proxy' | 'images' | 'userConfig' | 'persist' | 'resumeThread'>,
+  o: Pick<CodexOptions, 'cwd' | 'model' | 'effort' | 'sandbox' | 'proxy' | 'images' | 'userConfig' | 'persist' | 'resumeThread'>,
   extra: { schemaFile?: string; lastFile: string },
 ): string[] {
   // У resume нет -C и -s: папка — рабочая папка процесса, песочница — через -c.
@@ -72,6 +72,7 @@ export function codexArgs(
   // Исполнителю и планировщику на codex нужна сеть (зависимости, openspec) — в песочнице workspace-write она выключена по умолчанию.
   if (o.sandbox === 'workspace-write') args.push('-c', 'sandbox_workspace_write.network_access=true');
   if (o.model) args.push('-m', o.model);
+  if (o.effort) args.push('-c', `model_reasoning_effort="${o.effort}"`);
   if (extra.schemaFile) args.push('--output-schema', extra.schemaFile);
   // --image=… по одному: иначе многозначный -i проглотит завершающий «-» (промпт из stdin).
   for (const img of o.images ?? []) args.push(`--image=${img}`);

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { app, safeStorage } from 'electron';
-import { enabledAgents, type AgentKind, type CoreSettings, type Role } from '@purpleflow/core';
+import { enabledAgents, type AgentKind, type CoreSettings, type Efforts, type Role } from '@purpleflow/core';
 import type { PublicSettings, SettingsPatch } from '../shared/ipc';
 import { diagnosticsFrom } from './diagnostics';
 import { ACCOUNT_ENABLED, DEFAULT_PROXY } from './provider';
@@ -12,6 +12,8 @@ interface StoredSettings {
   /** enabled: false — ключ сохранён, но агенты работают по своим подпискам. */
   proxy: { baseUrl: string; codexBaseUrl: string; apiKeyEnc: string; enabled: boolean };
   models: CoreSettings['models'];
+  /** Уровень рассуждений по ролям; нет — как в CLI. */
+  efforts: Efforts;
   /** Роли конвейера; visual — по умолчанию claude, manager и scan — claude, если установлен, иначе codex. */
   agents: Record<Role, AgentKind> & { visual?: AgentKind; manager?: AgentKind; scan?: AgentKind };
   /** Какими CLI пользоваться; выключенный не выполняет ни одной роли. Хотя бы один включён. */
@@ -47,6 +49,7 @@ const DEFAULTS: StoredSettings = {
   toolPaths: {},
   proxy: { baseUrl: '', codexBaseUrl: '', apiKeyEnc: '', enabled: true },
   models: { planner: 'opus', executor: 'sonnet', reviewer: '', visual: '', manager: '', scan: '' },
+  efforts: {},
   agents: { planner: 'claude', executor: 'claude', reviewer: 'codex' },
   enabledAgents: ['claude', 'codex'],
   agentTimeoutMin: 30,
@@ -86,6 +89,7 @@ function load(): StoredSettings {
       proxy: { ...DEFAULTS.proxy, ...raw.proxy },
       account: { ...DEFAULTS.account, ...raw.account },
       models: { ...DEFAULTS.models, ...raw.models },
+      efforts: { ...raw.efforts },
       agents: { ...DEFAULTS.agents, ...raw.agents },
       toolPaths: { ...raw.toolPaths },
       enabledAgents: enabledAgents({ enabledAgents: raw.enabledAgents }),
@@ -199,6 +203,7 @@ export function publicSettings(): PublicSettings {
     toolPaths: s.toolPaths,
     proxy: { baseUrl: s.proxy.baseUrl, codexBaseUrl: s.proxy.codexBaseUrl, hasKey: Boolean(s.proxy.apiKeyEnc), enabled: s.proxy.enabled },
     models: s.models,
+    efforts: s.efforts,
     agents: s.agents,
     enabledAgents: s.enabledAgents,
     agentTimeoutMin: s.agentTimeoutMin,
@@ -229,6 +234,7 @@ export function coreSettings(): CoreSettings {
       apiKey,
     },
     models: s.models,
+    efforts: s.efforts,
     agents: s.agents,
     enabledAgents: s.enabledAgents,
     claudeAuth: s.claudeAuth,
@@ -244,6 +250,11 @@ export function updateSettings(patch: SettingsPatch): PublicSettings {
   if (patch.toolPaths) s.toolPaths = { ...s.toolPaths, ...patch.toolPaths };
   if (patch.models) s.models = { ...s.models, ...patch.models };
   if (patch.agents) s.agents = { ...s.agents, ...patch.agents };
+  if (patch.efforts) {
+    // '' — снова «как в CLI».
+    s.efforts = { ...s.efforts, ...patch.efforts };
+    for (const r of Object.keys(s.efforts) as Role[]) if (!s.efforts[r]) delete s.efforts[r];
+  }
   if (patch.enabledAgents) s.enabledAgents = enabledAgents(patch);
   // Роли на выключенном CLI переходят на включённый — с его моделью по умолчанию: имя модели одного CLI другому не подходит.
   for (const slot of AGENT_SLOTS) {

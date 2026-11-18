@@ -1,5 +1,5 @@
 // Черновик настроек, общий для вкладок «Инструменты» и «Модели»: правки копятся здесь и уходят одним «Сохранить».
-import type { AgentKind, ConnectionCheck, Models, Role, ToolName } from '@purpleflow/core';
+import type { AgentKind, ConnectionCheck, Efforts, Models, Role, ToolName } from '@purpleflow/core';
 import { useEffect, useRef, useState } from 'react';
 import { bridge } from '../../lib/api';
 import { useStore } from '../../lib/store';
@@ -13,6 +13,7 @@ export function useSettingsDraft() {
   const { state, saveSettings, refreshTools } = useStore();
   const s = state.settings;
   const [models, setModels] = useState<Models>({ planner: '', executor: '', reviewer: '', visual: '', manager: '', scan: '' });
+  const [efforts, setEfforts] = useState<Efforts>({});
   const [agents, setAgents] = useState<Record<Role, AgentKind> & { visual?: AgentKind; manager?: AgentKind; scan?: AgentKind }>({
     planner: 'claude',
     executor: 'claude',
@@ -38,6 +39,7 @@ export function useSettingsDraft() {
     seen.current = s;
     setModels((d) => rebase(d, prev?.models, s.models));
     setAgents((d) => rebase(d, prev?.agents, s.agents));
+    setEfforts((d) => rebase(d, prev?.efforts, s.efforts ?? {}));
     setPaths((d) => rebase(d, prev?.toolPaths, s.toolPaths));
     setAgentTimeout((d) => rebase(d, prev?.agentTimeoutMin, s.agentTimeoutMin));
     setTestTimeout((d) => rebase(d, prev?.testTimeoutMin, s.testTimeoutMin));
@@ -53,8 +55,11 @@ export function useSettingsDraft() {
     setSaving(true);
     setError(null);
     try {
+      // Убранный уровень уходит пустой строкой — иначе слияние в настройках оставило бы старый.
+      const cleared = Object.fromEntries((Object.keys(s?.efforts ?? {}) as Role[]).filter((r) => !efforts[r]).map((r) => [r, '']));
       await saveSettings({
         models,
+        efforts: { ...cleared, ...efforts },
         agents,
         toolPaths: paths,
         agentTimeoutMin: agentTimeout,
@@ -131,6 +136,8 @@ export function useSettingsDraft() {
   return {
     models,
     setModels,
+    efforts,
+    setEfforts,
     agents,
     setAgents,
     paths,

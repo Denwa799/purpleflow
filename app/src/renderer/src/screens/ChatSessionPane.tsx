@@ -7,6 +7,7 @@ import { bridge, cleanErr } from '../lib/api';
 import { chatSession, mcpStatus, type ChatSessionSummary } from '../lib/chatSession';
 import { shortPath, tokens, when } from '../lib/format';
 import { SkillList, useSkills } from '../components/SkillList';
+import { EFFORT_LEVELS, effortOf } from '../lib/effort';
 
 /** Кольцо заполнения контекста: свёрнутая панель и заголовок карточки. */
 export function ContextRing({ pct, size = 22 }: { pct?: number; size?: number }) {
@@ -186,6 +187,7 @@ export function ChatSessionPane({ chat, model, busy }: { chat: ChatFile; model: 
             model || s.model || 'по умолчанию CLI'
           )}
         </Row>
+        {EFFORT_LEVELS[chat.agent].length > 0 && <Row label="Рассуждения">{effortOf(chat.agent, chat.effort) || 'как в CLI'}</Row>}
         <Row label="Режим">{chat.edits ? 'Правки — может менять файлы' : 'Вопросы — только чтение'}</Row>
         {s.version && <Row label="Версия CLI">{s.version}</Row>}
         <Row label="Сессия CLI">

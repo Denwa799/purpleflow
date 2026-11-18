@@ -100,8 +100,8 @@ export interface CoreApi {
   /** Чаты: разговор с агентом вне конвейера. Ответ приходит событиями chat.updated. */
   listChats(): Promise<ChatSummary[]>;
   getChat(id: string): Promise<{ chat: ChatFile; busy: boolean } | null>;
-  createChat(o: { projectPath?: string; agent?: AgentKind; model?: string; edits?: boolean }): Promise<ChatFile>;
-  updateChat(id: string, patch: Partial<Pick<ChatFile, 'title' | 'agent' | 'model' | 'edits'>>): Promise<ChatFile>;
+  createChat(o: { projectPath?: string; agent?: AgentKind; model?: string; effort?: string; edits?: boolean }): Promise<ChatFile>;
+  updateChat(id: string, patch: Partial<Pick<ChatFile, 'title' | 'agent' | 'model' | 'effort' | 'edits'>>): Promise<ChatFile>;
   deleteChat(id: string): Promise<void>;
   sendChat(id: string, text: string, files?: { name: string; data: Uint8Array }[]): Promise<void>;
   stopChat(id: string): Promise<void>;

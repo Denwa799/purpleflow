@@ -7,6 +7,8 @@ export interface AgentRunOptions {
   prompt: string;
   systemPrompt?: string;
   model?: string;
+  /** Уровень рассуждений; нет — как в настройках CLI. claude: --effort, codex: model_reasoning_effort. */
+  effort?: string;
   timeoutMs: number;
   /** Остановить агента, если он столько молчит; общий timeoutMs — жёсткий потолок. */
   idleTimeoutMs?: number;

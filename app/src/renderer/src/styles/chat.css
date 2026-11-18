@@ -701,6 +701,15 @@ input.chat-title:focus {
 .amp-agent {
   color: var(--text-2);
 }
+/* Уровень рассуждений — рядом с моделью; «как в CLI» приглушён: флаг не передаётся. */
+.chat-compose-bar .chat-effort {
+  height: 32px;
+  font-size: var(--fs-12);
+  font-family: var(--font-code);
+}
+.chat-compose-bar .chat-effort.is-default {
+  color: var(--text-3);
+}
 .amp-sep {
   color: var(--text-4);
 }
@@ -1072,6 +1081,13 @@ button.dd:hover:not(:disabled),
 }
 .role-model {
   width: 100%;
+}
+/* Уровень рассуждений роли — под моделью, по ширине карточки. */
+.role-effort {
+  width: 100%;
+  margin-top: 8px;
+  font-family: var(--font-code);
+  font-size: var(--fs-12);
 }
 .base-branch-select {
   max-width: 240px;

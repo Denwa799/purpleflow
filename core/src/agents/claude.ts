@@ -20,7 +20,7 @@ import { questionsOf, todosOf, toolName, toolView } from './tools.js';
  * Флаги сверены с claude 2.1.x, см. README.
  */
 export function claudeArgs(
-  o: Pick<AgentRunOptions, 'model' | 'systemPrompt' | 'addDirs' | 'tools' | 'sessionId' | 'resume' | 'userConfig' | 'partial'>,
+  o: Pick<AgentRunOptions, 'model' | 'effort' | 'systemPrompt' | 'addDirs' | 'tools' | 'sessionId' | 'resume' | 'userConfig' | 'partial'>,
 ): string[] {
   const args = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'bypassPermissions'];
   if (o.userConfig) {
@@ -36,6 +36,7 @@ export function claudeArgs(
   else if (o.sessionId) args.push('--session-id', o.sessionId);
   else args.push('--no-session-persistence');
   if (o.model) args.push('--model', o.model);
+  if (o.effort) args.push('--effort', o.effort);
   if (o.systemPrompt) args.push('--append-system-prompt', o.systemPrompt);
   for (const d of o.addDirs ?? []) args.push('--add-dir', d);
   if (o.tools) args.push('--tools', o.tools.join(','));

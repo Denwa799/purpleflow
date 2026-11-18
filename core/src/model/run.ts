@@ -1,6 +1,6 @@
 // Состояние прогона (run.json): стадии, попытки, проверки, ревью, вмешательства человека.
 
-import type { AgentKind, Models, Role } from './settings.js';
+import type { AgentKind, Efforts, Models, Role } from './settings.js';
 import type { ForgeKind, PrFollowupItem } from './pr.js';
 
 export type StageId =
@@ -288,6 +288,8 @@ export interface RunFile {
   /** Команда подготовки (установка зависимостей) уже выполнена в worktree. */
   prepared?: boolean;
   models: Models;
+  /** Уровни рассуждений по ролям на момент старта; нет — как в CLI. */
+  efforts?: Efforts;
   /** Агенты по ролям на момент старта. */
   agents: Record<Role, AgentKind> & { visual?: AgentKind };
   status: RunStatus;

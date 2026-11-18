@@ -11,7 +11,7 @@ import { killGroup } from '../proc.js';
 import { writeAtomic } from '../store.js';
 import { applyStep, partsText, settleParts, type ChatAnswer } from '../chatparts.js';
 import type { AgentKind, ChatFile, ChatMessage, ChatSkill, ChatSummary, DiffFile, NextPartDraft, PreviewState } from '../types.js';
-import { enabledAgent } from '../types.js';
+import { effortFor, enabledAgent } from '../types.js';
 import { PROXY_DEFAULT_MODEL } from '../agents/opencode.js';
 import { agentModel, service, serviceAgent } from './agents.js';
 import { findMentions, listSkills, mentionsBlock, walkFiles } from './mentions.js';
@@ -99,7 +99,7 @@ export function getChat(k: Kernel, id: string): { chat: ChatFile; busy: boolean 
 
 export async function createChat(
   k: Kernel,
-  o: { projectPath?: string; agent?: AgentKind; model?: string; edits?: boolean },
+  o: { projectPath?: string; agent?: AgentKind; model?: string; effort?: string; edits?: boolean },
 ): Promise<ChatFile> {
   const now = new Date().toISOString();
   const agent = o.agent ?? (await serviceAgent(k));
@@ -111,6 +111,7 @@ export async function createChat(
     projectPath,
     agent,
     model: o.model ?? '',
+    effort: effortFor(agent, o.effort),
     edits: o.edits ?? true,
     createdAt: now,
     updatedAt: now,
@@ -122,11 +123,18 @@ export async function createChat(
 }
 
 /** Название, агент, модель и правки. Смена агента или правок начинает новую сессию — история уйдёт пересказом. */
-export function updateChat(k: Kernel, id: string, patch: Partial<Pick<ChatFile, 'title' | 'agent' | 'model' | 'edits'>>): ChatFile {
+export function updateChat(
+  k: Kernel,
+  id: string,
+  patch: Partial<Pick<ChatFile, 'title' | 'agent' | 'model' | 'effort' | 'edits'>>,
+): ChatFile {
   const chat = must(k, id);
   if (patch.title !== undefined) chat.title = patch.title.trim().slice(0, 120) || chat.title;
   if (patch.agent && patch.agent !== chat.agent) chat.agent = patch.agent;
   if (patch.model !== undefined) chat.model = patch.model.trim();
+  // '' — снова «как в CLI»; уровень, которого новый агент не знает, сбрасывается.
+  if (patch.effort !== undefined) chat.effort = patch.effort || undefined;
+  chat.effort = effortFor(chat.agent, chat.effort);
   // Правила чата уходят в начале сессии: «только чтение» в ней осталось бы и после включения правок — и наоборот.
   if (patch.edits !== undefined && patch.edits !== chat.edits) chat.session = undefined;
   if (patch.edits !== undefined) chat.edits = patch.edits;
@@ -334,11 +342,14 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
     // Сжатие — встроенная команда CLI: только она, без истории и вложений.
     if (compact) prompt = '/compact';
     const model = (agent === chat.agent ? chat.model : '') || chatDefaultModel(k, agent) || undefined;
+    const effort = agent === chat.agent ? effortFor(agent, chat.effort) : undefined;
+    if (effort) answer.effort = effort;
     const common = {
       bin: tools[agent],
       cwd,
       env: k.opts.env,
       model,
+      effort,
       group: group(id),
       timeoutMs: 4 * 60 * 60_000,
       idleTimeoutMs: s.agentTimeoutMin * 60_000,
