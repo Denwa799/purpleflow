@@ -21,6 +21,8 @@ interface Props {
   readOnly?: boolean;
   /** «Что изменилось»: сводка для приёмки; null — ещё готовится. */
   summary?: string | null;
+  /** Как назвать блокирующие: в ревью кода это «Важные» — возвращать задачу некуда. */
+  blockingTitle?: string;
   /** Выбранные на приёмке замечания ревьюера — уйдут исполнителю через «Исправить выбранные». */
   picked?: ReviewItem[];
   onPicked?: (items: ReviewItem[]) => void;
@@ -48,6 +50,7 @@ export function DiffReview({
   onComments,
   readOnly,
   summary,
+  blockingTitle = 'Блокирующие',
   picked,
   onPicked,
   visualItems = [],
@@ -474,7 +477,7 @@ export function DiffReview({
           )}
           <PlanCoverageList plan={review?.plan} picked={!readOnly ? picked : undefined} onPicked={onPicked} />
           <NoteList
-            title="Блокирующие"
+            title={blockingTitle}
             kind="blocking"
             items={review?.blocking ?? []}
             picked={!readOnly ? picked : undefined}

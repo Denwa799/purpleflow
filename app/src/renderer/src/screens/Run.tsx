@@ -30,7 +30,7 @@ import { StageDrawer } from './run/StageDrawer';
 import { useRunGate } from './run/useRunGate';
 import { useStageDrawer } from './run/useStageDrawer';
 import { MergeCheckNote, useMergeCheck } from './run/MergeCheckNote';
-import { currentStage, unstableText, withPicked } from './run/util';
+import { currentStage, reviewFixText, unstableText, withPicked } from './run/util';
 
 type View = 'timeline' | 'log' | 'browser' | 'code' | 'files' | 'git' | 'pr';
 
@@ -38,7 +38,7 @@ type View = 'timeline' | 'log' | 'browser' | 'code' | 'files' | 'git' | 'pr';
 const GATE_ACTIONS = ['approve', 'reject', 'cancel', 'accept', 'fix', 'skip'];
 
 export function RunScreen({ runId }: { runId: string }) {
-  const { state, loadRun } = useStore();
+  const { state, loadRun, go } = useStore();
   const run = state.details[runId];
   const [view, setView] = useState<View>('timeline');
   const d = useStageDrawer(run, () => setView('code'));
@@ -99,7 +99,11 @@ export function RunScreen({ runId }: { runId: string }) {
   /** Место в строке вкладок для инструментов вкладки «Код»: «Код / Заметки» и «Обновить». */
   const [tabTools, setTabTools] = useState<HTMLDivElement | null>(null);
   // На приёмке: базовая ветка ушла вперёд или те же файлы правит другой прогон — видно до решения, а не при влитии.
-  const mergeCheck = useMergeCheck(run, run?.baseBranch?.replace(/^origin\//, ''), run?.next === 'gate2' && run.status === 'waiting');
+  const mergeCheck = useMergeCheck(
+    run,
+    run?.baseBranch?.replace(/^origin\//, ''),
+    run?.next === 'gate2' && run.status === 'waiting' && run.mode !== 'review',
+  );
 
   if (!run) {
     return (
@@ -153,6 +157,17 @@ export function RunScreen({ runId }: { runId: string }) {
     (lastVisual ? lastVisual.blocking.length + lastVisual.notes.length : 0) +
     lineComments.length;
 
+  const codeReview = run.mode === 'review' && gate === 'gate2';
+  /** Ревью кода: завершить разбор и отнести выбранное туда, где исправят, — в новую задачу или, для незакоммиченных правок, в чат. */
+  const fixReview = () =>
+    act('fix', async () => {
+      const text = reviewFixText(run.review?.label ?? 'код', comment, picked, lineComments);
+      await dispatch({ type: 'gate.approve', runId, comment: text });
+      setPicked([]);
+      if (run.review?.target.kind === 'uncommitted') go({ name: 'chat', project: run.projectPath, text });
+      else go({ name: 'new', draft: { projectPath: run.projectPath, task: text, attachments: [], baseBranch: run.baseBranch, rest: [] } });
+    });
+
   const gateBar =
     gate === 'gate0' ? (
       <ClarifyGateBar
@@ -176,13 +191,16 @@ export function RunScreen({ runId }: { runId: string }) {
           onAccept={gate === 'limit' ? () => act('accept', () => dispatch({ type: 'gate.accept', runId })) : undefined}
           acceptTo={gate === 'limit' ? acceptTarget(run) : undefined}
           stuck={gate === 'limit' ? run.stuck?.items : undefined}
+          codeReview={codeReview ? { fixTo: run.review?.target.kind === 'uncommitted' ? 'chat' : 'task' } : undefined}
           onFix={
-            gate === 'gate2'
-              ? () =>
-                  act('fix', () =>
-                    dispatch({ type: 'gate.fix', runId, comment: withPicked(comment, picked), lineComments }).then(() => setPicked([])),
-                  )
-              : undefined
+            codeReview
+              ? () => void fixReview()
+              : gate === 'gate2'
+                ? () =>
+                    act('fix', () =>
+                      dispatch({ type: 'gate.fix', runId, comment: withPicked(comment, picked), lineComments }).then(() => setPicked([])),
+                    )
+                : undefined
           }
           pickedCount={gate === 'gate2' ? picked.length : 0}
           onOpenAccept={() => openStage(gate === 'gate1' ? 'gate1' : 'gate2')}
@@ -286,8 +304,10 @@ export function RunScreen({ runId }: { runId: string }) {
                         comments: lineComments,
                         onComments: setLineComments,
                         notes: accNotes,
-                        summary:
-                          run.changeSummary?.attempt === run.attempts.filter((a) => a.stage === 'gate2').length
+                        // Ревью кода сводку изменений не готовит — не показываем вечное «готовится».
+                        summary: codeReview
+                          ? undefined
+                          : run.changeSummary?.attempt === run.attempts.filter((a) => a.stage === 'gate2').length
                             ? run.changeSummary.text
                             : run.status === 'waiting'
                               ? null

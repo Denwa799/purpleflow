@@ -46,6 +46,14 @@ export function freePort(): Promise<number> {
   });
 }
 
+/**
+ * Освободить тело ответа, которое не читаем. Непрочитанное тело держит поток на паузе, и когда сервер
+ * закрывает соединение, undici падает на assert(!this.paused) необработанным исключением в процессе ядра.
+ */
+export async function discardBody(res: Response): Promise<void> {
+  await res.body?.cancel().catch(() => {});
+}
+
 /** Ждём, пока адрес начнёт отвечать (любой HTTP-ответ), или пока процесс не умрёт. */
 export async function waitForUrl(url: string, timeoutMs: number, abort: () => boolean): Promise<boolean> {
   const t0 = Date.now();
@@ -54,8 +62,9 @@ export async function waitForUrl(url: string, timeoutMs: number, abort: () => bo
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 3000);
-      await fetch(url, { signal: ctrl.signal, redirect: 'manual' });
+      const res = await fetch(url, { signal: ctrl.signal, redirect: 'manual' });
       clearTimeout(timer);
+      await discardBody(res);
       return true;
     } catch {
       /* ещё не поднялось */

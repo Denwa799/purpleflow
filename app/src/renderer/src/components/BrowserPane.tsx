@@ -179,10 +179,34 @@ export function BrowserPane({
   const [nav, setNav] = useState({ back: false, forward: false, loading: false });
   const [mobile, setMobile] = useState(false);
   const ready = state.status === 'ready' && state.url;
+  /**
+   * Webview готов к вызовам методов (был dom-ready). До этого loadURL, getWebContentsId, reload и прочие
+   * бросают синхронно — «The WebView must be attached to the DOM and the dom-ready event emitted…».
+   */
+  const domReady = useRef(false);
+  const mobileRef = useRef(mobile);
+  mobileRef.current = mobile;
+  /** Вызвать метод webview, только если он уже готов; иначе — ничего (или запасной путь). */
+  const call = (fn: (w: WebviewTag) => void, fallback?: (w: WebviewTag) => void) => {
+    const w = view.current;
+    if (!w) return;
+    if (!domReady.current) return fallback?.(w);
+    try {
+      fn(w);
+    } catch {
+      fallback?.(w);
+    }
+  };
 
   useEffect(() => {
     const w = view.current;
     if (!w || !ready) return;
+    domReady.current = false;
+    const onReady = () => {
+      domReady.current = true;
+      // «Телефон» выбрали до загрузки — применяем, как только webview готов.
+      if (mobileRef.current) void bridge.previewEmulate(w.getWebContentsId(), true);
+    };
     const sync = () => {
       try {
         setAddress(w.getURL());
@@ -204,9 +228,11 @@ export function BrowserPane({
     w.addEventListener('did-navigate-in-page', sync);
     w.addEventListener('did-stop-loading', sync);
     w.addEventListener('did-start-loading', loading);
+    w.addEventListener('dom-ready', onReady);
     w.addEventListener('dom-ready', sync);
     w.addEventListener('did-fail-load', failed);
     return () => {
+      w.removeEventListener('dom-ready', onReady);
       w.removeEventListener('did-navigate', sync);
       w.removeEventListener('did-navigate-in-page', sync);
       w.removeEventListener('did-stop-loading', sync);
@@ -222,15 +248,22 @@ export function BrowserPane({
     let target = address.trim();
     if (target.startsWith('/')) target = new URL(target, state.url).toString();
     else if (!/^https?:\/\//.test(target)) target = `http://${target}`;
-    void w.loadURL(target).catch(() => {});
+    // До dom-ready loadURL бросает — тогда просто меняем адрес webview.
+    call(
+      (v) => void v.loadURL(target).catch(() => {}),
+      (v) => {
+        v.src = target;
+      },
+    );
   };
 
   // Выбор элемента: скрипт в странице подсвечивает элемент под курсором и отдаёт описание по клику.
   const [picking, setPicking] = useState(false);
   const togglePick = async () => {
     const w = view.current;
-    if (!w || !onPick) return;
-    if (picking) return void w.executeJavaScript(CANCEL_PICK_SCRIPT).catch(() => {});
+    // До dom-ready executeJavaScript бросает синхронно — выбирать ещё не из чего.
+    if (!w || !onPick || !domReady.current) return;
+    if (picking) return call((v) => void v.executeJavaScript(CANCEL_PICK_SCRIPT).catch(() => {}));
     setPicking(true);
     setLoadError(null);
     try {
@@ -250,14 +283,14 @@ export function BrowserPane({
     w?.addEventListener('did-start-loading', reset);
     return () => {
       w?.removeEventListener('did-start-loading', reset);
-      void w?.executeJavaScript(CANCEL_PICK_SCRIPT).catch(() => {});
+      call((v) => void v.executeJavaScript(CANCEL_PICK_SCRIPT).catch(() => {}));
     };
   }, [picking]);
 
   const toggleMobile = (m: boolean) => {
     setMobile(m);
-    const w = view.current;
-    if (w) void bridge.previewEmulate(w.getWebContentsId(), m);
+    // Не готов — применится на dom-ready.
+    call((w) => void bridge.previewEmulate(w.getWebContentsId(), m));
   };
 
   if (!ready) {
@@ -338,19 +371,19 @@ export function BrowserPane({
   return (
     <div className="browser">
       <div className="browser-bar">
-        <Button tone="quiet" icon={<ArrowLeft size={16} />} title="Назад" disabled={!nav.back} onClick={() => view.current?.goBack()} />
+        <Button tone="quiet" icon={<ArrowLeft size={16} />} title="Назад" disabled={!nav.back} onClick={() => call((w) => w.goBack())} />
         <Button
           tone="quiet"
           icon={<ArrowRight size={16} />}
           title="Вперёд"
           disabled={!nav.forward}
-          onClick={() => view.current?.goForward()}
+          onClick={() => call((w) => w.goForward())}
         />
         <Button
           tone="quiet"
           icon={<RotateCw size={15} className={nav.loading ? 'spin' : ''} />}
           title="Обновить"
-          onClick={() => view.current?.reload()}
+          onClick={() => call((w) => w.reload())}
         />
         <form
           className="browser-address"

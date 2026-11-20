@@ -94,6 +94,42 @@ export class Git {
     return this.head(dir);
   }
 
+  /**
+   * Снимок рабочей копии отдельным коммитом поверх HEAD: правки, удаления и новые файлы (кроме игнорируемых).
+   * Через временный индекс — индекс, файлы и ветки проекта не меняются; коммит ни на какую ветку не ставится.
+   */
+  async snapshotWorkingTree(repo: string, message: string): Promise<string> {
+    const index = path.join(os.tmpdir(), `purpleflow-index-${process.pid}-${Date.now()}`);
+    const env = {
+      ...this.env,
+      GIT_INDEX_FILE: index,
+      GIT_AUTHOR_NAME: 'PurpleFlow',
+      GIT_AUTHOR_EMAIL: 'purpleflow@localhost',
+      GIT_COMMITTER_NAME: 'PurpleFlow',
+      GIT_COMMITTER_EMAIL: 'purpleflow@localhost',
+    };
+    try {
+      const head = await this.head(repo);
+      await exec(this.bin, ['read-tree', head], repo, env, 60_000);
+      await exec(this.bin, ['add', '-A'], repo, env, 120_000);
+      const tree = (await exec(this.bin, ['write-tree'], repo, env, 60_000)).trim();
+      return (await exec(this.bin, ['commit-tree', tree, '-p', head, '-m', message], repo, env, 60_000)).trim();
+    } finally {
+      fs.rmSync(index, { force: true });
+    }
+  }
+
+  /** Общий предок двух коммитов — от него считается дифф ветки. */
+  async mergeBase(repo: string, a: string, b: string): Promise<string> {
+    return (await this.git(repo, ['merge-base', a, b])).trim();
+  }
+
+  /** Первый родитель коммита; у самого первого коммита его нет — null. */
+  async parentOf(repo: string, hash: string): Promise<string | null> {
+    const out = await run(this.bin, ['rev-parse', '--verify', '--quiet', `${hash}^1`], { cwd: repo, env: this.env, timeoutMs: 10_000 });
+    return out.code === 0 ? out.stdout.trim() : null;
+  }
+
   async head(dir: string): Promise<string> {
     return (await this.git(dir, ['rev-parse', 'HEAD'])).trim();
   }

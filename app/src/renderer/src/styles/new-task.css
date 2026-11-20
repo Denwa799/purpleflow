@@ -221,3 +221,40 @@
 .route-note svg {
   margin-top: 3px;
 }
+
+/* Новая задача: что проверить в ревью кода. */
+.review-target {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+  padding: var(--s-4);
+  border-radius: var(--r-card);
+}
+.review-target-hint {
+  margin: 0;
+  font-size: var(--fs-13);
+}
+.review-branches {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.review-files {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font: 13px/1.5 var(--font-mono, ui-monospace, monospace);
+  resize: vertical;
+}
+.review-target-label {
+  font-size: var(--fs-12);
+  font-weight: 500;
+  color: var(--text-3);
+}

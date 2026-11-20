@@ -1,4 +1,4 @@
-import { Bug, Layers, Rocket, Shuffle, Zap } from 'lucide-react';
+import { Bug, Layers, Rocket, ScanSearch, Shuffle, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { Mode } from '../lib/stages';
 
@@ -8,4 +8,5 @@ export const MODE_ICON: Record<Mode, ReactNode> = {
   task: <Rocket size={15} />,
   epic: <Layers size={15} />,
   refactor: <Shuffle size={15} />,
+  review: <ScanSearch size={15} />,
 };

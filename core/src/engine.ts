@@ -25,10 +25,11 @@ import { needsReview, stageBaseline, stageTests, startNextPhase } from './stages
 import { stageFinish } from './stages/finish.js';
 import { stageImplement } from './stages/implement.js';
 import { stageClarify, stagePlan } from './stages/plan.js';
+import { stageCodeReview } from './stages/codereview.js';
 import { stageReview } from './stages/review.js';
 import { stageVisual } from './stages/visual.js';
 import { traced } from './trace.js';
-import type { AgentKind, Efforts, GateId, Role, RunFile, StartRunInput } from './types.js';
+import type { AgentKind, Efforts, GateId, ReviewTarget, Role, RunFile, StartRunInput } from './types.js';
 import { DEFAULT_AGENTS, effortFor, enabledAgent } from './types.js';
 
 /** После перезапуска приложения: прогоны, оборванные посреди стадии, помечаются остановленными. */
@@ -101,7 +102,9 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
   if (visualAgent !== (s.agents?.visual ?? 'claude')) models.visual = '';
   const tools = await k.tools(['git', 'openspec', ...new Set(Object.values(roles))]);
   const git = new Git(tools.git, k.opts.env);
-  if (!input.task.trim()) throw new Error('Опишите задачу');
+  const mode = input.mode ?? 'task';
+  // В ревью кода текст задачи — только на чём сосредоточиться, его можно не писать.
+  if (!input.task.trim() && mode !== 'review') throw new Error('Опишите задачу');
   if (!(await git.isRepo(input.projectPath))) throw new Error('Выбранная папка не является git-репозиторием');
   const repo = await git.topLevel(input.projectPath);
   // Подпапку чужого репозитория не подменяем молча его корнем: задача ушла бы в другой проект.
@@ -120,11 +123,14 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
       })
     : head;
 
-  const changeId = makeChangeId(input.task);
+  const review = mode === 'review' ? await resolveReview(git, repo, input.reviewTarget) : undefined;
+  const reviewBranch = review?.target.kind === 'branch' ? review.target.branch : undefined;
+  const changeId = makeChangeId(review ? `review ${review.label}` : input.task);
   const branch = runBranch(changeId);
   // Несколько репозиториев: у каждого своя рабочая копия на той же ветке, все — в общей папке прогона.
-  const multi = multiRepoOf(repo, (getProjectConfig(k, repo) ?? getProjectConfig(k, input.projectPath))?.multiRepo);
-  const workspace = multi ? 'worktree' : (input.workspace ?? 'worktree');
+  // Ревью кода смотрит один репозиторий и всегда в отдельной копии: проект не переключается ни на какую ветку.
+  const multi = review ? null : multiRepoOf(repo, (getProjectConfig(k, repo) ?? getProjectConfig(k, input.projectPath))?.multiRepo);
+  const workspace = multi || review ? 'worktree' : (input.workspace ?? 'worktree');
   if (workspace === 'branch') {
     // В режиме «ветка» прогон занимает рабочую копию проекта целиком — второй в том же проекте ей бы помешал.
     const busy = runsWithFiles(k).find(
@@ -160,9 +166,8 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
         }),
       )
     : undefined;
-  const mode = input.mode ?? 'task';
   // Агента визуальной проверки на машине может не быть — тогда проверка выключается, а не роняет прогон.
-  const visual = Boolean(input.visual && input.runCommand?.trim() && input.appUrl?.trim() && (await k.hasTool(visualAgent)));
+  const visual = Boolean(!review && input.visual && input.runCommand?.trim() && input.appUrl?.trim() && (await k.hasTool(visualAgent)));
   const queued = activeCount(k) >= maxParallel(k);
 
   const now = new Date().toISOString();
@@ -175,15 +180,16 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
     version: RUN_VERSION,
     id,
     changeId,
-    title: makeTitle(input.task),
+    title: makeTitle(review ? `Ревью: ${review.label}` : input.task),
     task: input.task.trim(),
+    review: review ? { target: review.target, tip: review.tip, label: review.label } : undefined,
     projectPath: repo,
     worktreePath,
     root: multi ? { path: multi.root, dir: rootDir!, main: multi.main } : undefined,
     repos,
     branch,
-    baseCommit: base,
-    baseBranch,
+    baseCommit: review?.base ?? base,
+    baseBranch: reviewBranch ?? baseBranch,
     testCommand: input.testCommand.trim(),
     setupCommand: input.setupCommand?.trim() || undefined,
     lintCommand: input.lintCommand?.trim() || undefined,
@@ -191,14 +197,14 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
     workspace,
     workspacePending: true,
     visual: visual || undefined,
-    autopilot: input.autopilot || undefined,
+    autopilot: (!review && input.autopilot) || undefined,
     // Команда запуска нужна и визуальной стадии, и ручной проверке во вкладке «Браузер».
     runCommand: input.runCommand?.trim() || undefined,
     appUrl: input.appUrl?.trim() || undefined,
     visualNotes: input.visualNotes?.trim() || undefined,
     envFiles: input.envFiles?.map((f) => f.trim()).filter(Boolean),
     // В режиме «ветка» зависимости — уже установленные пользователем; подготовку не запускаем.
-    prepared: workspace === 'branch' || !input.setupCommand?.trim(),
+    prepared: Boolean(review) || workspace === 'branch' || !input.setupCommand?.trim(),
     models,
     ...(Object.keys(efforts).length ? { efforts } : {}),
     agents: { ...roles, ...(s.agents?.visual || visualAgent !== 'claude' ? { visual: visualAgent } : {}) },
@@ -246,6 +252,48 @@ export async function start(k: Kernel, input: StartRunInput): Promise<string> {
   }
   void drive(k, run);
   return run.id;
+}
+
+/**
+ * Что смотрит ревью кода: коммит, на котором будет рабочая копия (tip), и база диффа.
+ * Незакоммиченные изменения — снимком поверх HEAD, файлы — как они есть в HEAD (дифф пустой, ревьюер читает файлы).
+ */
+export async function resolveReview(
+  git: Git,
+  repo: string,
+  target: StartRunInput['reviewTarget'],
+): Promise<{ target: ReviewTarget; tip: string; base: string; label: string }> {
+  if (!target) throw new Error('Выберите, что проверить');
+  const head = await git.head(repo);
+  switch (target.kind) {
+    case 'uncommitted': {
+      if (!(await git.dirtyFiles(repo)).length) throw new Error('Незакоммиченных изменений нет — проверять нечего');
+      const tip = await git.snapshotWorkingTree(repo, 'PurpleFlow: незакоммиченные изменения для ревью');
+      return { target, tip, base: head, label: 'незакоммиченные изменения' };
+    }
+    case 'commit': {
+      const tip = await git.revParse(repo, target.hash).catch(() => '');
+      if (!tip) throw new Error(`Коммит ${target.hash} не найден`);
+      const parent = await git.parentOf(repo, tip);
+      if (!parent) throw new Error('Это первый коммит репозитория — выберите «Файлы», чтобы проверить код целиком');
+      return { target: { kind: 'commit', hash: tip }, tip, base: parent, label: `коммит ${tip.slice(0, 7)}` };
+    }
+    case 'branch': {
+      const tip = await git.revParse(repo, target.branch).catch(() => '');
+      if (!tip) throw new Error(`Ветка ${target.branch} не найдена`);
+      const against = await git.revParse(repo, target.against).catch(() => '');
+      if (!against) throw new Error(`Ветка ${target.against} не найдена`);
+      const base = await git.mergeBase(repo, against, tip);
+      if (base === tip) throw new Error(`В ветке ${target.branch} нет своих коммитов относительно ${target.against}`);
+      return { target, tip, base, label: `${target.branch} против ${target.against}` };
+    }
+    case 'files': {
+      const files = [...new Set(target.files.map((f) => f.trim().replace(/^\.?\/+/, '')).filter(Boolean))];
+      if (!files.length) throw new Error('Выберите файлы для ревью');
+      const label = files.length === 1 ? files[0] : `${files[0]} и ещё ${files.length - 1}`;
+      return { target: { kind: 'files', files }, tip: head, base: head, label };
+    }
+  }
 }
 
 export function maxParallel(k: Kernel): number {
@@ -479,7 +527,7 @@ export async function drive(k: Kernel, run: RunFile) {
           await stageTests(k, run);
           break;
         case 'review':
-          await stageReview(k, run);
+          await (run.mode === 'review' ? stageCodeReview(k, run) : stageReview(k, run));
           break;
         case 'finish':
           await stageFinish(k, run);

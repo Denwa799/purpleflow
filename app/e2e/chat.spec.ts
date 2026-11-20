@@ -259,11 +259,10 @@ test('Git (просмотр): ветки, история с графом и ди
     const branches = page.getByRole('list', { name: 'Ветки' });
     await expect(branches.getByRole('listitem').filter({ hasText: 'later' })).toContainText('↑1 ↓0');
     await expect(branches.getByRole('listitem').filter({ hasText: 'feature' })).toContainText('↑1 ↓1');
-    await branches
-      .getByRole('listitem')
-      .filter({ hasText: 'feature' })
-      .getByRole('button', { name: /feature/ })
-      .click();
+    // Ревью — у веток со своими коммитами; у основной его нет.
+    await expect(branches.getByRole('button', { name: 'Ревью ветки feature' })).toBeVisible();
+    await expect(branches.getByRole('button', { name: 'Ревью ветки main' })).toHaveCount(0);
+    await branches.getByRole('listitem').filter({ hasText: 'feature' }).getByRole('button', { name: 'feature', exact: true }).click();
     await expect(log.locator('.git-row.is-marked')).toContainText('Фича');
     if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-git.png') });
 
@@ -284,7 +283,19 @@ test('Git (просмотр): ветки, история с графом и ди
     await gitRail.hover();
     await expect(page.getByRole('tooltip', { name: 'Git', exact: true })).toBeVisible();
     await gitRail.click();
-    await expect(page.locator('.chat-side').getByRole('list', { name: 'История коммитов' }).getByRole('listitem')).toHaveCount(4);
+    const sideLog = page.locator('.chat-side').getByRole('list', { name: 'История коммитов' });
+    await expect(sideLog.getByRole('listitem')).toHaveCount(4);
+
+    // «Ревью» у коммита — новая задача сразу в режиме ревью кода с этим коммитом.
+    await sideLog.getByRole('listitem').filter({ hasText: 'Правка в main' }).click();
+    await page.getByRole('button', { name: 'Ревью', exact: true }).click();
+    await expect(page.getByRole('radio', { name: 'Ревью кода', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('radiogroup', { name: 'Что проверить' }).getByRole('radio', { name: 'Коммит' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await expect(page.getByRole('button', { name: 'Коммит' }).last()).toContainText('Правка в main');
+    await expect(page.getByRole('button', { name: 'Запустить прогон' })).toBeEnabled();
     expect(l.errors).toEqual([]);
   } finally {
     await quit(l);

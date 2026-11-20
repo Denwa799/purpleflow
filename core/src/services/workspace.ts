@@ -32,13 +32,14 @@ export async function prepareWorkspace(k: Kernel, run: RunFile) {
     run.originalBranch = (await git.currentBranch(run.projectPath)) ?? undefined;
     await git.checkoutNewBranch(run.projectPath, run.branch, run.baseCommit);
   } else {
-    await git.addWorktree(run.projectPath, run.worktreePath, run.branch, run.baseCommit);
+    // Ревью кода: рабочая копия — на проверяемом коде, дифф считается от базы (baseCommit).
+    await git.addWorktree(run.projectPath, run.worktreePath, run.branch, run.review?.tip ?? run.baseCommit);
     await addRepoWorktrees(git, run).catch(async (e) => {
       await undoWorkspace(git, run).catch(traced('prepareWorkspace: откат'));
       throw e;
     });
   }
-  if (run.mode !== 'quick') {
+  if (run.mode !== 'quick' && run.mode !== 'review') {
     await new OpenSpec(tools.openspec, k.opts.env).ensureInit(run.worktreePath, 'init').catch(async (e) => {
       await undoWorkspace(git, run).catch(traced('prepareWorkspace: откат'));
       throw e;
@@ -48,9 +49,11 @@ export async function prepareWorkspace(k: Kernel, run: RunFile) {
   run.workspacePending = undefined;
   k.save(run);
   copyEnvFiles(k, run);
-  await cloneDeps(k, run).catch((e) =>
-    k.warn(run, `Не удалось скопировать зависимости — команда подготовки поставит их заново: ${(e as Error).message}`),
-  );
+  // Ревью кода ничего не запускает — зависимости ему не нужны.
+  if (run.mode !== 'review')
+    await cloneDeps(k, run).catch((e) =>
+      k.warn(run, `Не удалось скопировать зависимости — команда подготовки поставит их заново: ${(e as Error).message}`),
+    );
   k.save(run);
   k.log(
     run,

@@ -62,6 +62,15 @@ if (prompt.trim() === '/compact') {
 if (/Ты — менеджер прогона/.test(prompt)) reply('{"reply": "Всё идёт по плану."}');
 if (/Перед планом проверь/.test(prompt)) reply('{"questions": []}');
 if (/второй, независимый ревьюер/.test(prompt)) reply('{"items": []}');
+// Ревью кода: одно важное замечание и одна заметка — на разбор человеку.
+if (/ревьюер кода в PurpleFlow/.test(prompt))
+  reply(
+    JSON.stringify({
+      blocking: [{ file: 'src/math.js', line: 1, message: 'sub складывает вместо вычитания', origin: null }],
+      notes: [{ file: null, line: null, message: 'Не проверено: тесты не запускались', origin: null }],
+      plan: [],
+    }),
+  );
 // РЕВЬЮ_ПО_КРУГУ (маркер попадает в proposal, а он — в промпт ревьюера): ревьюер стоит на своём замечании,
 // пока человек не уточнит его.
 if (/ревьюер в конвейере PurpleFlow/.test(prompt) && /РЕВЬЮ_ПО_КРУГУ/.test(prompt) && !/Уточнения человека/.test(prompt)) {

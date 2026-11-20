@@ -138,12 +138,18 @@ function fakeClaude(script: {
   let rev = 0;
   const prompts: string[] = [];
   const plans: string[] = [];
+  const codeReviews: string[] = [];
   const fn = async (o: { prompt: string; cwd: string; systemPrompt?: string }): Promise<AgentResult> => {
     const p = o.prompt;
     const sys = o.systemPrompt ?? '';
     if (/Ты — менеджер прогона/.test(p)) return ok(script.manager?.(p) ?? '{"reply": "Всё идёт по плану.", "action": null}');
     if (/Перед планом проверь/.test(p)) return ok('{"questions": []}');
     if (/второй, независимый ревьюер/.test(p)) return ok('{"items":[{"index":1,"verdict":"confirmed","reason":"сценарий есть"}]}');
+    if (/ревьюер кода в PurpleFlow/.test(p)) {
+      codeReviews.push(p);
+      rev++;
+      return ok(JSON.stringify(script.review(rev)));
+    }
     if (/ревьюер в конвейере PurpleFlow/.test(p)) {
       rev++;
       return ok(JSON.stringify(script.review(rev)));
@@ -174,7 +180,7 @@ function fakeClaude(script: {
     // Служебное: профиль, сводка, уроки, карта плана.
     return ok('{}');
   };
-  return { fn, prompts: () => prompts, plans: () => plans, reviews: () => rev };
+  return { fn, prompts: () => prompts, plans: () => plans, reviews: () => rev, codeReviews: () => codeReviews };
 }
 
 async function untilGate(core: Orchestrator, runId: string, gate: string, timeoutMs = 60_000): Promise<RunFile> {
@@ -1201,4 +1207,70 @@ test('initRepo: проект с нуля — main, .gitignore без секре�
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('ревью кода: незакоммиченные изменения и ветка — только чтение, разбор, завершение без коммита', { timeout: 120_000 }, async () => {
+  const repo = makeRepo();
+  const g = (...a: string[]) => execFileSync('git', a, { cwd: repo }).toString().trim();
+  const fake = fakeClaude({
+    implement: () => assert.fail('в ревью кода исполнителя нет'),
+    review: () => ({
+      blocking: [{ file: 'src/math.js', line: 2, message: 'sub складывает', origin: null }],
+      notes: [{ file: null, line: null, message: 'Не проверено: тесты не запускались', origin: null }],
+      plan: [],
+    }),
+  });
+  const core = makeCore(fake);
+  const start = (input: object) => core.dispatch({ type: 'run.start', input: { projectPath: repo, testCommand: '', ...input } as never });
+
+  // Чистая копия — проверять нечего.
+  await assert.rejects(start({ task: '', mode: 'review', reviewTarget: { kind: 'uncommitted' } }), /Незакоммиченных изменений нет/);
+
+  fs.writeFileSync(path.join(repo, 'src/math.js'), 'export const add = (a, b) => a + b;\nexport const sub = (a, b) => a + b;\n');
+  fs.writeFileSync(path.join(repo, 'src/new.js'), 'export const x = 1;\n');
+  const status = g('status', '--porcelain');
+  const head = g('rev-parse', 'HEAD');
+  const { runId } = await start({ task: 'Посмотри арифметику', mode: 'review', reviewTarget: { kind: 'uncommitted' } });
+  const r = await untilGate(core, runId, 'gate2');
+  assert.deepEqual(
+    r.attempts.map((a) => `${a.stage}:${a.status}`),
+    ['review:done', 'gate2:running'],
+  );
+  assert.equal(r.title, 'Ревью: незакоммиченные изменения');
+  assert.equal(r.baseCommit, head);
+  assert.equal(r.reviews[0].blocking.length, 1);
+  assert.equal(r.reviews[0].notes.length, 1);
+  const prompt = fake.codeReviews()[0];
+  assert.match(prompt, /sub = \(a, b\) => a \+ b/);
+  assert.match(prompt, /src\/new\.js/);
+  assert.match(prompt, /Посмотри арифметику/);
+  // Проект не тронут: те же файлы, пустой индекс, та же ветка и HEAD.
+  assert.equal(g('status', '--porcelain'), status);
+  assert.equal(g('diff', '--cached', '--name-only'), '');
+  assert.equal(g('rev-parse', 'HEAD'), head);
+  assert.equal(g('rev-parse', '--abbrev-ref', 'HEAD'), 'main');
+  // Ревью ничего не правит: вернуть на доработку нельзя, только завершить.
+  await assert.rejects(core.dispatch({ type: 'gate.reject', runId, comment: 'исправь' }), /правок нет/);
+  await core.dispatch({ type: 'gate.approve', runId });
+  const done = (await core.getRun(runId))!;
+  assert.equal(done.status, 'finished');
+  assert.equal(g('rev-parse', 'HEAD'), head);
+
+  // Ветка против main: база — общий предок, в промпте — только коммиты ветки.
+  g('stash', '-u');
+  g('checkout', '-q', '-b', 'feature');
+  fs.writeFileSync(path.join(repo, 'src/mul.js'), 'export const mul = (a, b) => a * b;\n');
+  g('add', '-A');
+  g('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'mul');
+  g('checkout', '-q', 'main');
+  const b = await start({ task: '', mode: 'review', reviewTarget: { kind: 'branch', branch: 'feature', against: 'main' } });
+  const rb = await untilGate(core, b.runId, 'gate2');
+  assert.equal(rb.baseCommit, head);
+  assert.equal(rb.baseBranch, 'feature');
+  assert.match(fake.codeReviews()[1], /src\/mul\.js/);
+  assert.doesNotMatch(fake.codeReviews()[1], /src\/new\.js/);
+  await assert.rejects(
+    start({ task: '', mode: 'review', reviewTarget: { kind: 'branch', branch: 'main', against: 'feature' } }),
+    /нет своих коммитов/,
+  );
 });

@@ -13,7 +13,7 @@ export interface StageDef {
   hint: string;
 }
 
-export type Mode = 'quick' | 'bug' | 'task' | 'epic' | 'refactor';
+export type Mode = 'quick' | 'bug' | 'task' | 'epic' | 'refactor' | 'review';
 
 export interface ModeDef {
   id: Mode;
@@ -27,6 +27,11 @@ export const MODES: ModeDef[] = [
   { id: 'task', title: 'Задача', hint: 'Обычная фича: план OpenSpec, реализация, проверки, ревью' },
   { id: 'epic', title: 'Большая задача', hint: 'Дизайн с вариантами, реализация по этапам с проверками после каждого' },
   { id: 'refactor', title: 'Рефакторинг', hint: 'Без изменения поведения: проверки зелёные до и после, тесты не трогаем' },
+  {
+    id: 'review',
+    title: 'Ревью кода',
+    hint: 'Только анализ: замечания с файлом и строкой, без правок и коммита. Исправления — отдельной задачей или в чате',
+  },
 ];
 
 const BASE: Record<StageId, StageDef> = {
@@ -76,6 +81,10 @@ const OVERRIDE: Partial<Record<Mode, Partial<Record<StageId, Partial<StageDef>>>
     plan: { title: 'Дизайн и план', hint: 'design.md с вариантами, tasks.md по этапам' },
     gate1: { title: 'Утверждение дизайна', hint: 'Подход, этапы и риски' },
     implement: { title: 'Реализация по этапам', hint: 'Этап за этапом, проверки после каждого' },
+  },
+  review: {
+    review: { hint: 'Читает код только на чтение и пишет замечания; важные перепроверяет второй ревьюер' },
+    gate2: { title: 'Разбор', hint: 'Отметьте замечания, которые нужно исправить, — или завершите' },
   },
   refactor: {
     plan: { hint: 'Структурные изменения без дельт спецификаций' },

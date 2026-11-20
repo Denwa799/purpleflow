@@ -8,13 +8,14 @@ import { MODES, stageTitle } from '../../lib/stages';
 import { useStore, type ProjectTab } from '../../lib/store';
 import { CmdChips, InitRepoButton, type LoadedProject, plural } from './common';
 import { SkillList, useSkills } from '../../components/SkillList';
-import { bridge } from '../../lib/api';
+import { bridge, cleanErr } from '../../lib/api';
 
 export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: ProjectTab) => void; onReload: () => void }) {
   const { state, go } = useStore();
   const [o, setO] = useState<ProjectOverview | null>(null);
   const [k, setK] = useState<ProjectKnowledge | null>(null);
   const [forgetting, setForgetting] = useState(false);
+  const [forgetError, setForgetError] = useState<string | null>(null);
   const repo = p.info.path;
   useEffect(() => {
     if (!p.info.isRepo) return;
@@ -195,11 +196,21 @@ export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: 
         <div className="overview-forget">
           {forgetting ? (
             <>
-              <span className="muted">Команды и знания проекта удалятся, прогоны останутся.</span>
+              <span className={forgetError ? 'actionbar-error' : 'muted'}>
+                {forgetError ?? 'Команды и знания проекта удалятся, прогоны останутся.'}
+              </span>
               <Button tone="quiet" onClick={() => setForgetting(false)}>
                 Отмена
               </Button>
-              <Button tone="danger" onClick={() => void bridge.core.forgetProject(repo).then(() => go({ name: 'projects' }))}>
+              <Button
+                tone="danger"
+                onClick={() =>
+                  void bridge.core
+                    .forgetProject(repo)
+                    .then(() => go({ name: 'projects' }))
+                    .catch((e) => setForgetError(cleanErr(e)))
+                }
+              >
                 Удалить настройки
               </Button>
             </>

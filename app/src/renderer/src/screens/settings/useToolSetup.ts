@@ -20,7 +20,11 @@ export function useToolSetup(draft: SettingsDraft) {
   const [node, setNode] = useState<NodeInfo | null>(null);
 
   useEffect(() => {
-    void bridge.core.detectNode().then(setNode);
+    // Не нашли — шаг установки Node останется доступным; ошибка не должна уходить необработанной.
+    void bridge.core
+      .detectNode()
+      .then(setNode)
+      .catch(() => {});
   }, []);
 
   const tools = state.tools;

@@ -82,13 +82,18 @@ export function App() {
         <div className="main-drag drag" aria-hidden />
         <div className="screen-enter" key={viewKey}>
           {v.name === 'new' && (
-            <NewTaskScreen key={v.draft ? `draft-${v.draft.task.length}` : 'new'} initialProject={v.project} draft={v.draft} />
+            <NewTaskScreen
+              key={v.draft ? `draft-${v.draft.task.length}` : v.review ? `review-${JSON.stringify(v.review)}` : 'new'}
+              initialProject={v.project ?? v.draft?.projectPath}
+              draft={v.draft}
+              review={v.review}
+            />
           )}
           {v.name === 'projects' && <ProjectsScreen />}
           {v.name === 'project' && <ProjectScreen path={v.path} initialTab={v.tab} />}
           {v.name === 'run' && <RunScreen runId={v.runId} />}
           {v.name === 'settings' && <SettingsScreen />}
-          {v.name === 'chat' && <ChatScreen chatId={v.chatId} initialProject={v.project} />}
+          {v.name === 'chat' && <ChatScreen chatId={v.chatId} initialProject={v.project} initialText={v.text} />}
         </div>
       </main>
       <WhatsNewHost />

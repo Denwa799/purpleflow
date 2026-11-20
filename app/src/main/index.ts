@@ -28,6 +28,7 @@ import { proxyModels } from './models';
 import { isLocalUrl, isSameDocument, isWebUrl } from '../shared/urls';
 import type { UpdateState } from '../shared/update';
 import { errorReportingActive, initErrorReporting } from './error-reporting';
+import { ignoreClosedOutput } from './stdio';
 import {
   flushUsageEvents,
   recordRunStart,
@@ -50,6 +51,7 @@ else {
 }
 
 // После выбора профиля: настройка отчётов лежит в нём.
+ignoreClosedOutput();
 initErrorReporting();
 
 // Один экземпляр на профиль: второй при старте принял бы живые процессы прогонов первого за брошенные и убил их.

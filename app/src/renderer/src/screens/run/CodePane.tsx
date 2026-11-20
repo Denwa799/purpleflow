@@ -164,6 +164,7 @@ export function CodePane({
             files={diff}
             viewedKey={run.id}
             review={lastReview}
+            blockingTitle={run.mode === 'review' ? 'Важные' : undefined}
             groups={run.taskMap?.groups}
             visualItems={lastVisual ? [...lastVisual.blocking, ...lastVisual.notes] : []}
             visualPassed={lastVisual?.passed}

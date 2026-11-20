@@ -6,6 +6,9 @@ export function stagesOf(mode: RunMode, visual: boolean): StageId[] {
   switch (mode) {
     case 'quick':
       return ['implement', 'tests', 'review', ...v, 'gate2', 'finish'];
+    // Ревью кода: только чтение — ревьюер и разбор замечаний человеком, без плана, правок и коммита.
+    case 'review':
+      return ['review', 'gate2'];
     case 'refactor':
       return ['baseline', 'clarify', 'plan', 'gate1', 'implement', 'tests', 'review', ...v, 'gate2', 'finish'];
     default:
@@ -19,10 +22,11 @@ export const MODE_FIRST: Record<RunMode, StageId> = {
   task: 'clarify',
   epic: 'clarify',
   refactor: 'baseline',
+  review: 'review',
 };
 
 /** Лимит попыток реализации (для большой задачи — на этап). */
-export const MODE_LIMIT: Record<RunMode, number> = { quick: 2, bug: 3, task: 3, epic: 3, refactor: 3 };
+export const MODE_LIMIT: Record<RunMode, number> = { quick: 2, bug: 3, task: 3, epic: 3, refactor: 3, review: 0 };
 
 /** Быстрая правка без ревью, если дифф маленький. */
 export const QUICK_REVIEW_LINES = 120;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Archive, Eraser, GitBranch, RotateCw, MonitorCheck, Sparkles } from 'lucide-react';
-import type { ProjectBranches, Workspace, NextPartDraft } from '@purpleflow/core';
+import type { GitGraph, ProjectBranches, ReviewTarget, Workspace, NextPartDraft } from '@purpleflow/core';
 import { Button, Topbar } from '../components/ui';
 import { Select } from '../components/Dropdown';
 import { useStore } from '../lib/store';
@@ -14,14 +14,37 @@ import { bridge, cleanErr } from '../lib/api';
 const LAST_PROJECT = 'purpleflow.lastProject';
 const AUTOPILOT_KEY = 'purpleflow.autopilot';
 
-export function NewTaskScreen({ initialProject, draft }: { initialProject?: string; draft?: NextPartDraft }) {
+const REVIEW_KINDS: { id: ReviewTarget['kind']; title: string; hint: string }[] = [
+  { id: 'uncommitted', title: 'Незакоммиченное', hint: 'Правки в рабочей копии проекта, включая новые файлы' },
+  { id: 'commit', title: 'Коммит', hint: 'Изменения одного коммита против его родителя' },
+  { id: 'branch', title: 'Ветка', hint: 'Коммиты ветки, которых нет в другой ветке' },
+  { id: 'files', title: 'Файлы', hint: 'Файлы целиком, как они есть в последнем коммите' },
+];
+
+export function NewTaskScreen({
+  initialProject,
+  draft,
+  review,
+}: {
+  initialProject?: string;
+  draft?: NextPartDraft;
+  /** Открыть сразу в режиме «Ревью кода» с этой целью. */
+  review?: ReviewTarget;
+}) {
   const { go, state } = useStore();
   const [p, setP] = useState<LoadedProject | null>(null);
   const [task, setTask] = useState(draft?.task ?? '');
   /** Вложения прошлой части задачи — уйдут в новый прогон как есть. */
   const [carried, setCarried] = useState<string[]>(draft?.attachments ?? []);
   const [images, setImages] = useState<PickedFile[]>([]);
-  const [mode, setMode] = useState<Mode>('task');
+  const [mode, setMode] = useState<Mode>(review ? 'review' : 'task');
+  // Ревью кода: что проверить. Поля всех видов живут отдельно — переключение вида не стирает выбранное.
+  const [rKind, setRKind] = useState<ReviewTarget['kind']>(review?.kind ?? 'uncommitted');
+  const [rCommit, setRCommit] = useState(review?.kind === 'commit' ? review.hash : '');
+  const [rBranch, setRBranch] = useState(review?.kind === 'branch' ? review.branch : '');
+  const [rAgainst, setRAgainst] = useState(review?.kind === 'branch' ? review.against : '');
+  const [rFiles, setRFiles] = useState(review?.kind === 'files' ? review.files.join('\n') : '');
+  const [graph, setGraph] = useState<GitGraph | null>(null);
   const [suggest, setSuggest] = useState<{ mode: Mode; reason: string } | null>(null);
   const [suggesting, setSuggesting] = useState(false);
   const [visual, setVisual] = useState(true);
@@ -64,7 +87,17 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
     setWorkspace(x.multi ? 'worktree' : x.workspace);
     setBranches(null);
     setBaseBranch('');
+    setGraph(null);
     if (x.info.isRepo) void loadBranches(dir, false);
+    if (x.info.isRepo)
+      void Promise.resolve()
+        .then(() => bridge.core.getGitGraph(dir, 60))
+        .then((g) => {
+          if (chosen.current !== dir) return;
+          setGraph(g);
+          setRAgainst((cur) => cur || g.base || '');
+        })
+        .catch(() => {});
     try {
       localStorage.setItem(LAST_PROJECT, dir);
     } catch {
@@ -107,8 +140,23 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
   const cmds = p?.cmds ?? { setup: '', lint: '', test: '', run: '', url: '' };
   const toProject = () => project && go({ name: 'project', path: project.path, tab: 'commands' });
 
+  const reviewTarget = (): ReviewTarget | null => {
+    if (rKind === 'uncommitted') return { kind: 'uncommitted' };
+    if (rKind === 'commit') return rCommit ? { kind: 'commit', hash: rCommit } : null;
+    if (rKind === 'branch')
+      return rBranch && rAgainst && rBranch !== rAgainst ? { kind: 'branch', branch: rBranch, against: rAgainst } : null;
+    const files = rFiles
+      .split('\n')
+      .map((f) => f.trim())
+      .filter(Boolean);
+    return files.length ? { kind: 'files', files } : null;
+  };
+  const isReview = mode === 'review';
+
   const start = async () => {
     if (!p) return;
+    const target = isReview ? reviewTarget() : null;
+    if (isReview && !target) return;
     setBusy(true);
     setError(null);
     setConfirmDiscard(false);
@@ -124,7 +172,8 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
           setupCommand: cmds.setup,
           lintCommand: cmds.lint,
           mode,
-          visual: canVisual && visual,
+          ...(target ? { reviewTarget: target } : {}),
+          visual: !isReview && canVisual && visual,
           autopilot,
           attachmentPaths: carried.length ? carried : undefined,
           runCommand: cmds.run,
@@ -173,7 +222,7 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
   const queuedCount = state.runs.filter((r) => r.status === 'queued').length;
   // Визуальная проверка всегда видна в маршруте и включается переключателем прямо в нём.
   const route = stagesFor(mode, true);
-  const canStart = Boolean(project?.isRepo && task.trim().length > 5);
+  const canStart = Boolean(project?.isRepo && (isReview ? reviewTarget() : task.trim().length > 5));
   const hasRunCmd = Boolean(cmds.run.trim() && cmds.url.trim());
   // Агент визуальной проверки из настроек должен быть на этой машине.
   // Не выбран — claude; выключен в настройках — первый включённый (так же решает ядро при старте прогона).
@@ -201,7 +250,10 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
 
   return (
     <div className="screen">
-      <Topbar title="Новая задача" sub="Простая задача: одно изменение OpenSpec в отдельной ветке">
+      <Topbar
+        title={isReview ? 'Ревью кода' : 'Новая задача'}
+        sub={isReview ? 'Только чтение: замечания без правок и коммита' : 'Простая задача: одно изменение OpenSpec в отдельной ветке'}
+      >
         <ProjectPicker project={project} draft={Boolean(project?.isRepo && !p?.cfg)} onPick={(dir) => void choose(dir)} />
       </Topbar>
       <div className="scroll">
@@ -247,14 +299,91 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
               )}
             </p>
 
+            {isReview && (
+              <div className="review-target bezel">
+                <span className="review-target-label">Что проверить</span>
+                <div className="segmented small" role="radiogroup" aria-label="Что проверить">
+                  {REVIEW_KINDS.map((k) => (
+                    <button
+                      key={k.id}
+                      role="radio"
+                      aria-checked={rKind === k.id}
+                      className={rKind === k.id ? 'is-on' : ''}
+                      onClick={() => setRKind(k.id)}
+                    >
+                      {k.title}
+                    </button>
+                  ))}
+                </div>
+                <p className="muted review-target-hint">{REVIEW_KINDS.find((k) => k.id === rKind)!.hint}</p>
+                {rKind === 'commit' && (
+                  <Select<string>
+                    mono
+                    ariaLabel="Коммит"
+                    value={rCommit}
+                    minWidth={420}
+                    disabled={!graph?.commits.length}
+                    placeholder={graph ? 'коммитов нет' : 'загружаю…'}
+                    onChange={setRCommit}
+                    options={[
+                      ...(rCommit && !graph?.commits.some((c) => c.hash === rCommit)
+                        ? [{ value: rCommit, label: `${rCommit.slice(0, 7)}` }]
+                        : []),
+                      ...(graph?.commits.map((c) => ({ value: c.hash, label: `${c.hash.slice(0, 7)}  ${c.subject}`, hint: c.author })) ??
+                        []),
+                    ]}
+                  />
+                )}
+                {rKind === 'branch' && (
+                  <div className="review-branches">
+                    <Select<string>
+                      mono
+                      ariaLabel="Ветка для ревью"
+                      value={rBranch}
+                      minWidth={220}
+                      placeholder={branches ? 'выберите ветку' : 'загружаю…'}
+                      disabled={!branches?.branches.length}
+                      onChange={setRBranch}
+                      options={branches?.branches.map((b) => ({ value: b.name, label: b.name })) ?? []}
+                    />
+                    <span className="muted">против</span>
+                    <Select<string>
+                      mono
+                      ariaLabel="С какой веткой сравнить"
+                      value={rAgainst}
+                      minWidth={180}
+                      placeholder="ветка"
+                      disabled={!branches?.branches.length}
+                      onChange={setRAgainst}
+                      options={branches?.branches.map((b) => ({ value: b.name, label: b.name })) ?? []}
+                    />
+                  </div>
+                )}
+                {rKind === 'branch' && rBranch && rBranch === rAgainst && <p className="actionbar-error">Выберите две разные ветки</p>}
+                {rKind === 'files' && (
+                  <textarea
+                    className="review-files"
+                    aria-label="Файлы для ревью"
+                    rows={3}
+                    placeholder={'Путь от корня проекта — по одному в строке:\nsrc/api/payments.ts\nsrc/lib/auth.ts'}
+                    value={rFiles}
+                    onChange={(e) => setRFiles(e.target.value)}
+                  />
+                )}
+              </div>
+            )}
             <div className="task-sheet bezel">
               <label htmlFor="task" className="task-label">
-                Что сделать
+                {isReview ? 'На что обратить внимание — необязательно' : 'Что сделать'}
               </label>
               <textarea
                 id="task"
                 className="task-input"
-                placeholder="Например: добавь функцию slugify(s) в src/strings.ts, которая переводит строку в kebab-case латиницей, и тест к ней."
+                placeholder={
+                  isReview
+                    ? 'Например: безопасность платёжного API и обработка ошибок. Пусто — обычное ревью.'
+                    : 'Например: добавь функцию slugify(s) в src/strings.ts, которая переводит строку в kebab-case латиницей, и тест к ней.'
+                }
                 value={task}
                 onChange={(e) => setTask(e.target.value)}
                 onKeyDown={(e) => {
@@ -264,7 +393,11 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
               />
               <div className="task-foot">
                 <span className="muted">
-                  {task.trim() ? `${task.trim().length} символов` : 'Опишите результат, а не шаги — план составит планировщик'}
+                  {task.trim()
+                    ? `${task.trim().length} символов`
+                    : isReview
+                      ? 'Ревьюер ничего не правит — исправления запустите сами после разбора'
+                      : 'Опишите результат, а не шаги — план составит планировщик'}
                 </span>
                 <span className="kbd-hint">
                   <kbd>{bridge.platform === 'darwin' ? '⌘' : 'Ctrl'}</kbd>
@@ -337,92 +470,101 @@ export function NewTaskScreen({ initialProject, draft }: { initialProject?: stri
                 );
               })}
             </ol>
-            <div className="autopilot">
-              <div>
-                <strong>Автопилот</strong>
-                <span>
-                  План принимается сам, при исчерпанных попытках — ещё одна сама. Вы нужны на приёмке, а также если у планировщика вопросы
-                  или он предлагает разбить задачу.
-                </span>
-              </div>
-              <button
-                role="switch"
-                aria-checked={autopilot}
-                aria-label="Автопилот"
-                className={`switch is-mini ${autopilot ? 'is-on' : ''}`}
-                onClick={() => setAutopilot(!autopilot)}
-              >
-                <i />
-              </button>
-            </div>
-            <div className="workspace">
-              <div className="workspace-head">
-                <strong>Где работать</strong>
-                {!p?.multi && (
-                  <div className="segmented small" role="radiogroup">
-                    {WORKSPACES.map((w) => (
-                      <button
-                        key={w.id}
-                        role="radio"
-                        aria-checked={workspace === w.id}
-                        className={workspace === w.id ? 'is-on' : ''}
-                        onClick={() => setWorkspace(w.id)}
-                      >
-                        {w.title}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+            {isReview ? (
               <p className="route-note">
                 <GitBranch size={14} />
-                <span>
-                  {p?.multi
-                    ? `Отдельные копии всех репозиториев проекта на одной ветке задачи — ваши рабочие папки не меняются. «От ветки» — для основного (${projectName(p.info.path)}), остальные начнут от своих текущих веток.`
-                    : WORKSPACES.find((w) => w.id === workspace)!.hint}
-                </span>
+                <span>Код для ревью — в отдельной копии: ваша рабочая папка, ветки и индекс не меняются.</span>
               </p>
-              {project?.isRepo && (
-                <div className="base-branch">
-                  <span className="base-branch-label">От ветки</span>
-                  <Select<string>
-                    className="base-branch-select"
-                    mono
-                    title="Ветка, от которой начать задачу — переходить в неё в проекте не нужно"
-                    ariaLabel="Ветка, от которой начать"
-                    value={baseBranch}
-                    minWidth={240}
-                    disabled={!branches?.branches.length}
-                    placeholder={branches ? 'веток нет' : 'загружаю…'}
-                    onChange={setBaseBranch}
-                    options={
-                      branches?.branches.map((b) => ({
-                        value: b.name,
-                        label: b.name,
-                        hint: b.name === branches.current ? 'текущая' : undefined,
-                      })) ?? []
-                    }
-                  />
+            ) : (
+              <>
+                <div className="autopilot">
+                  <div>
+                    <strong>Автопилот</strong>
+                    <span>
+                      План принимается сам, при исчерпанных попытках — ещё одна сама. Вы нужны на приёмке, а также если у планировщика
+                      вопросы или он предлагает разбить задачу.
+                    </span>
+                  </div>
                   <button
-                    className="side-icon base-branch-fetch"
-                    title="Подтянуть ветки с origin (git fetch)"
-                    disabled={fetching}
-                    onClick={() => project && void loadBranches(project.path, true)}
+                    role="switch"
+                    aria-checked={autopilot}
+                    aria-label="Автопилот"
+                    className={`switch is-mini ${autopilot ? 'is-on' : ''}`}
+                    onClick={() => setAutopilot(!autopilot)}
                   >
-                    <RotateCw size={14} className={fetching ? 'spin' : ''} />
+                    <i />
                   </button>
                 </div>
-              )}
-              {branches && baseBranch && branches.current && baseBranch !== branches.current && (
-                <p className="base-branch-note">
-                  Задача начнётся от <code>{baseBranch}</code>, хотя проект сейчас на <code>{branches.current}</code>
-                  {workspace === 'branch'
-                    ? ' — в режиме «Ветка» проект переключится на ветку задачи'
-                    : ' — ваша рабочая копия не изменится'}
-                  .
-                </p>
-              )}
-            </div>
+                <div className="workspace">
+                  <div className="workspace-head">
+                    <strong>Где работать</strong>
+                    {!p?.multi && (
+                      <div className="segmented small" role="radiogroup">
+                        {WORKSPACES.map((w) => (
+                          <button
+                            key={w.id}
+                            role="radio"
+                            aria-checked={workspace === w.id}
+                            className={workspace === w.id ? 'is-on' : ''}
+                            onClick={() => setWorkspace(w.id)}
+                          >
+                            {w.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="route-note">
+                    <GitBranch size={14} />
+                    <span>
+                      {p?.multi
+                        ? `Отдельные копии всех репозиториев проекта на одной ветке задачи — ваши рабочие папки не меняются. «От ветки» — для основного (${projectName(p.info.path)}), остальные начнут от своих текущих веток.`
+                        : WORKSPACES.find((w) => w.id === workspace)!.hint}
+                    </span>
+                  </p>
+                  {project?.isRepo && (
+                    <div className="base-branch">
+                      <span className="base-branch-label">От ветки</span>
+                      <Select<string>
+                        className="base-branch-select"
+                        mono
+                        title="Ветка, от которой начать задачу — переходить в неё в проекте не нужно"
+                        ariaLabel="Ветка, от которой начать"
+                        value={baseBranch}
+                        minWidth={240}
+                        disabled={!branches?.branches.length}
+                        placeholder={branches ? 'веток нет' : 'загружаю…'}
+                        onChange={setBaseBranch}
+                        options={
+                          branches?.branches.map((b) => ({
+                            value: b.name,
+                            label: b.name,
+                            hint: b.name === branches.current ? 'текущая' : undefined,
+                          })) ?? []
+                        }
+                      />
+                      <button
+                        className="side-icon base-branch-fetch"
+                        title="Подтянуть ветки с origin (git fetch)"
+                        disabled={fetching}
+                        onClick={() => project && void loadBranches(project.path, true)}
+                      >
+                        <RotateCw size={14} className={fetching ? 'spin' : ''} />
+                      </button>
+                    </div>
+                  )}
+                  {branches && baseBranch && branches.current && baseBranch !== branches.current && (
+                    <p className="base-branch-note">
+                      Задача начнётся от <code>{baseBranch}</code>, хотя проект сейчас на <code>{branches.current}</code>
+                      {workspace === 'branch'
+                        ? ' — в режиме «Ветка» проект переключится на ветку задачи'
+                        : ' — ваша рабочая копия не изменится'}
+                      .
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </aside>
         </div>
       </div>

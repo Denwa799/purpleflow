@@ -7,7 +7,17 @@ export type StageId =
   'baseline' | 'clarify' | 'gate0' | 'plan' | 'gate1' | 'implement' | 'tests' | 'visual' | 'review' | 'gate2' | 'limit' | 'finish';
 
 /** Режим работы: какие стадии и правила применяются к задаче. */
-export type RunMode = 'quick' | 'bug' | 'task' | 'epic' | 'refactor';
+export type RunMode = 'quick' | 'bug' | 'task' | 'epic' | 'refactor' | 'review';
+
+/**
+ * Что проверяет «Ревью кода»: незакоммиченные изменения проекта, коммит, ветку против другой или файлы целиком.
+ * Агенты только читают: код лежит в отдельной рабочей копии, файлы проекта не меняются.
+ */
+export type ReviewTarget =
+  | { kind: 'uncommitted' }
+  | { kind: 'commit'; hash: string }
+  | { kind: 'branch'; branch: string; against: string }
+  | { kind: 'files'; files: string[] };
 
 /** Где работают агенты: отдельная worktree (рабочая копия не меняется) или ветка прямо в проекте. */
 export type Workspace = 'worktree' | 'branch';
@@ -237,6 +247,11 @@ export interface RunFile {
   setupCommand?: string;
   lintCommand?: string;
   mode: RunMode;
+  /**
+   * Ревью кода: что проверяем и на каком коммите рабочая копия (tip). Для незакоммиченных изменений tip — снимок
+   * рабочей копии проекта отдельным коммитом поверх HEAD (ни индекс, ни файлы проекта при этом не трогаются).
+   */
+  review?: { target: ReviewTarget; tip: string; label: string };
   /** Рабочая копия ещё не создана (прогон в очереди) — run.json живёт только в данных приложения. */
   workspacePending?: boolean;
   /** Уточнение до плана: вопросы планировщика и ответы человека (они дописываются к задаче для всех стадий). */

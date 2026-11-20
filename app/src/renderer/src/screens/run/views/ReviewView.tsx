@@ -24,21 +24,32 @@ export function ReviewView({
     [r],
   );
   if (!r) return <Empty icon={<Sparkles />} title="Ревью ещё не было" />;
+  const code = run.mode === 'review';
   return (
     <div className="scroll">
       <div className="review">
         <div className={`verdict bezel ${r.blocking.length ? 'is-bad' : 'is-ok'}`}>
           <span className="verdict-mark">{r.blocking.length ? r.blocking.length : <CircleCheck size={22} />}</span>
           <div>
-            <strong>{r.blocking.length ? `Блокирующих замечаний: ${r.blocking.length}` : 'Блокирующих замечаний нет'}</strong>
+            <strong>
+              {code
+                ? r.blocking.length
+                  ? `Важных замечаний: ${r.blocking.length}`
+                  : 'Важных замечаний нет'
+                : r.blocking.length
+                  ? `Блокирующих замечаний: ${r.blocking.length}`
+                  : 'Блокирующих замечаний нет'}
+            </strong>
             <p>
-              {r.blocking.length
-                ? run.next === 'limit' && idx === run.reviews.length - 1
-                  ? run.stuck
-                    ? 'Исполнитель и ревьюер ходят по кругу: замечания вернулись неисправленными. Решение за вами — уточните замечание или примите как есть.'
-                    : 'Попытки реализации исчерпаны — решение за вами: ещё попытка или дальше как есть.'
-                  : 'Задача вернулась исполнителю с этими замечаниями.'
-                : 'Изменение передано вам на приёмку.'}{' '}
+              {code
+                ? 'Ревью кода ничего не правит: замечания — на разбор вам.'
+                : r.blocking.length
+                  ? run.next === 'limit' && idx === run.reviews.length - 1
+                    ? run.stuck
+                      ? 'Исполнитель и ревьюер ходят по кругу: замечания вернулись неисправленными. Решение за вами — уточните замечание или примите как есть.'
+                      : 'Попытки реализации исчерпаны — решение за вами: ещё попытка или дальше как есть.'
+                    : 'Задача вернулась исполнителю с этими замечаниями.'
+                  : 'Изменение передано вам на приёмку.'}{' '}
               Заметок: {r.notes.length}.{originSummary(r.blocking)}
               {planScore(r.plan) ? ` План: сделано ${planScore(r.plan)!.done} из ${planScore(r.plan)!.total}.` : ''}
             </p>

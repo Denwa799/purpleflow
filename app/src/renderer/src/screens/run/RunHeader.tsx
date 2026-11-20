@@ -506,13 +506,16 @@ export function MetricsInline({ run }: { run: RunFile }) {
           <Num text={total ? tokens(total) : '—'} />
         </dd>
       </div>
-      <div>
-        <dt>Попытки</dt>
-        <dd>
-          <Num text={`${run.implAttemptsUsed}`} />
-          <small>/ {run.implAttemptsLimit}</small>
-        </dd>
-      </div>
+      {/* В ревью кода реализации нет — и считать нечего. */}
+      {run.mode !== 'review' && (
+        <div>
+          <dt>Попытки</dt>
+          <dd>
+            <Num text={`${run.implAttemptsUsed}`} />
+            <small>/ {run.implAttemptsLimit}</small>
+          </dd>
+        </div>
+      )}
     </dl>
   );
 }

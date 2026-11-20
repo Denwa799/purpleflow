@@ -39,6 +39,18 @@ export function withPicked(comment: string, picked: ReviewItem[]): string {
   return `${comment.trim() ? comment.trim() + '\n\n' : ''}Исправь эти замечания ревьюера (выбраны человеком на приёмке):\n${list}`;
 }
 
+/** Текст исправлений по разбору ревью кода: выбранные замечания ревьюера, свои замечания к строкам и комментарий. */
+export function reviewFixText(
+  label: string,
+  comment: string,
+  picked: ReviewItem[],
+  lines: { file: string; line: number; text: string }[],
+): string {
+  const at = (file: string | null, line: number | null) => (file ? `${file}${line ? ':' + line : ''} — ` : '');
+  const items = [...picked.map((i) => `- ${at(i.file, i.line)}${i.message}`), ...lines.map((l) => `- ${at(l.file, l.line)}${l.text}`)];
+  return [`Исправь замечания ревью кода (${label}):`, ...items, comment.trim() ? `\n${comment.trim()}` : ''].filter(Boolean).join('\n');
+}
+
 export function stripAnsi(s: string): string {
   return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
 }

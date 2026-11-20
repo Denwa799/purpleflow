@@ -1,11 +1,12 @@
 // Состояние окна: чистый редьюсер, без обращений к мосту — чтобы проверялся тестами.
-import type { ChatFile, ChatSummary, RunFile, RunSummary, ToolInfo, ToolName, NextPartDraft } from '@purpleflow/core';
+import type { ChatFile, ChatSummary, RunFile, RunSummary, ToolInfo, ToolName, NextPartDraft, ReviewTarget } from '@purpleflow/core';
 import type { PublicSettings } from '../../../shared/ipc';
 
 export type ProjectTab = 'overview' | 'commands' | 'knowledge' | 'git';
 export type SettingsTab = 'account' | 'stats' | 'tools' | 'models' | 'window';
 export type View =
-  | { name: 'new'; project?: string; draft?: NextPartDraft }
+  /** review — открыть сразу в режиме «Ревью кода» с выбранной целью (из вкладки «Git»). */
+  | { name: 'new'; project?: string; draft?: NextPartDraft; review?: ReviewTarget }
   | { name: 'run'; runId: string }
   /** tab — открыть сразу на этой вкладке (например, «Аккаунт» для входа в PurpleSchool). */
   | { name: 'settings'; tab?: SettingsTab }
@@ -13,7 +14,8 @@ export type View =
   /** Онбординг первого проекта: выбор папки, сканирование, подключение. */
   | { name: 'start' }
   /** Чат; без chatId — новый, создаётся с первым сообщением. */
-  | { name: 'chat'; chatId?: string; project?: string }
+  /** text — заготовка первого сообщения нового чата (например, замечания ревью кода). */
+  | { name: 'chat'; chatId?: string; project?: string; text?: string }
   | { name: 'projects' }
   | { name: 'project'; path: string; tab?: ProjectTab };
 

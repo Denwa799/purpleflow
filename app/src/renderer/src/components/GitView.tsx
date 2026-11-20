@@ -1,6 +1,16 @@
 // Вкладка «Git» (только просмотр): ветки, история всех веток с графом и дифф коммита. В репозитории ничего не меняет.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown, ChevronRight, CircleAlert, GitBranch, GitCommitHorizontal, RefreshCw, Workflow } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  GitBranch,
+  GitCommitHorizontal,
+  RefreshCw,
+  ScanSearch,
+  Workflow,
+} from 'lucide-react';
 import type { DiffFile, GitBranchInfo, GitCommitInfo, GitGraph } from '@purpleflow/core';
 import { layoutGraph, type GraphRow } from '../lib/gitGraph';
 import { DiffReview } from './diff/DiffReview';
@@ -87,7 +97,7 @@ export function GitView({ projectPath, refresh, focus }: { projectPath: string; 
         </div>
       ) : (
         <>
-          {branchesOpen && <BranchList graph={graph} onPick={showBranch} />}
+          {branchesOpen && <BranchList graph={graph} onPick={showBranch} projectPath={projectPath} />}
           {!graph.commits.length ? (
             <Empty icon={<GitCommitHorizontal />} title="Коммитов пока нет">
               История появится после первого коммита.
@@ -159,7 +169,7 @@ function GraphCell({ row, lanes }: { row: GraphRow; lanes: number }) {
   );
 }
 
-function BranchList({ graph, onPick }: { graph: GitGraph; onPick: (b: GitBranchInfo) => void }) {
+function BranchList({ graph, onPick, projectPath }: { graph: GitGraph; onPick: (b: GitBranchInfo) => void; projectPath: string }) {
   const { go } = useStore();
   return (
     <div className="git-branches" role="list" aria-label="Ветки">
@@ -183,6 +193,17 @@ function BranchList({ graph, onPick }: { graph: GitGraph; onPick: (b: GitBranchI
               ↑{b.ahead} ↓{b.behind}
             </span>
           )}
+          {graph.base && b.name !== graph.base && (b.ahead ?? 0) > 0 && (
+            <button
+              className="git-branch-run git-review"
+              title={`Ревью кода: коммиты ${b.name}, которых нет в ${graph.base}`}
+              aria-label={`Ревью ветки ${b.name}`}
+              onClick={() => go({ name: 'new', project: projectPath, review: { kind: 'branch', branch: b.name, against: graph.base! } })}
+            >
+              <ScanSearch size={12} />
+              <span>Ревью</span>
+            </button>
+          )}
           <span className="muted git-branch-at">{b.at ? when(b.at) : ''}</span>
         </div>
       ))}
@@ -191,6 +212,7 @@ function BranchList({ graph, onPick }: { graph: GitGraph; onPick: (b: GitBranchI
 }
 
 function CommitView({ projectPath, c, onBack }: { projectPath: string; c: GitCommitInfo; onBack: () => void }) {
+  const { go } = useStore();
   const [diff, setDiff] = useState<DiffFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -212,6 +234,16 @@ function CommitView({ projectPath, c, onBack }: { projectPath: string; c: GitCom
         <span className="git-commit-title" title={c.subject}>
           {c.subject}
         </span>
+        {c.parents.length > 0 && (
+          <Button
+            tone="quiet"
+            icon={<ScanSearch size={14} />}
+            title="Ревью кода этого коммита: замечания без правок"
+            onClick={() => go({ name: 'new', project: projectPath, review: { kind: 'commit', hash: c.hash } })}
+          >
+            Ревью
+          </Button>
+        )}
       </div>
       <p className="git-commit-meta muted">
         <span className="mono">{c.hash.slice(0, 10)}</span> · {c.author} · {when(c.at)}

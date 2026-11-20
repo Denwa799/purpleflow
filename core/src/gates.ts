@@ -40,6 +40,9 @@ export async function decide(
     if (gate !== 'gate2') throw new Error('Быстрая правка — только на приёмке');
     if (!comment?.trim() && !lineComments?.length) throw new Error('Опишите, что поправить');
   }
+  // Ревью кода ничего не правит: разбор только завершается, исправления — отдельной задачей или в чате.
+  if (r.mode === 'review' && decision !== 'approve' && decision !== 'cancel')
+    throw new Error('В ревью кода правок нет — исправления запускаются отдельной задачей');
   if (decision === 'accept' && gate !== 'limit') throw new Error('Принять как есть можно только после исчерпания попыток');
   // Решение принято — сервер ручной проверки гасим: дальше коммит или новая попытка в той же рабочей копии.
   await stopPreview(k, id);
@@ -89,6 +92,18 @@ export async function decide(
     r.status = 'running';
     k.save(r);
     void k.engine.drive(r);
+    return;
+  }
+
+  if (r.mode === 'review') {
+    // Разбор закончен — прогон завершён без коммита: ветка ревью и рабочая копия остаются для просмотра до очистки.
+    if (gateAttempt) gateAttempt.summary = decision === 'cancel' ? 'Отменено' : 'Разобрано';
+    r.feedback = undefined;
+    r.status = decision === 'cancel' ? 'cancelled' : 'finished';
+    r.finishedAt = new Date().toISOString();
+    k.log(r, c.mint(`✓ ревью кода ${decision === 'cancel' ? 'отменено' : 'разобрано'} — файлы проекта не менялись`) + '\n');
+    k.save(r);
+    k.emit({ type: 'run.finished', runId: id, status: r.status, reason: decision === 'cancel' ? 'cancelled' : 'done' });
     return;
   }
 
@@ -171,6 +186,13 @@ export function gateMessage(k: Kernel, run: RunFile): string | undefined {
   if (run.next === 'gate1' && run.nextParts)
     return 'Задача большая — планировщик взял в этот план первую часть, остальные перечислены в разделе «Next Parts» в proposal. Запустите их следующими задачами после этой. Принять план первой части?';
   if (run.next === 'gate1') return 'Проверьте proposal и tasks. Принять, вернуть с комментарием или отменить?';
+  if (run.next === 'gate2' && run.mode === 'review') {
+    const last = run.reviews.at(-1);
+    const n = (last?.blocking.length ?? 0) + (last?.notes.length ?? 0);
+    return n
+      ? 'Разберите замечания ревьюера: отметьте те, что нужно исправить, — или завершите ревью.'
+      : 'Ревьюер не нашёл проблем. Посмотрите код сами и завершите ревью.';
+  }
   if (run.next === 'gate2') return 'Посмотрите дифф и замечания ревью. Принять или вернуть на доработку?';
   return undefined;
 }
@@ -195,7 +217,7 @@ export function waitGate(k: Kernel, run: RunFile, gate: GateId, message?: string
       ? { cause: run.stuck ? ('loop' as const) : ('attempts' as const), attempts: run.implAttemptsUsed, max: run.implAttemptsLimit }
       : undefined;
   k.emit({ type: 'gate.waiting', runId: run.id, gate, message, ...(limit ? { limit } : {}) });
-  if (gate === 'gate2') {
+  if (gate === 'gate2' && run.mode !== 'review') {
     void summarizeChanges(k, run.id).catch(traced('summarizeChanges'));
     void mapFilesToPlan(k, run.id).catch(traced('mapFilesToPlan'));
   }

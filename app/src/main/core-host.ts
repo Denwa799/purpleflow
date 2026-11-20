@@ -2,6 +2,9 @@
 import { init as initErrorReporting } from '@sentry/electron/utility';
 import { Orchestrator, killAll, loadLoginShellEnv, type CoreSettings } from '@purpleflow/core';
 import { coreMethodNames, type CoreApi, type HostMessage, type HostRequest } from '../shared/ipc';
+import { ignoreClosedOutput } from './stdio';
+
+ignoreClosedOutput();
 
 if (process.argv.includes('--report-errors')) initErrorReporting();
 

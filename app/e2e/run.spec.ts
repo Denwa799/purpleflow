@@ -199,3 +199,42 @@ test('длинное описание задачи раскрывается с �
   await inner.evaluate((el) => (el.scrollTop = el.scrollHeight));
   await expect(l.page.getByText('Пункт 120:', { exact: false })).toBeInViewport();
 });
+
+test('ревью кода: незакоммиченные правки — замечания на разбор, исправление уходит в чат, проект не тронут', async () => {
+  const file = path.join(box.repo, 'src/math.js');
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8') + 'export const sub = (a, b) => a + b;\n');
+  const status = box.git('status', '--porcelain');
+  const head = box.git('rev-parse', 'HEAD');
+  const page = l.page;
+  await page.getByRole('button', { name: /Выберите проект/ }).click();
+  await page.getByRole('menuitem', { name: /Новый проект/ }).click();
+  await expect(page.getByRole('button', { name: /demo/ }).first()).toBeVisible();
+  await page.getByRole('radio', { name: 'Ревью кода', exact: true }).click();
+  await expect(page.getByRole('radiogroup', { name: 'Что проверить' }).getByRole('radio', { name: 'Незакоммиченное' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  // Ни автопилота, ни выбора рабочей копии: ревью всегда только читает.
+  await expect(page.getByRole('switch', { name: 'Автопилот' })).toHaveCount(0);
+  if (process.env.PURPLEFLOW_SHOTS) {
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: path.join(box.root, '..', 'pf-review-form.png') });
+  }
+  await page.getByRole('button', { name: 'Запустить прогон' }).click();
+
+  await expect(page.getByText('Разбор', { exact: true })).toBeVisible({ timeout: 60_000 });
+  await page.getByRole('tab', { name: /Заметки/ }).click();
+  await expect(page.locator('.note.n-blocking p')).toHaveText('sub складывает вместо вычитания');
+  await expect(page.getByRole('heading', { name: /^Важные/ })).toBeVisible();
+  // Отправить на исправление можно только выбранное.
+  const fix = page.getByRole('button', { name: /Исправить в чате/ });
+  await expect(fix).toBeDisabled();
+  await page.locator('.note.n-blocking').getByRole('switch').click();
+  await fix.click();
+
+  await expect(page.locator('.chat-compose textarea')).toHaveValue(/sub складывает вместо вычитания/);
+  await expect(page.locator('.chat-compose textarea')).toHaveValue(/src\/math\.js:1/);
+  expect(box.git('status', '--porcelain')).toBe(status);
+  expect(box.git('rev-parse', 'HEAD')).toBe(head);
+  expect(box.calls().some((c) => /ревьюер кода в PurpleFlow/.test(c.prompt) && c.prompt.includes('sub = (a, b) => a + b'))).toBe(true);
+});

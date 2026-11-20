@@ -36,12 +36,15 @@ export function KnowledgeView({ repo, name }: { repo: string; name: string }) {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    void bridge.core.getKnowledge(repo).then((x) => {
-      if (!alive) return;
-      setK(x);
-      setProfile(x.profile ?? '');
-      setEditing(false);
-    });
+    void bridge.core
+      .getKnowledge(repo)
+      .then((x) => {
+        if (!alive) return;
+        setK(x);
+        setProfile(x.profile ?? '');
+        setEditing(false);
+      })
+      .catch((e) => alive && setError(cleanErr(e)));
     return () => {
       alive = false;
     };

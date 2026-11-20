@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { addToPath, nodeBinDir, nodeHome, prependPath, which } from '../env.js';
 import { run } from '../proc.js';
+import { discardBody } from '../net.js';
 import type { NodeInfo, NodeInstallResult } from '../types.js';
 
 const VERSION = '22.23.4';
@@ -49,7 +50,10 @@ export async function installNode(env: NodeJS.ProcessEnv, dist: NodeDist | null 
   const tmp = fs.mkdtempSync(`${home}-`);
   try {
     const res = await fetch(dist.url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
-    if (!res.ok) return { ok: false, error: `Не удалось скачать Node.js: HTTP ${res.status}.` };
+    if (!res.ok) {
+      await discardBody(res);
+      return { ok: false, error: `Не удалось скачать Node.js: HTTP ${res.status}.` };
+    }
     const data = Buffer.from(await res.arrayBuffer());
     if (createHash('sha256').update(data).digest('hex') !== dist.sha256) {
       return { ok: false, error: 'Контрольная сумма Node.js не совпала, архив не установлен.' };

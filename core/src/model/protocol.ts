@@ -8,6 +8,7 @@ import type {
   ManagerMessage,
   PreviewState,
   ReviewResult,
+  ReviewTarget,
   RunFile,
   RunMode,
   RunStatus,
@@ -66,6 +67,8 @@ export interface StartRunInput {
   setupCommand?: string;
   lintCommand?: string;
   mode?: RunMode;
+  /** Режим «Ревью кода»: что проверить. task тогда — на чём сосредоточиться (можно пустым). */
+  reviewTarget?: ReviewTarget;
   /** Визуальная проверка: команда запуска приложения ({port} — свободный порт) и адрес. */
   runCommand?: string;
   appUrl?: string;

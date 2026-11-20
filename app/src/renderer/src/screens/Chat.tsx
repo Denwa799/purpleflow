@@ -33,7 +33,7 @@ interface Picked {
 }
 
 /** Чат с агентом вне конвейера: вопросы по проекту и небольшие правки без плана и ревью. */
-export function ChatScreen({ chatId, initialProject }: { chatId?: string; initialProject?: string }) {
+export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: string; initialProject?: string; initialText?: string }) {
   const { state, go } = useStore();
   const settings = state.settings;
   const [chat, setChat] = useState<ChatFile | null>(null);
@@ -47,7 +47,7 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
     edits: true,
   }));
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText ?? '');
   const [files, setFiles] = useState<Picked[]>([]);
   const [error, setError] = useState<string | null>(null);
   /** Что человек набирает в заголовке: события ответа агента приходят постоянно и иначе затирали бы ввод. */
@@ -544,7 +544,7 @@ export function ChatScreen({ chatId, initialProject }: { chatId?: string; initia
                       type="button"
                       className="chat-send is-stop"
                       title={queued ? 'Остановить ответ — сообщения из очереди уйдут сразу' : 'Остановить ответ'}
-                      onClick={() => chat && bridge.core.stopChat(chat.id).catch((e) => setError(cleanErr(e)))}
+                      onClick={() => chat && bridge.core.stopChat(chat.id).catch(() => {})}
                     >
                       <Square size={13} />
                     </button>
@@ -606,12 +606,12 @@ function UserMessage({ m, chatId }: { m: ChatMessage; chatId: string }) {
           <span>Уйдёт после ответа</span>
           <button
             type="button"
-            onClick={() => void bridge.core.stopChat(chatId)}
+            onClick={() => void bridge.core.stopChat(chatId).catch(() => {})}
             title="Остановить текущий ответ и сразу отправить это сообщение"
           >
             Прервать и отправить
           </button>
-          <button type="button" onClick={() => void bridge.core.unqueueChat(chatId, m.id)}>
+          <button type="button" onClick={() => void bridge.core.unqueueChat(chatId, m.id).catch(() => {})}>
             Убрать
           </button>
         </div>

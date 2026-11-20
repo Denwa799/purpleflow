@@ -1,6 +1,7 @@
 // Трансляция экрана браузера агента (Chrome DevTools Protocol, Page.startScreencast) во вкладку «Браузер».
 import fs from 'node:fs';
 import path from 'node:path';
+import { discardBody } from './net.js';
 
 /** Установленный Chrome / Chromium — тот же, что берёт Playwright CLI. null — не найден. */
 export function findChrome(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -23,6 +24,7 @@ export async function waitForCdp(port: number, timeoutMs = 20_000): Promise<bool
   while (Date.now() < until) {
     try {
       const r = await fetch(`http://127.0.0.1:${port}/json/version`);
+      await discardBody(r);
       if (r.ok) return true;
     } catch {
       /* ещё не поднялся */
