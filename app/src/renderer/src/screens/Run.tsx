@@ -191,7 +191,14 @@ export function RunScreen({ runId }: { runId: string }) {
           onAccept={gate === 'limit' ? () => act('accept', () => dispatch({ type: 'gate.accept', runId })) : undefined}
           acceptTo={gate === 'limit' ? acceptTarget(run) : undefined}
           stuck={gate === 'limit' ? run.stuck?.items : undefined}
-          codeReview={codeReview ? { fixTo: run.review?.target.kind === 'uncommitted' ? 'chat' : 'task' } : undefined}
+          codeReview={
+            codeReview
+              ? {
+                  fixTo: run.review?.target.kind === 'uncommitted' ? 'chat' : 'task',
+                  findings: (lastReview?.blocking.length ?? 0) + (lastReview?.notes.length ?? 0),
+                }
+              : undefined
+          }
           onFix={
             codeReview
               ? () => void fixReview()

@@ -26,7 +26,7 @@ export function GateBar(props: {
   /** Исполнитель и ревьюер ходят по кругу: эти замечания вернулись неисправленными. */
   stuck?: ReviewItem[];
   /** Разбор ревью кода: правок в этом прогоне нет — «Завершить» или выбранное в новую задачу (чат). */
-  codeReview?: { fixTo: 'task' | 'chat' };
+  codeReview?: { fixTo: 'task' | 'chat'; findings: number };
 }) {
   const { gate, comment, setComment, lineCount, busy, error } = props;
   const [open, setOpen] = useState(false);
@@ -63,7 +63,7 @@ export function GateBar(props: {
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
   const mod = bridge.platform === 'darwin' ? '⌘' : 'Ctrl+';
-  if (props.codeReview) return <CodeReviewBar {...props} fixTo={props.codeReview.fixTo} mod={mod} />;
+  if (props.codeReview) return <CodeReviewBar {...props} fixTo={props.codeReview.fixTo} findings={props.codeReview.findings} mod={mod} />;
   const stuck = gate === 'limit' && props.stuck?.length ? props.stuck : null;
   const title = gate === 'gate1' ? 'Утверждение плана' : gate === 'gate2' ? 'Приёмка' : stuck ? 'Ходят по кругу' : 'Попытки исчерпаны';
   const needsComment = gate !== 'limit';
@@ -221,25 +221,32 @@ export function GateBar(props: {
 }
 
 /** Разбор ревью кода: выбрать замечания и отправить их на исправление — или просто завершить. */
-function CodeReviewBar(props: Parameters<typeof GateBar>[0] & { fixTo: 'task' | 'chat'; mod: string }) {
+function CodeReviewBar(props: Parameters<typeof GateBar>[0] & { fixTo: 'task' | 'chat'; findings: number; mod: string }) {
   const { comment, setComment, lineCount, busy, error, mod } = props;
   const picked = (props.pickedCount ?? 0) + lineCount;
   const [open, setOpen] = useState(false);
   const canFix = picked > 0 || Boolean(comment.trim());
+  // Замечаний нет — исправлять нечего, пока человек сам не оставит замечание на строке или комментарий.
+  const clean = props.findings === 0;
   return (
     <div className="gatebar is-gate">
       <div className="gate-sign" aria-hidden>
         <ClipboardCheck size={17} />
       </div>
       <div className="gate-text">
-        <strong>Разбор</strong>
+        <strong>{clean ? 'Замечаний нет' : 'Разбор'}</strong>
         <span>
-          {props.diffShown
-            ? 'Отметьте галочкой замечания, которые нужно исправить, или оставьте свои на строках.'
-            : 'Посмотрите код и замечания ревьюера.'}{' '}
-          {props.fixTo === 'chat'
-            ? 'Исправлять будет чат прямо в рабочей копии проекта.'
-            : 'Исправления пойдут новой задачей от проверенного кода.'}
+          {clean
+            ? 'Ревьюер не нашёл проблем. Посмотрите код сами: если что-то не так — оставьте замечание на строке, иначе завершите ревью.'
+            : `${
+                props.diffShown
+                  ? 'Отметьте замечания, которые нужно исправить, или оставьте свои на строках.'
+                  : 'Посмотрите код и замечания ревьюера.'
+              } ${
+                props.fixTo === 'chat'
+                  ? 'Исправлять будет чат прямо в рабочей копии проекта.'
+                  : 'Исправления пойдут новой задачей от проверенного кода.'
+              }`}
         </span>
       </div>
       {open && (
@@ -264,21 +271,23 @@ function CodeReviewBar(props: Parameters<typeof GateBar>[0] & { fixTo: 'task' | 
             Добавить комментарий
           </Button>
         )}
-        <Button
-          tone="ghost"
-          icon={<Wrench size={14} />}
-          busy={busy === 'fix'}
-          disabled={!canFix}
-          onClick={props.onFix}
-          title={
-            props.fixTo === 'chat'
-              ? 'Завершить ревью и открыть новый чат с проектом — выбранные замечания уже в сообщении'
-              : 'Завершить ревью и открыть новую задачу — выбранные замечания уже в её тексте'
-          }
-        >
-          {props.fixTo === 'chat' ? 'Исправить в чате' : 'Исправить задачей'}
-          {picked ? ` (${picked})` : ''}
-        </Button>
+        {(!clean || canFix) && (
+          <Button
+            tone="ghost"
+            icon={<Wrench size={14} />}
+            busy={busy === 'fix'}
+            disabled={!canFix}
+            onClick={props.onFix}
+            title={
+              props.fixTo === 'chat'
+                ? 'Завершить ревью и открыть новый чат с проектом — выбранные замечания уже в сообщении'
+                : 'Завершить ревью и открыть новую задачу — выбранные замечания уже в её тексте'
+            }
+          >
+            {props.fixTo === 'chat' ? 'Исправить в чате' : 'Исправить задачей'}
+            {picked ? ` (${picked})` : ''}
+          </Button>
+        )}
         <Button tone="approve" icon={<CircleCheck size={15} />} busy={busy === 'approve'} onClick={props.onApprove}>
           Завершить <kbd className="kbd-mini">{mod}↵</kbd>
         </Button>
