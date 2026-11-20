@@ -3,8 +3,6 @@ import { createPortal } from 'react-dom';
 import { CircleAlert, FileCode2, RefreshCw } from 'lucide-react';
 import type { DiffFile, LineComment, ReviewItem, RunFile } from '@purpleflow/core';
 import { DiffReview } from '../../components/diff/DiffReview';
-import { planScore } from '../../components/diff/ReviewNotes';
-import { PillTabs } from '../../components/PillTabs';
 import { Button, Empty } from '../../components/ui';
 import { bridge, cleanErr } from '../../lib/api';
 
@@ -40,11 +38,8 @@ const time = (d: Date) => d.toLocaleTimeString('ru-RU', { hour: '2-digit', minut
 export interface AcceptProps {
   picked: ReviewItem[];
   onPicked: (items: ReviewItem[]) => void;
-  tab: 'code' | 'notes';
-  onTab: (t: 'code' | 'notes') => void;
   comments: LineComment[];
   onComments: (c: LineComment[]) => void;
-  notes: number;
   summary?: string | null;
   banner?: ReactNode;
 }
@@ -59,11 +54,16 @@ export function CodePane({
   changed,
   accept,
   tools,
+  tab,
+  onTab,
 }: {
   run: RunFile;
   changed: string[] | null;
   accept?: AcceptProps;
   tools: HTMLElement | null;
+  /** «Код» и «Замечания» — две вкладки прогона над одним диффом: клик по замечанию ведёт к строке в коде. */
+  tab: 'code' | 'notes';
+  onTab: (t: 'code' | 'notes') => void;
 }) {
   const [diff, setDiff] = useState<DiffFile[] | null>(null);
   const [at, setAt] = useState<Date | null>(null);
@@ -106,32 +106,10 @@ export function CodePane({
   const live = run.status === 'running';
   const lastReview = run.reviews.at(-1);
   const lastVisual = run.visuals?.at(-1);
-  const planOpen = planScore(lastReview?.plan)?.open ?? 0;
 
-  // Переключатель и «Обновить» — в строке вкладок прогона, а не отдельной полосой над диффом.
+  // «Обновить» — в строке вкладок прогона, а не отдельной полосой над диффом.
   const bar = (
     <>
-      {accept && diff && (
-        <PillTabs<'code' | 'notes'>
-          className="tabs attempts"
-          value={accept.tab}
-          onChange={accept.onTab}
-          items={[
-            { id: 'code', label: `Код · ${diff.length}` },
-            {
-              id: 'notes',
-              label: `Заметки · ${accept.notes}`,
-              extra: accept.picked.length ? (
-                <span className="tab-badge is-pick">{accept.picked.length}</span>
-              ) : planOpen ? (
-                <span className="tab-badge is-bad" title="Пункты плана, которые ревьюер не нашёл сделанными">
-                  {planOpen}
-                </span>
-              ) : undefined,
-            },
-          ]}
-        />
-      )}
       {live && <span className="code-live">Агент работает — дифф может меняться</span>}
       {stale && <span className="code-stale">Есть новые изменения</span>}
       <span className="grow" />
@@ -153,7 +131,7 @@ export function CodePane({
         <div className="center">
           <span className="spinner big" />
         </div>
-      ) : !diff.length ? (
+      ) : !diff.length && tab === 'code' ? (
         <Empty icon={<FileCode2 />} title="Изменений пока нет">
           Агент ещё не менял файлы — загляните, когда пойдёт реализация.
         </Empty>
@@ -168,14 +146,15 @@ export function CodePane({
             groups={run.taskMap?.groups}
             visualItems={lastVisual ? [...lastVisual.blocking, ...lastVisual.notes] : []}
             visualPassed={lastVisual?.passed}
+            history={run.reviews.slice(0, -1)}
+            tab={tab}
+            onTab={onTab}
             {...(accept
               ? {
                   comments: accept.comments,
                   onComments: accept.onComments,
                   picked: accept.picked,
                   onPicked: accept.onPicked,
-                  tab: accept.tab,
-                  onTab: accept.onTab,
                   summary: accept.summary,
                 }
               : { comments: NO_COMMENTS, onComments: () => {}, readOnly: true })}

@@ -223,13 +223,20 @@ test('ревью кода: незакоммиченные правки — за�
   await page.getByRole('button', { name: 'Запустить прогон' }).click();
 
   await expect(page.getByText('Разбор', { exact: true })).toBeVisible({ timeout: 60_000 });
-  await page.getByRole('tab', { name: /Заметки/ }).click();
+  // Есть замечания — «Разбор» сразу открывает вкладку «Замечания», отдельного «Код / Заметки» больше нет.
+  await expect(page.getByRole('tab', { name: /Замечания/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: /^Заметки/ })).toHaveCount(0);
   await expect(page.locator('.note.n-blocking p')).toHaveText('sub складывает вместо вычитания');
   await expect(page.getByRole('heading', { name: /^Важные/ })).toBeVisible();
+  if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-review-notes.png') });
   // Отправить на исправление можно только выбранное.
   const fix = page.getByRole('button', { name: /Исправить в чате/ });
   await expect(fix).toBeDisabled();
   await page.locator('.note.n-blocking').getByRole('switch').click();
+  // Клик по месту замечания ведёт к строке во вкладке «Код».
+  await page.locator('.note.n-blocking .note-loc').click();
+  await expect(page.getByRole('tab', { name: /^Код/ })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: /Замечания/ }).click();
   await fix.click();
 
   await expect(page.locator('.chat-compose textarea')).toHaveValue(/sub складывает вместо вычитания/);

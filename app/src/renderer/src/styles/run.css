@@ -1000,6 +1000,28 @@ body.is-col-resizing .monaco-editor {
   justify-content: space-between;
 }
 
+/* Прошлые раунды ревью: свёрнуты, раскрываются по одному — для истории, не для решения. */
+.notes-history {
+  margin-top: var(--s-4);
+}
+.notes-round {
+  border-radius: var(--r-l);
+  background: var(--bg-1);
+}
+.notes-round > summary {
+  cursor: pointer;
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--fs-13);
+  color: var(--text-2);
+}
+.notes-round[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+.notes-round > .notes {
+  padding: var(--s-3);
+  opacity: 0.85;
+}
+
 /* Подтверждения визуальной проверки: спокойный список с галочками, не карточки замечаний. */
 .passed-list ul {
   list-style: none;

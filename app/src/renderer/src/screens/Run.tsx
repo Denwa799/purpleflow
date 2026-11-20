@@ -1,10 +1,11 @@
-// Экран прогона: шапка, чат менеджера, вкладки (таймлайн с деталями стадий, лог, браузер, код, PR) и панель решения на гейте.
+// Экран прогона: шапка, чат менеджера, вкладки (таймлайн с деталями стадий, лог, браузер, код, замечания, PR) и панель решения на гейте.
 import {
   ChartGantt,
   FileCode2,
   FolderTree,
   GitBranch,
   GitPullRequest,
+  MessageSquareText,
   Globe,
   MousePointerClick,
   ScrollText,
@@ -32,7 +33,7 @@ import { useStageDrawer } from './run/useStageDrawer';
 import { MergeCheckNote, useMergeCheck } from './run/MergeCheckNote';
 import { currentStage, reviewFixText, unstableText, withPicked } from './run/util';
 
-type View = 'timeline' | 'log' | 'browser' | 'code' | 'files' | 'git' | 'pr';
+type View = 'timeline' | 'log' | 'browser' | 'code' | 'notes' | 'files' | 'git' | 'pr';
 
 /** Решения на гейте: после них детали (план, дифф) сворачиваются и снова виден весь таймлайн. */
 const GATE_ACTIONS = ['approve', 'reject', 'cancel', 'accept', 'fix', 'skip'];
@@ -42,7 +43,7 @@ export function RunScreen({ runId }: { runId: string }) {
   const run = state.details[runId];
   const [view, setView] = useState<View>('timeline');
   const d = useStageDrawer(run, () => setView('code'));
-  const { comment, setComment, lineComments, setLineComments, picked, setPicked, accTab, setAccTab } = useRunGate();
+  const { comment, setComment, lineComments, setLineComments, picked, setPicked } = useRunGate();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const gateKey = useRef('');
@@ -80,7 +81,9 @@ export function RunScreen({ runId }: { runId: string }) {
     gateKey.current = key;
     if (run.status === 'waiting' && run.next === 'gate2') {
       d.reset();
-      setView('code');
+      // Ревью кода: главное — замечания; если их нет, смотреть остаётся код.
+      const r = run.reviews.at(-1);
+      setView(run.mode === 'review' && r && r.blocking.length + r.notes.length > 0 ? 'notes' : 'code');
     } else if (run.status === 'waiting') {
       setView('timeline');
       d.open(run.next === 'limit' ? limitRow(run) : run.next === 'gate0' ? 'clarify' : run.next);
@@ -96,7 +99,7 @@ export function RunScreen({ runId }: { runId: string }) {
   // До проверки «прогон загружен»: порядок хуков не должен зависеть от загрузки.
   const changed = useChangedFiles(run);
   const managerLayout = useManagerLayout();
-  /** Место в строке вкладок для инструментов вкладки «Код»: «Код / Заметки» и «Обновить». */
+  /** Место в строке вкладок для инструментов вкладок «Код» и «Замечания»: «Обновить». */
   const [tabTools, setTabTools] = useState<HTMLDivElement | null>(null);
   // На приёмке: базовая ветка ушла вперёд или те же файлы правит другой прогон — видно до решения, а не при влитии.
   const mergeCheck = useMergeCheck(
@@ -156,6 +159,8 @@ export function RunScreen({ runId }: { runId: string }) {
     (lastReview ? lastReview.blocking.length + lastReview.notes.length : 0) +
     (lastVisual ? lastVisual.blocking.length + lastVisual.notes.length : 0) +
     lineComments.length;
+  /** Вкладка «Замечания» — когда ревьюер или визуальная проверка уже что-то сказали, или на приёмке (там и свои замечания). */
+  const hasNotes = run.reviews.length > 0 || Boolean(run.visuals?.length) || gate === 'gate2';
 
   const codeReview = run.mode === 'review' && gate === 'gate2';
   /** Ревью кода: завершить разбор и отнести выбранное туда, где исправят, — в новую задачу или, для незакоммиченных правок, в чат. */
@@ -212,7 +217,7 @@ export function RunScreen({ runId }: { runId: string }) {
           pickedCount={gate === 'gate2' ? picked.length : 0}
           onOpenAccept={() => openStage(gate === 'gate1' ? 'gate1' : 'gate2')}
           onOpenApp={gate === 'gate2' && canRunApp && view !== 'browser' ? openApp : undefined}
-          diffShown={gate === 'gate1' ? showPlan : view === 'code'}
+          diffShown={gate === 'gate1' ? showPlan : view === 'code' || view === 'notes'}
         />
       )
     );
@@ -254,6 +259,22 @@ export function RunScreen({ runId }: { runId: string }) {
                   icon: <FileCode2 size={15} />,
                   extra: changed?.length ? <span className="tab-badge">{changed.length}</span> : undefined,
                 },
+                ...(hasNotes
+                  ? [
+                      {
+                        id: 'notes' as const,
+                        label: 'Замечания',
+                        icon: <MessageSquareText size={15} />,
+                        extra: picked.length ? (
+                          <span className="tab-badge is-pick" title="Отмечено к исправлению">
+                            {picked.length}
+                          </span>
+                        ) : accNotes ? (
+                          <span className={`tab-badge ${lastReview?.blocking.length ? 'is-bad' : ''}`}>{accNotes}</span>
+                        ) : undefined,
+                      },
+                    ]
+                  : []),
                 { id: 'files', label: 'Файлы', icon: <FolderTree size={15} /> },
                 { id: 'git', label: 'Git', icon: <GitBranch size={15} /> },
                 ...(run.pr
@@ -268,7 +289,7 @@ export function RunScreen({ runId }: { runId: string }) {
                   : []),
               ]}
             />
-            {view === 'code' ? <div className="tab-tools" ref={setTabTools} /> : <span className="grow" />}
+            {view === 'code' || view === 'notes' ? <div className="tab-tools" ref={setTabTools} /> : <span className="grow" />}
             {view === 'timeline' && !d.drawer && (
               <span className="tab-hint">
                 <MousePointerClick size={14} /> Нажмите на стадию — откроются её детали
@@ -296,21 +317,20 @@ export function RunScreen({ runId }: { runId: string }) {
                 <BrowserPane preview={preview} canRun={canRunApp} />
               </div>
             )}
-            {view === 'code' && (
+            {(view === 'code' || view === 'notes') && (
               <CodePane
                 run={run}
                 changed={changed}
                 tools={tabTools}
+                tab={view}
+                onTab={setView}
                 accept={
                   gate === 'gate2'
                     ? {
                         picked,
                         onPicked: setPicked,
-                        tab: accTab,
-                        onTab: setAccTab,
                         comments: lineComments,
                         onComments: setLineComments,
-                        notes: accNotes,
                         // Ревью кода сводку изменений не готовит — не показываем вечное «готовится».
                         summary: codeReview
                           ? undefined

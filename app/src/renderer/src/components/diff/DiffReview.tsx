@@ -1,6 +1,6 @@
 // Дифф прогона или чата: дерево файлов, Monaco, комментарии к строкам и замечания ревью.
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react';
-import type { DiffFile, LineComment, PlanCoverage, ReviewItem } from '@purpleflow/core';
+import type { DiffFile, LineComment, PlanCoverage, ReviewItem, ReviewResult } from '@purpleflow/core';
 import { Check, MessageSquarePlus, Sparkles, Trash2 } from 'lucide-react';
 import * as monaco from 'monaco-editor';
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
@@ -37,6 +37,8 @@ interface Props {
   onTab?: (t: 'code' | 'notes') => void;
   /** Ключ для отметок «Просмотрено» (id прогона); без него отметок нет. */
   viewedKey?: string;
+  /** Прошлые раунды ревью — свёрнуто под текущими замечаниями, только чтение. */
+  history?: ReviewResult[];
 }
 type Marker = { line: number; kind: 'blocking' | 'note' | 'mine'; text: string; idx?: number };
 const TREE_KEY = 'purpleflow.diffTree';
@@ -59,6 +61,7 @@ export function DiffReview({
   onTab,
   groups,
   viewedKey,
+  history = [],
 }: Props) {
   const [ownTab, setOwnTab] = useState<'code' | 'notes'>('code');
   const tab = outerTab ?? ownTab;
@@ -522,6 +525,36 @@ export function DiffReview({
           />
           <PassedList items={visualPassed} />
           {noteCount === 0 && !review?.plan?.length && !visualPassed.length && <p className="composer-hint">Замечаний нет.</p>}
+          {history.length > 0 && (
+            <section className="notes notes-history">
+              <h4>
+                Прошлые раунды ревью <span className="muted">{history.length}</span>
+              </h4>
+              {history
+                .map((r, i) => ({ r, n: i + 1 }))
+                .reverse()
+                .map(({ r, n }) => {
+                  const count = r.blocking.length + r.notes.length;
+                  return (
+                    <details key={n} className="notes-round">
+                      <summary>
+                        Ревью {n}
+                        <span className="muted">
+                          {' · '}
+                          {new Date(r.at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          {' · '}
+                          {count
+                            ? `замечаний: ${count}${r.blocking.length ? `, блокирующих: ${r.blocking.length} — отправлены на исправление` : ''}`
+                            : 'замечаний нет'}
+                        </span>
+                      </summary>
+                      <NoteList title={blockingTitle} kind="blocking" items={r.blocking} onJump={jumpTo} />
+                      <NoteList title="Заметки ревьюера" kind="note" items={r.notes} onJump={jumpTo} />
+                    </details>
+                  );
+                })}
+            </section>
+          )}
         </div>
       )}
     </div>
