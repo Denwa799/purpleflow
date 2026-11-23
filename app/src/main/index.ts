@@ -144,8 +144,8 @@ function attention(e: CoreEvent) {
     notify(e.runId, 'Прогон остановлен', `${title()}: ${e.message.slice(0, 160)}`);
 }
 
-// Восстановление может выполнять git-команды до 60 секунд каждая.
-const STARTUP_TIMEOUT_MS = 120_000;
+// Восстановление идёт по прогонам последовательно, и каждая git-команда может занять до 60 секунд.
+const STARTUP_TIMEOUT_MS = 5 * 60_000;
 let restartDelay = 0;
 let restartWait: Promise<void> | null = null;
 
@@ -210,12 +210,8 @@ function startHost(): CoreHost {
   });
   proc.once('exit', (code) => {
     const wasCurrent = host === current;
-    if (finishStartup()) {
-      const error = new Error(`Процесс ядра завершился при запуске (код ${code})`);
-      startupFailed = true;
-      failStart(error);
-      if (wasCurrent) startupError = error;
-    }
+    // Падение при запуске — не окончательный отказ: ниже ядро перезапустится с задержкой, как после любого падения.
+    if (finishStartup()) failStart(new Error(`Процесс ядра завершился при запуске (код ${code})`));
     if (wasCurrent) host = null;
     const error = new Error(`Процесс ядра завершился (код ${code})`);
     for (const p of current.pending.values()) p.reject(error);
@@ -226,9 +222,14 @@ function startHost(): CoreHost {
     restartDelay = Date.now() - startedAt < 10_000 ? Math.min(30_000, restartDelay * 2 || 1000) : 0;
     restartWait = new Promise((resolve) => {
       setTimeout(() => {
-        restartWait = null;
-        if (!quitting && !host) startHost();
-        resolve();
+        try {
+          if (!quitting && !host) startHost();
+        } catch (error) {
+          console.error('[core-host] restart', error);
+        } finally {
+          restartWait = null;
+          resolve();
+        }
       }, restartDelay);
     });
   });
