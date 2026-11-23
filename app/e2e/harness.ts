@@ -95,7 +95,8 @@ export async function launch(box: Sandbox, env: Record<string, string> = {}, app
     cwd: appDir,
     // В контейнере CI нет прав на песочницу Chromium.
     // «.», а не путь к файлу: от каталога приложения окно ищет промпты ядра, как и при обычном запуске.
-    // На Linux-раннере нет системного хранилища ключей (libsecret): basic даёт safeStorage встроенный ключ, иначе ключ и токен не сохранить.
+    // На Linux-раннере нет системного хранилища ключей (libsecret): basic + PURPLEFLOW_E2E_PLAIN_STORAGE дают safeStorage
+    // встроенный ключ, иначе ключ и токен не сохранить.
     args: [...(process.platform === 'linux' ? ['--no-sandbox', '--password-store=basic'] : []), '.'],
     env: {
       ...process.env,
@@ -105,6 +106,7 @@ export async function launch(box: Sandbox, env: Record<string, string> = {}, app
       ELECTRON_DISABLE_SECURITY_WARNINGS: '1',
       // Окно не всплывает и не забирает фокус, пока идут тесты. Посмотреть глазами: PURPLEFLOW_E2E_SHOW=1.
       ...(process.env.PURPLEFLOW_E2E_SHOW ? {} : { PURPLEFLOW_HIDDEN: '1' }),
+      PURPLEFLOW_E2E_PLAIN_STORAGE: '1',
       ...env,
     } as Record<string, string>,
   });

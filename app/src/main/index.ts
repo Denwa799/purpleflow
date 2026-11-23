@@ -716,6 +716,9 @@ handle('notify:test', () => {
 
 app.whenReady().then(() => {
   if (!primary) return;
+  // Сквозные тесты на Linux-раннере: системного хранилища ключей нет, а без шифрования ключ и токен не сохранить.
+  // Встроенный ключ — только для тестов; обычный запуск по-прежнему требует libsecret или KWallet.
+  if (process.platform === 'linux' && process.env.PURPLEFLOW_E2E_PLAIN_STORAGE) safeStorage.setUsePlainTextEncryption(true);
   // Сайт проекта во вкладке «Браузер» не получает разрешений (камера, геолокация, уведомления…).
   session.fromPartition(PREVIEW_PARTITION).setPermissionRequestHandler((_wc, _p, cb) => cb(false));
   if ((process.env.PURPLEFLOW_CAPTURE || HIDDEN) && process.platform === 'darwin') app.dock?.hide();
