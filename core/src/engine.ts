@@ -407,18 +407,19 @@ export async function stop(k: Kernel, id: string) {
   const r = k.store.load(id);
   if (!r) return;
   k.beginBackgroundTeardown(id);
-  k.cancelBackground(id);
-  const active = k.driving.has(id) || k.preparing.has(id);
-  const queued = r.status === 'queued';
-  if (active) k.stopping.add(id);
-  // Фоновые исходные проверки гибнут вместе с группой процессов — их итог больше не годится в эталон.
-  k.basePrep.delete(id);
-  if (queued) {
-    r.status = 'stopped';
-    r.message = 'Снят с очереди. «Продолжить» запустит его сразу.';
-    k.save(r);
-  }
+  // Флаг снимается в finally при любом исходе: иначе менеджер прогона останется заблокирован до перезапуска.
   try {
+    k.cancelBackground(id);
+    const active = k.driving.has(id) || k.preparing.has(id);
+    const queued = r.status === 'queued';
+    if (active) k.stopping.add(id);
+    // Фоновые исходные проверки гибнут вместе с группой процессов — их итог больше не годится в эталон.
+    k.basePrep.delete(id);
+    if (queued) {
+      r.status = 'stopped';
+      r.message = 'Снят с очереди. «Продолжить» запустит его сразу.';
+      k.save(r);
+    }
     // Start every kill before awaiting any of them. The teardown guard prevents a new manager from joining these groups.
     // Закрытие сессии визуальной проверки (visual-cleanup) переживает «Стоп» — его прерывает только удаление.
     const kills = runProcessGroups(id)
