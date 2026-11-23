@@ -12,7 +12,9 @@ import { halt, restore } from './engine.js';
 import { decide, waitGate } from './gates.js';
 import { Orchestrator } from './orchestrator.js';
 import { liveCount, run as runProc } from './proc.js';
+import { saveProjectConfig } from './services/projects.js';
 import { copyEnvFiles, cloneDeps } from './services/workspace.js';
+import { checksFeedback, runChecks } from './stages/checks.js';
 import { stageFinish } from './stages/finish.js';
 import { stageImplement } from './stages/implement.js';
 import { stageReview } from './stages/review.js';
@@ -127,6 +129,74 @@ function setup(t: { after: (fn: () => void) => void }, claude: Claude = () => ok
 
 const start = (core: Orchestrator, repo: string, over: object = {}) =>
   core.dispatch({ type: 'run.start', input: { projectPath: repo, task: 'Задача', testCommand: 'true', mode: 'quick', ...over } as never });
+
+// ——— Хук pre-commit ———
+
+/** Хук, который отклоняет коммит, если в застейдженном есть «BAD», — как lint-staged по изменённым файлам. */
+const REJECT_BAD = '#!/bin/sh\nif git diff --cached | grep -q BAD; then echo "hook: найдено BAD" >&2; exit 1; fi\nexit 0\n';
+
+test('хук pre-commit: отдельная проверка на изменениях прогона, настоящий индекс не трогает', unix, async (t) => {
+  const { k, repo, g, save } = setup(t);
+  fs.writeFileSync(path.join(repo, '.git', 'hooks', 'pre-commit'), REJECT_BAD, { mode: 0o755 });
+  const run = save({ next: 'tests' });
+
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'BAD\n');
+  fs.writeFileSync(path.join(repo, 'new.txt'), 'новый файл\n');
+  const red = await runChecks(k, run, 'true', { hooks: true });
+  assert.deepEqual(
+    red.failed.map((x) => x.kind),
+    ['hooks'],
+  );
+  assert.match(red.failed[0].output, /найдено BAD/);
+  assert.match(checksFeedback(k, red.failed), /Хук pre-commit репозитория не пропустил бы коммит/);
+  // Изменения прогона хук видел как застейдженные, а в настоящем индексе worktree ничего не появилось.
+  assert.equal(g('diff', '--cached', '--name-only'), '');
+
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'хорошо\n');
+  const green = await runChecks(k, run, 'true', { hooks: true });
+  assert.equal(green.result.passed, true);
+  assert.deepEqual(
+    green.result.checks?.map((x) => x.kind),
+    ['hooks', 'test'],
+  );
+  // Без hooks (воспроизведение бага, эталон) хук не запускается.
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'BAD\n');
+  assert.deepEqual(
+    (await runChecks(k, run, 'true')).result.checks?.map((x) => x.kind),
+    ['test'],
+  );
+});
+
+test('хук pre-commit: core.hooksPath (husky) находится, выключатель проекта и неисполняемый хук — без проверки', unix, async (t) => {
+  const { k, repo, g, save } = setup(t);
+  const run = save({ next: 'tests' });
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'BAD\n');
+  const kinds = async () => (await runChecks(k, run, 'true', { hooks: true })).result.checks?.map((x) => x.kind);
+
+  // Хука нет — проверки нет.
+  assert.deepEqual(await kinds(), ['test']);
+  // Неисполняемый файл git не запустит — и мы его не считаем.
+  fs.mkdirSync(path.join(repo, '.husky'));
+  fs.writeFileSync(path.join(repo, '.husky', 'pre-commit'), REJECT_BAD, { mode: 0o644 });
+  g('config', 'core.hooksPath', '.husky');
+  assert.deepEqual(await kinds(), ['test']);
+  fs.chmodSync(path.join(repo, '.husky', 'pre-commit'), 0o755);
+  assert.deepEqual(await kinds(), ['hooks', 'test']);
+
+  const cfg = {
+    setupCommand: '',
+    lintCommand: '',
+    testCommand: 'true',
+    notes: { setup: '', lint: '', test: '' },
+  };
+  saveProjectConfig(k, repo, { ...cfg, gitHooks: false });
+  assert.deepEqual(await kinds(), ['test']);
+  // Сохранение без поля (старое окно) выключатель не сбрасывает; явное включение — возвращает проверку.
+  saveProjectConfig(k, repo, cfg);
+  assert.deepEqual(await kinds(), ['test']);
+  saveProjectConfig(k, repo, { ...cfg, gitHooks: true });
+  assert.deepEqual(await kinds(), ['hooks', 'test']);
+});
 
 // ——— Завершение ———
 

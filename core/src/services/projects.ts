@@ -564,6 +564,8 @@ export function saveProjectConfig(k: Kernel, repo: string, cfg: ProjectConfigInp
       .filter((r) => r.path && r.path !== path.resolve(repo)),
     // Несколько репозиториев работают только в отдельных копиях: ветку в проекте пришлось бы переключать в каждом.
     workspace: multi?.repos.length ? 'worktree' : cfg.workspace,
+    // undefined — не трогаем (сохранение из старых окон); хранится только выключенный, включено — по умолчанию.
+    gitHooks: (cfg.gitHooks ?? prev?.gitHooks !== false) ? undefined : false,
     multiRepo: multi
       ? { root, repos: [...new Set(multi.repos.map((r) => r.trim().replace(/\/+$/, '')))].filter((r) => r && r !== mainRel) }
       : undefined,

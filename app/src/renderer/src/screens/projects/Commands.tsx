@@ -7,6 +7,7 @@ import {
   FolderGit2,
   FolderSearch,
   GitBranch,
+  GitCommitVertical,
   GitPullRequest,
   Globe,
   KeyRound,
@@ -36,6 +37,7 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
   const [visualNotes, setVisualNotes] = useState(p.visualNotes);
   const [quickTest, setQuickTest] = useState(p.quickTest ?? '');
   const [prepare, setPrepare] = useState(p.prepare ?? '');
+  const [gitHooks, setGitHooks] = useState(p.gitHooks !== false);
   const [envFiles, setEnvFiles] = useState(p.envFiles.join(', '));
   const [related, setRelated] = useState<RelatedRepo[]>(p.related ?? []);
   // Проект из нескольких репозиториев: участники (без основного) и все репозитории верхней папки для галочек.
@@ -111,6 +113,7 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
         quickTest,
         prepare,
         related,
+        gitHooks,
         // Сняли все галочки — проект снова из одного репозитория.
         ...(root ? { multi: members.length ? { root, repos: members } : null } : {}),
         forge: forgeTouched ? (forge && forge.host.trim() ? forge : null) : undefined,
@@ -224,6 +227,43 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
           onChange={(v) => edit('url', v)}
           loading={aiBusy}
         />
+        {!root && (
+          <div className="cmd-row">
+            <span className="cmd-icon">
+              <GitCommitVertical size={17} />
+            </span>
+            <div className="cmd-label">
+              <strong>Хук pre-commit</strong>
+              <span>Если в репозитории есть (husky, lint-staged…) — отдельной проверкой на изменениях прогона</span>
+            </div>
+            <div className="cmd-field">
+              <div className="segmented small" role="radiogroup" aria-label="Хук pre-commit">
+                {[
+                  { on: true, title: 'Проверять' },
+                  { on: false, title: 'Не запускать' },
+                ].map((o) => (
+                  <button
+                    key={String(o.on)}
+                    role="radio"
+                    aria-checked={gitHooks === o.on}
+                    className={gitHooks === o.on ? 'is-on' : ''}
+                    onClick={() => {
+                      setGitHooks(o.on);
+                      touch();
+                    }}
+                  >
+                    {o.title}
+                  </button>
+                ))}
+              </div>
+              <span className="cmd-note">
+                {gitHooks
+                  ? 'Хук не прошёл — работа уходит исполнителю, как красный линтер. Коммит прогона хук не запускает повторно.'
+                  : 'Хук не запускается: коммит прогона его не проверяет.'}
+              </span>
+            </div>
+          </div>
+        )}
         <div className="cmd-row">
           <span className="cmd-icon">
             <GitBranch size={17} />

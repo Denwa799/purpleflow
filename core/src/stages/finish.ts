@@ -9,8 +9,7 @@ import type { Kernel } from '../kernel.js';
 import { OpenSpec } from '../openspec.js';
 import { learn } from '../services/projects.js';
 import { repoSlots } from '../services/repos.js';
-import { envFilesOf } from '../services/workspace.js';
-import { RunStore } from '../store.js';
+import { commitExcludes } from '../services/workspace.js';
 import { traced } from '../trace.js';
 import type { RunFile } from '../types.js';
 export async function stageFinish(k: Kernel, run: RunFile) {
@@ -19,6 +18,7 @@ export async function stageFinish(k: Kernel, run: RunFile) {
   const openspec = new OpenSpec(tools.openspec, k.opts.env);
   const git = new Git(tools.git, k.opts.env);
 
+  // Хук pre-commit проекта уже прошёл отдельной проверкой на этом же содержимом (стадия «Проверки»), поэтому коммит — с --no-verify.
   // Повтор после сбоя на коммите: архив уже сделан — второй раз openspec archive не запускаем.
   if (run.mode !== 'quick' && (!run.archivedPath || !fs.existsSync(path.dirname(run.archivedPath)))) {
     k.log(run, c.sky(`$ openspec archive ${run.changeId} -y`) + '\n');
@@ -35,14 +35,7 @@ export async function stageFinish(k: Kernel, run: RunFile) {
   k.save(run);
   let sha: string;
   try {
-    // Быстрая правка идёт без OpenSpec: run.json остаётся в данных прогона, но не в коммите проекта.
-    const exclude = [
-      ...(run.mode === 'quick' && RunStore.inProject(run)
-        ? [path.relative(run.worktreePath, RunStore.runJsonPath(run)).split(path.sep).join('/')]
-        : []),
-      // Скопированные файлы окружения — секреты разработчика, в коммит не попадают даже без .gitignore.
-      ...envFilesOf(k, run),
-    ];
+    const exclude = commitExcludes(k, run);
     const round = run.prRound && run.pr ? run.prRounds?.at(-1) : undefined;
     const message =
       round?.kind === 'update'

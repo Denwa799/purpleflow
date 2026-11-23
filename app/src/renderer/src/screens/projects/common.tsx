@@ -30,6 +30,8 @@ export interface LoadedProject {
   multi?: MultiRepo;
   /** Сохранённый провайдер PR/MR; пусто — определяется по origin. */
   forge?: ForgeRef | null;
+  /** Хук pre-commit репозитория — проверкой на стадии «Проверки»; по умолчанию включено. */
+  gitHooks?: boolean;
 }
 export const projectName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
 /** Имя проекта в списках: у проекта из нескольких репозиториев — его верхняя папка. */
@@ -55,6 +57,7 @@ export async function loadProject(dir: string): Promise<LoadedProject> {
       prepare: cfg.prepareCommand ?? '',
       related: cfg.relatedRepos ?? [],
       forge: cfg.forge ?? null,
+      gitHooks: cfg.gitHooks !== false,
     };
   }
   const from = det.detectedFrom ? `по ${det.detectedFrom}` : '';
@@ -69,7 +72,7 @@ export async function loadProject(dir: string): Promise<LoadedProject> {
   };
 }
 export function saveLoaded(
-  p: Pick<LoadedProject, 'cmds' | 'notes' | 'workspace' | 'visualNotes' | 'envFiles' | 'quickTest' | 'prepare' | 'related'> & {
+  p: Pick<LoadedProject, 'cmds' | 'notes' | 'workspace' | 'visualNotes' | 'envFiles' | 'quickTest' | 'prepare' | 'related' | 'gitHooks'> & {
     path: string;
     /** Не передан — участники проекта остаются прежними; null — проект снова из одного репозитория. */
     multi?: MultiRepo | null;
@@ -90,6 +93,7 @@ export function saveLoaded(
     relatedRepos: p.related,
     forge: p.forge,
     workspace: p.workspace,
+    gitHooks: p.gitHooks !== false,
     notes: { setup: p.notes.setup, lint: p.notes.lint, test: p.notes.test, run: p.notes.run },
     ...(p.multi !== undefined ? { multiRepo: p.multi } : {}),
   });

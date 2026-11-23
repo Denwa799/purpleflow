@@ -8,21 +8,26 @@ import { afterChecks, afterReview, epicHasMore, reviewInParallel } from '../rout
 import type { BasePrep } from '../runtime.js';
 import { CHECK_NAME, MAX_TEST_OUTPUT, RUN_JSON_GLOB, StopSignal } from '../runtime.js';
 import { getProjectConfig } from '../services/projects.js';
-import { envFilesOf } from '../services/workspace.js';
+import { commitExcludes, envFilesOf } from '../services/workspace.js';
 import { repoChangedFiles, repoDiffText } from '../services/repos.js';
 import type { CheckResult, ReviewResult, RunFile, TestResult } from '../types.js';
 import { reviewFeedback, reviewLoop, reviewPass } from './review.js';
-/** Линтер и тесты в worktree. Общий для «Проверок», базовых проверок и воспроизведения бага. */
+/**
+ * Линтер и тесты в worktree. Общий для «Проверок», базовых проверок и воспроизведения бага.
+ * hooks — ещё и хук pre-commit репозитория (только на стадии «Проверки»): первым, его автоисправления увидят линтер и тесты.
+ */
 export async function runChecks(
   k: Kernel,
   run: RunFile,
   testCommand = run.testCommand,
+  { hooks = false }: { hooks?: boolean } = {},
 ): Promise<{ result: TestResult; failed: CheckResult[] }> {
   const s = k.opts.getSettings();
   const plan: { kind: CheckResult['kind']; command: string }[] = [];
   if (run.lintCommand) plan.push({ kind: 'lint', command: run.lintCommand });
   if (testCommand) plan.push({ kind: 'test', command: testCommand });
   const checks: CheckResult[] = [];
+  if (hooks && (await hookCheckNeeded(k, run))) checks.push(await runHookCheck(k, run, s.testTimeoutMin));
   for (const p of plan) checks.push(await runCheck(k, run, p.kind, p.command, s.testTimeoutMin));
   const failed = checks.filter((x) => !x.passed);
   const result: TestResult = checks.length
@@ -42,7 +47,7 @@ export async function runChecks(
         passed: true,
         exitCode: 0,
         durationMs: 0,
-        output: 'Команды линтера и тестов не заданы — проверки пропущены.',
+        output: 'Команды линтера и тестов не заданы, хука pre-commit нет — проверки пропущены.',
         checks: [],
       };
   if (!checks.length) k.log(run, c.amber(result.output) + '\n');
@@ -60,6 +65,60 @@ export async function runCheck(
   k.log(run, c.sky(`$ ${command}`) + c.dim(`  # ${CHECK_NAME[kind]}${note ? `, ${note}` : ''}`) + '\n');
   const r = await k.shell(run, command, timeoutMin);
   k.checkStop(run);
+  return checkResult(k, run, kind, command, r);
+}
+
+/** Как запускается хук: так его и показываем в логе и в выводе для исполнителя. */
+export const HOOK_COMMAND = 'git hook run pre-commit';
+
+/**
+ * Хук pre-commit — отдельной проверкой, если он есть и не выключен в настройках проекта.
+ * Проект из нескольких репозиториев пока без него: у каждого репозитория свои хуки.
+ */
+async function hookCheckNeeded(k: Kernel, run: RunFile): Promise<boolean> {
+  if (run.root || getProjectConfig(k, run.projectPath)?.gitHooks === false) return false;
+  const tools = await k.tools(['git']);
+  return Boolean(await new Git(tools.git, k.opts.env).preCommitHook(run.worktreePath));
+}
+
+/**
+ * Хук pre-commit на том, что войдёт в коммит: изменения прогона — во временном индексе (lint-staged и подобные смотрят
+ * на «застейдженное»), настоящий индекс worktree не трогаем. Коммит на «Завершении» идёт с --no-verify: хук уже прошёл здесь.
+ */
+export async function runHookCheck(k: Kernel, run: RunFile, timeoutMin: number): Promise<CheckResult> {
+  const tools = await k.tools(['git']);
+  const git = new Git(tools.git, k.opts.env);
+  k.log(run, c.sky(`$ ${HOOK_COMMAND}`) + c.dim(`  # ${CHECK_NAME.hooks}`) + '\n');
+  const staged = await git.stagedIndex(run.worktreePath, commitExcludes(k, run));
+  let r: Awaited<ReturnType<Kernel['exec']>>;
+  try {
+    r = await k.exec(run, tools.git, ['hook', 'run', 'pre-commit'], timeoutMin, { GIT_INDEX_FILE: staged.env.GIT_INDEX_FILE });
+  } finally {
+    staged.cleanup();
+  }
+  k.checkStop(run);
+  // git старше 2.36 не знает «git hook»: хук не запустить — не блокируем, но говорим об этом.
+  if (r.code !== 0 && /'hook' is not a git command|unknown subcommand/i.test(r.stderr)) {
+    k.log(run, c.amber('! git старше 2.36 не умеет запускать хуки отдельно — хук pre-commit пропущен. Обновите git.') + '\n');
+    return {
+      kind: 'hooks',
+      command: HOOK_COMMAND,
+      passed: true,
+      exitCode: 0,
+      durationMs: r.durationMs,
+      output: 'Пропущен: git старше 2.36.',
+    };
+  }
+  return checkResult(k, run, 'hooks', HOOK_COMMAND, r);
+}
+
+function checkResult(
+  k: Kernel,
+  run: RunFile,
+  kind: CheckResult['kind'],
+  command: string,
+  r: Awaited<ReturnType<Kernel['exec']>>,
+): CheckResult {
   const output = (r.stdout + (r.stderr ? '\n' + r.stderr : '')).trim();
   const check: CheckResult = {
     kind,
@@ -166,7 +225,10 @@ export function checksFeedback(k: Kernel, failed: CheckResult[], base?: CheckRes
   return failed
     .map((x) => {
       const before = base?.find((b) => b.kind === x.kind && !b.passed);
-      const head = `${x.kind === 'lint' ? 'Линтер' : 'Тесты'} не прошли. Команда: \`${x.command}\`, код выхода ${x.exitCode}${x.timedOut ? ' (таймаут)' : ''}.`;
+      const head =
+        x.kind === 'hooks'
+          ? `Хук pre-commit репозитория не пропустил бы коммит. Команда: \`${x.command}\`, код выхода ${x.exitCode}${x.timedOut ? ' (таймаут)' : ''}. Исправь код так, чтобы хук прошёл; сам хук и его настройки не меняй и не обходи.`
+          : `${x.kind === 'lint' ? 'Линтер' : 'Тесты'} не прошли. Команда: \`${x.command}\`, код выхода ${x.exitCode}${x.timedOut ? ' (таймаут)' : ''}.`;
       // Проверка была красной и до задачи: просим исправить только новое, чужие старые ошибки не трогать.
       const delta = before
         ? `\n\nЭта проверка была красной ещё до задачи (ошибок: ${errorCount(before.output) ?? 'не удалось посчитать'}), сейчас — ${errorCount(x.output) ?? 'не удалось посчитать'}. Старые ошибки в чужом коде не исправляй — устрани только те, что появились из‑за твоих изменений, чтобы ошибок стало не больше, чем было.`
@@ -469,7 +531,7 @@ export async function stageTests(k: Kernel, run: RunFile) {
           `${run.focusTestCommand ? 'Тесты задачи' : 'Быстрые проверки'}: \`${quick}\` — полный набор \`${run.testCommand}\` пойдёт перед приёмкой, когда остальное будет зелёным.`,
         ) + '\n',
       );
-    const raw = await runChecks(k, run, useQuick ? quick : run.testCommand);
+    const raw = await runChecks(k, run, useQuick ? quick : run.testCommand, { hooks: true });
     ({ result, failed } = await probe(...(Object.values(compareWithBase(k, run, raw.result)) as [TestResult, CheckResult[]])));
     if (useQuick && result.passed && lastPhase) {
       // Полный набор — после ревью: если ревьюер вернёт задачу, гонять его сейчас незачем.

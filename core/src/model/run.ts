@@ -75,7 +75,8 @@ export interface StageAttempt {
 }
 
 export interface CheckResult {
-  kind: 'lint' | 'test';
+  /** hooks — хук pre-commit репозитория (husky, lint-staged…) на изменениях прогона. */
+  kind: 'lint' | 'test' | 'hooks';
   command: string;
   passed: boolean;
   exitCode: number | null;

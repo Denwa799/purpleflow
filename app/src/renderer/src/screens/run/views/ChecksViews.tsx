@@ -46,7 +46,15 @@ function BaseChecksView({ run }: { run: RunFile }) {
       <ul className="base-checks">
         {checks.map((c) => (
           <li key={`${c.kind}:${c.command}`} className={c.passed ? 'is-ok' : 'is-bad'}>
-            <span>{c.kind === 'lint' ? 'Линтер' : c.command === run.focusTestCommand ? 'Тесты задачи' : 'Тесты'}</span>
+            <span>
+              {c.kind === 'lint'
+                ? 'Линтер'
+                : c.kind === 'hooks'
+                  ? 'Хук pre-commit'
+                  : c.command === run.focusTestCommand
+                    ? 'Тесты задачи'
+                    : 'Тесты'}
+            </span>
             <code>{c.command}</code>
           </li>
         ))}
@@ -87,7 +95,7 @@ export function TestsView({ run, idx }: { run: RunFile; idx: number }) {
           <section key={i} className="check-block">
             <div className={`tests-head ${c.unstable ? 'is-old' : c.passed ? 'is-ok' : c.preexisting ? 'is-old' : 'is-bad'}`}>
               <strong>
-                {c.kind === 'lint' ? 'Линтер' : 'Тесты'} ·{' '}
+                {c.kind === 'lint' ? 'Линтер' : c.kind === 'hooks' ? 'Хук pre-commit' : 'Тесты'} ·{' '}
                 {c.unstable ? 'нестабильные' : c.passed ? 'ok' : c.preexisting ? 'красные и до задачи' : 'красные'}
               </strong>
               <span className="mono">{c.command}</span>

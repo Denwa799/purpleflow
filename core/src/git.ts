@@ -486,16 +486,60 @@ export class Git {
     return serialized(worktree, () => this.commitUnsafe(worktree, message, exclude));
   }
 
-  private async commitUnsafe(worktree: string, message: string, exclude: string[]): Promise<string> {
+  /** Всё, что войдёт в коммит, — в индекс; исключённое (run.json быстрой правки, файлы окружения) остаётся вне его. */
+  private async stage(worktree: string, exclude: string[]) {
     // git ругается на :(exclude) для файлов из .gitignore — они и так не попадут в коммит, исключаем только остальные.
     const tracked: string[] = [];
     for (const e of exclude) {
       const ignored = await run(this.bin, ['check-ignore', '-q', '--', e], { cwd: worktree, env: this.env });
       if (ignored.code !== 0) tracked.push(e);
     }
-    exclude = tracked;
-    await this.git(worktree, ['add', '-A', '--', '.', ...exclude.map((e) => `:(exclude)${e}`)]);
-    if (exclude.length) await run(this.bin, ['reset', '-q', '--', ...exclude], { cwd: worktree, env: this.env });
+    await this.git(worktree, ['add', '-A', '--', '.', ...tracked.map((e) => `:(exclude)${e}`)]);
+    if (tracked.length) await run(this.bin, ['reset', '-q', '--', ...tracked], { cwd: worktree, env: this.env });
+  }
+
+  /**
+   * Хук pre-commit проекта, если он есть: core.hooksPath (husky и т.п.) или hooks в общем каталоге git (у worktree он общий).
+   * Неисполняемый файл git не запустит — его не считаем.
+   */
+  async preCommitHook(worktree: string): Promise<string | null> {
+    const configured = (await run(this.bin, ['config', '--get', 'core.hooksPath'], { cwd: worktree, env: this.env })).stdout.trim();
+    const dir = configured
+      ? path.resolve(await this.topLevel(worktree), configured.replace(/^~(?=$|[\\/])/, os.homedir()))
+      : path.resolve(worktree, (await this.git(worktree, ['rev-parse', '--git-common-dir'])).trim(), 'hooks');
+    const hook = path.join(dir, 'pre-commit');
+    try {
+      const st = fs.statSync(hook);
+      if (!st.isFile()) return null;
+      if (process.platform !== 'win32' && !(st.mode & 0o111)) return null;
+      return hook;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Индекс будущего коммита во временном файле: хуки (lint-staged и т.п.) смотрят на «застейдженное», а настоящий индекс
+   * worktree не трогаем. Возвращает окружение с GIT_INDEX_FILE и функцию уборки.
+   */
+  async stagedIndex(worktree: string, exclude: string[]): Promise<{ env: NodeJS.ProcessEnv; cleanup: () => void }> {
+    const real = path.resolve(worktree, (await this.git(worktree, ['rev-parse', '--git-path', 'index'])).trim());
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-index-'));
+    const file = path.join(dir, 'index');
+    if (fs.existsSync(real)) fs.copyFileSync(real, file);
+    const env = { ...this.env, GIT_INDEX_FILE: file };
+    const cleanup = () => fs.rmSync(dir, { recursive: true, force: true });
+    try {
+      await new Git(this.bin, env).stage(worktree, exclude);
+    } catch (e) {
+      cleanup();
+      throw e;
+    }
+    return { env, cleanup };
+  }
+
+  private async commitUnsafe(worktree: string, message: string, exclude: string[]): Promise<string> {
+    await this.stage(worktree, exclude);
     // Смотрим на индекс, а не на status: исключённые файлы (run.json быстрой правки) остаются неотслеживаемыми.
     const staged = await this.git(worktree, ['diff', '--cached', '--name-only']);
     if (!staged.trim()) return this.head(worktree);

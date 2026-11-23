@@ -47,6 +47,8 @@ export interface ProjectConfig {
   multiRepo?: MultiRepo;
   /** Провайдер Pull/Merge Request и хост; без него провайдер определяется по origin для github.com и gitlab.com. */
   forge?: ForgeRef;
+  /** Хук pre-commit репозитория — отдельной проверкой на стадии «Проверки». По умолчанию включено; false — не запускать. */
+  gitHooks?: boolean;
   /** Знания о проекте для всех агентов: профиль (стек, структура, соглашения) и уроки прошлых прогонов. */
   knowledge?: ProjectKnowledge;
   notes: { setup: string; lint: string; test: string; run?: string };

@@ -38,7 +38,7 @@ export const INLINE_DIFF = 60_000;
 
 export const RUN_JSON_GLOB = 'openspec/changes/**/run.json';
 
-export const CHECK_NAME = { lint: 'линтер', test: 'тесты' } as const;
+export const CHECK_NAME = { lint: 'линтер', test: 'тесты', hooks: 'хук pre-commit' } as const;
 
 /** Подготовка и исходные проверки прогона, идущие в фоне параллельно с уточнением и планом. */
 export interface BasePrep {

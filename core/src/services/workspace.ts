@@ -7,6 +7,7 @@ import type { Kernel } from '../kernel.js';
 
 import { OpenSpec } from '../openspec.js';
 import { run as runProc } from '../proc.js';
+import { RunStore } from '../store.js';
 import { traced } from '../trace.js';
 import type { RunFile } from '../types.js';
 import { getProjectConfig } from './projects.js';
@@ -87,6 +88,18 @@ async function undoWorkspace(git: Git, run: RunFile) {
 }
 
 /** Файлы окружения прогона: явный список или найденные в проекте (у прогонов без списка — из команд проекта). */
+/** Что не попадает в коммит прогона: run.json быстрой правки и скопированные файлы окружения (секреты разработчика). */
+export function commitExcludes(k: Kernel, run: RunFile): string[] {
+  return [
+    // Быстрая правка идёт без OpenSpec: run.json остаётся в данных прогона, но не в коммите проекта.
+    ...(run.mode === 'quick' && RunStore.inProject(run)
+      ? [path.relative(run.worktreePath, RunStore.runJsonPath(run)).split(path.sep).join('/')]
+      : []),
+    // Скопированные файлы окружения — секреты разработчика, в коммит не попадают даже без .gitignore.
+    ...envFilesOf(k, run),
+  ];
+}
+
 export function envFilesOf(k: Kernel, run: RunFile): string[] {
   if (run.workspace === 'branch') return [];
   return run.envFiles ?? getProjectConfig(k, run.projectPath)?.envFiles ?? [];
