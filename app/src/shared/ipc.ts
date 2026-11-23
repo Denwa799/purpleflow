@@ -299,6 +299,7 @@ export type HostRequest =
 
 export type HostMessage =
   | { kind: 'ready' }
+  | { kind: 'init-failed'; error: string }
   | { kind: 'event'; event: CoreEvent }
   | { kind: 'reply'; id: number; ok: true; result: unknown }
   | { kind: 'reply'; id: number; ok: false; error: string };
