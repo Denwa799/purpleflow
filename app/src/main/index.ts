@@ -147,7 +147,7 @@ function attention(e: CoreEvent) {
 // Восстановление может выполнять git-команды до 60 секунд каждая.
 const STARTUP_TIMEOUT_MS = 120_000;
 let restartDelay = 0;
-let restartTimer: ReturnType<typeof setTimeout> | null = null;
+let restartWait: Promise<void> | null = null;
 
 function startHost(): CoreHost {
   if (host) return host;
@@ -224,10 +224,13 @@ function startHost(): CoreHost {
     if (!wasCurrent || quitting || startupFailed) return;
     // Ядро упало — поднимаем заново; прогоны восстановятся из run.json. Падает сразу — не крутимся в холостую.
     restartDelay = Date.now() - startedAt < 10_000 ? Math.min(30_000, restartDelay * 2 || 1000) : 0;
-    restartTimer = setTimeout(() => {
-      restartTimer = null;
-      if (!quitting && !host) startHost();
-    }, restartDelay);
+    restartWait = new Promise((resolve) => {
+      setTimeout(() => {
+        restartWait = null;
+        if (!quitting && !host) startHost();
+        resolve();
+      }, restartDelay);
+    });
   });
   const init: HostRequest = {
     kind: 'init',
@@ -248,10 +251,9 @@ async function callHost(method: CoreMethod, args: unknown[]): Promise<unknown> {
   if (startupError) throw startupError;
   if (installAttempt) throw new Error('Приложение готовится к установке обновления');
   if (quitting || host?.stopping) throw new Error('Ядро останавливается');
-  if (restartTimer) {
-    clearTimeout(restartTimer);
-    restartTimer = null;
-  }
+  if (!host && restartWait) await restartWait;
+  if (startupError) throw startupError;
+  if (quitting) throw new Error('Ядро останавливается');
   const current = host ?? startHost();
   await current.ready;
   if (installAttempt) throw new Error('Приложение готовится к установке обновления');
@@ -604,10 +606,10 @@ function stopHost(): Promise<void> {
 }
 
 app.on('before-quit', (e) => {
-  if (quitting || !host) return;
+  if (quitting) return;
   e.preventDefault();
   quitting = true;
-  void Promise.all([stopHost(), flushUsageEvents()]).then(() => app.quit());
+  void Promise.allSettled([stopHost(), flushUsageEvents()]).then(() => app.quit());
 });
 
 // Некоторые установщики запрашивают выход асинхронно.
@@ -620,7 +622,7 @@ function resumeAfterInstallFailure() {
   installAttempt = undefined;
   quitting = false;
   // Пока старый процесс завершает работу, перезапуск выполнит его обработчик exit.
-  if (!host && !restartTimer) startHost();
+  if (!host && !restartWait) startHost();
 }
 
 app.on('will-quit', () => clearTimeout(installAttempt?.timer));
