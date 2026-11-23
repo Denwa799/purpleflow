@@ -75,10 +75,13 @@ export function parseEtime(s: string): number | null {
 /** Процесс начался уже после того, как PID был записан: номер достался кому-то другому. */
 async function startedAfter(pid: number, recordedAt: number): Promise<boolean> {
   if (process.platform === 'win32') return false;
+  // Время — до запуска ps: на загруженной машине он отвечает секундами, и «сейчас» после него сдвинуло бы начало процесса
+  // позже записи — свой процесс выглядел бы чужим и пережил бы восстановление.
+  const now = Date.now();
   const r = await run('ps', ['-o', 'etime=', '-p', String(pid)], { cwd: process.cwd(), env: process.env, timeoutMs: 5000 });
   const age = parseEtime(r.stdout);
   // Запас в пару секунд: и секунды ps, и время файла округлены.
-  return age != null && Date.now() - age * 1000 > recordedAt + 2000;
+  return age != null && now - age * 1000 > recordedAt + 2000;
 }
 
 /**
