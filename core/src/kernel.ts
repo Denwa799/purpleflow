@@ -40,6 +40,8 @@ export class Kernel {
   readonly previews = new Map<string, PreviewState>();
   /** Решения на гейтах, которые ещё не завершили остановку процессов и сохранение. */
   readonly decidingGates = new Set<string>();
+  /** Владелец запуска и сервера, начиная с подготовки рабочей копии. */
+  readonly previewLaunches = new Map<string, Promise<PreviewState>>();
   /** Прогоны, по которым менеджер сейчас готовит ответ. */
   readonly managerBusy = new Set<string>();
   /** Чаты, в которых агент сейчас отвечает. */
