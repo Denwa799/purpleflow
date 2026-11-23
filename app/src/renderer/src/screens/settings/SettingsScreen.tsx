@@ -1,5 +1,6 @@
 // Настройки: вкладки аккаунта, расхода, инструментов, моделей и приложения; черновик правок — в useSettingsDraft.
 import { useEffect, useState } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import { AccountStats } from '../../components/AccountStats';
 import { PillTabs } from '../../components/PillTabs';
 import { Mark } from '../../components/Sidebar';
@@ -25,7 +26,10 @@ export function SettingsScreen() {
   // Первый запуск идёт после экрана входа — начинаем с инструментов; дальше первой открывается вкладка аккаунта.
   const view = state.view;
   const wanted = view.name === 'settings' ? view.tab : undefined;
-  const [tab, setTab] = useState<SettingsTab>(() => wanted ?? (s && (!s.onboarded || !s.accountEnabled) ? 'tools' : 'account'));
+  // Файл настроек не читается — onboarded в нём неизвестен: не принимаем это за первый запуск.
+  const [tab, setTab] = useState<SettingsTab>(
+    () => wanted ?? (s && ((!s.onboarded && !s.unreadable) || !s.accountEnabled) ? 'tools' : 'account'),
+  );
   // Переход с вкладкой, пока настройки уже открыты (например, из выбора модели на «Моделях» — во вход на «Аккаунт»).
   useEffect(() => {
     if (wanted) setTab(wanted);
@@ -40,7 +44,7 @@ export function SettingsScreen() {
     });
   }, [tab, accountEmail, reloadSettings]);
 
-  const firstRun = Boolean(s && !s.onboarded);
+  const firstRun = Boolean(s && !s.onboarded && !s.unreadable);
   const toolsKnown = Boolean(state.tools);
   // Первая настройка открыта; агенты не найдены — отдельным сбоем: на этом месте настройку и бросают.
   useEffect(() => {
@@ -51,7 +55,7 @@ export function SettingsScreen() {
   }, [firstRun, toolsKnown, allFound]);
 
   if (!s) return null;
-  const first = !s.onboarded;
+  const first = firstRun;
   const tools = state.tools;
 
   const finish = async () => {
@@ -84,6 +88,19 @@ export function SettingsScreen() {
           title="Настройки"
           sub={s.accountEnabled ? 'Аккаунт, статистика, инструменты, модели и вид приложения' : 'Инструменты, модели и вид приложения'}
         />
+      )}
+
+      {s.unreadable && (
+        <div className="banner b-amber">
+          <TriangleAlert size={18} />
+          <div>
+            <strong>Файл настроек не читается</strong>
+            <p>
+              Скорее всего, у приложения нет к нему доступа. Пока показаны значения по умолчанию, а сохранить изменения нельзя — сам файл не
+              тронут. Как только доступ появится, настройки подхватятся сами.
+            </p>
+          </div>
+        </div>
       )}
 
       <div className="settings-tabs">

@@ -20,7 +20,7 @@ import {
 } from 'electron';
 import type { CoreCommand, CoreEvent, RunFile } from '@purpleflow/core';
 import type { CoreMethod, HostMessage, HostRequest, SettingsPatch } from '../shared/ipc';
-import { coreSettings, publicSettings, seenVersion, setSeenVersion, updateSettings } from './settings';
+import { coreSettings, publicSettings, seenVersion, setSeenVersion, settingsReadable, updateSettings } from './settings';
 import { releases } from './releases';
 import { bugReportUrl } from '../shared/bugReport';
 import * as account from './account';
@@ -437,6 +437,22 @@ handle('settings:set', (_e, patch: SettingsPatch) => {
 });
 // Аккаунт PurpleSchool. После смены ключа прокси ядро получает новые настройки.
 const pushSettings = () => host?.process.postMessage({ kind: 'settings', settings: coreSettings() } satisfies HostRequest);
+
+// Файл настроек не прочитался (нет доступа и т.п.): ядро и окно получили значения по умолчанию.
+// Проверяем, пока не прочитается, и тогда отдаём настоящие и ядру, и окну.
+const SETTINGS_RETRY_MS = 3000;
+let settingsRetry: ReturnType<typeof setInterval> | null = null;
+function watchUnreadableSettings() {
+  if (settingsRetry || settingsReadable()) return;
+  console.error('[settings] файл настроек не читается — до восстановления действуют значения по умолчанию');
+  settingsRetry = setInterval(() => {
+    if (!settingsReadable()) return;
+    clearInterval(settingsRetry!);
+    settingsRetry = null;
+    pushSettings();
+    win?.webContents.send('settings:recovered');
+  }, SETTINGS_RETRY_MS);
+}
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 handle('account:login', async (_e, email: unknown, password: unknown) => {
   const r = await account.login(str(email), str(password));
@@ -672,10 +688,14 @@ handle('update:install', async () => {
   try {
     await Promise.all([stopHost(), flushUsageEvents()]);
     const current = updateState();
-    if (current.kind !== 'ready' || current.version !== update.version) {
+    // Пока останавливалось ядро, состояние обновления сменилось. Не молчим: сбой фоновой проверки окно уже показывает,
+    // остальное сообщаем сами.
+    if (current.kind !== 'ready') {
       resumeAfterInstallFailure();
+      if (current.kind !== 'failed') reportInstallFailure(update.version, 'Обновление больше не готово к установке — попробуйте ещё раз');
       return;
     }
+    // Успела скачаться более новая версия — ставим её: установщик берёт последнюю скачанную.
     attempt.timer = setTimeout(() => fail('Установщик не запросил перезапуск приложения'), INSTALL_QUIT_TIMEOUT_MS);
     installUpdate();
   } catch (error) {
@@ -699,6 +719,7 @@ app.whenReady().then(() => {
   // Сайт проекта во вкладке «Браузер» не получает разрешений (камера, геолокация, уведомления…).
   session.fromPartition(PREVIEW_PARTITION).setPermissionRequestHandler((_wc, _p, cb) => cb(false));
   if ((process.env.PURPLEFLOW_CAPTURE || HIDDEN) && process.platform === 'darwin') app.dock?.hide();
+  watchUnreadableSettings();
   startHost();
   setupMenu();
   createWindow();

@@ -29,6 +29,11 @@ test('временная ошибка чтения не стирает сохр�
     launched = l;
     await l.page.evaluate(() => (window as unknown as AppWindow).purpleflow.whatsNew.versions());
     expect(fs.statSync(file).mode & 0o777).toBe(0);
+    // Неизвестный onboarded не принимается за первый запуск: окно сообщает о проблеме, а не открывает первую настройку.
+    await expect(l.page.evaluate(() => (window as unknown as AppWindow).purpleflow.settings.get())).resolves.toMatchObject({
+      unreadable: true,
+    });
+    await expect(l.page.getByText('Настроим PurpleFlow')).toHaveCount(0);
     await expect(l.page.evaluate(() => (window as unknown as AppWindow).purpleflow.settings.set({ sound: false }))).rejects.toThrow(
       /EACCES/,
     );
@@ -38,7 +43,7 @@ test('временная ошибка чтения не стирает сохр�
     expect(fs.readdirSync(box.profile).filter((name) => name.startsWith('settings.json.broken-'))).toEqual([]);
 
     const settings = await l.page.evaluate(() => (window as unknown as AppWindow).purpleflow.settings.get());
-    expect(settings).toMatchObject({ onboarded: true, maxParallel: 7 });
+    expect(settings).toMatchObject({ onboarded: true, maxParallel: 7, unreadable: false });
     await l.page.evaluate(() => (window as unknown as AppWindow).purpleflow.settings.set({ sound: false }));
     expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({ ...JSON.parse(original), sound: false });
     expect(l.errors).toEqual([]);

@@ -130,6 +130,9 @@ function loadIfReadable(): StoredSettings | undefined {
   }
 }
 
+/** Файл настроек читается. Пока нет — ядро и окно работают на значениях по умолчанию. */
+export const settingsReadable = () => loadIfReadable() !== undefined;
+
 function persist(s: StoredSettings) {
   cache = s;
   fs.mkdirSync(path.dirname(file()), { recursive: true });
@@ -251,6 +254,7 @@ export function publicSettings(): PublicSettings {
     account: ACCOUNT_ENABLED && s.account.tokenEnc ? { email: s.account.email, name: s.account.name, photo: s.account.photo } : null,
     authPrompted: s.authPrompted,
     diagnostics: stored?.diagnostics ?? false,
+    unreadable: !stored,
   };
 }
 

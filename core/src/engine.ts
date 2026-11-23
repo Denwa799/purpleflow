@@ -10,7 +10,7 @@ import type { Kernel } from './kernel.js';
 import { RUN_VERSION } from './migrate.js';
 import { MODE_FIRST, MODE_LIMIT } from './modes.js';
 import { killGroup, killPid } from './proc.js';
-import { runProcessGroups } from './run-processes.js';
+import { backgroundProcessGroups, runProcessGroups } from './run-processes.js';
 import { isInside } from './files.js';
 import { afterChecks } from './route.js';
 import { IMPL_LIMIT, StopSignal } from './runtime.js';
@@ -403,13 +403,17 @@ export async function restore(k: Kernel, id: string) {
   await resume(k, id);
 }
 
-export async function stop(k: Kernel, id: string) {
+/**
+ * background: false — останавливается только цикл стадий (перед сменой маршрута: пропуск проверок, переделка, возврат к плану).
+ * Фоновые вызовы — ответ менеджера, сводка, уроки — продолжают работать: вопрос, заданный в этот момент, не теряется.
+ */
+export async function stop(k: Kernel, id: string, { background = true }: { background?: boolean } = {}) {
   const r = k.store.load(id);
   if (!r) return;
-  k.beginBackgroundTeardown(id);
+  if (background) k.beginBackgroundTeardown(id);
   // Флаг снимается в finally при любом исходе: иначе менеджер прогона останется заблокирован до перезапуска.
   try {
-    k.cancelBackground(id);
+    if (background) k.cancelBackground(id);
     const active = k.driving.has(id) || k.preparing.has(id);
     const queued = r.status === 'queued';
     if (active) k.stopping.add(id);
@@ -422,8 +426,9 @@ export async function stop(k: Kernel, id: string) {
     }
     // Start every kill before awaiting any of them. The teardown guard prevents a new manager from joining these groups.
     // Закрытие сессии визуальной проверки (visual-cleanup) переживает «Стоп» — его прерывает только удаление.
+    const keep = new Set([`${id}:preview`, `${id}:visual-cleanup`, ...(background ? [] : backgroundProcessGroups(id))]);
     const kills = runProcessGroups(id)
-      .filter((group) => group !== `${id}:preview` && group !== `${id}:visual-cleanup`)
+      .filter((group) => !keep.has(group))
       .map(killGroup);
     await Promise.all([...kills, stopPreview(k, id)]);
     if (k.deleted.has(id)) return;
@@ -441,14 +446,14 @@ export async function stop(k: Kernel, id: string) {
       k.emit({ type: 'run.finished', runId: id, status: 'stopped', message: r.message, reason: 'user_stop' });
     }
   } finally {
-    k.endBackgroundTeardown(id);
+    if (background) k.endBackgroundTeardown(id);
   }
 }
 
 /** Остановить крутящийся цикл стадий и дождаться, пока он отпустит прогон, — перед тем как самим поменять маршрут. */
 export async function halt(k: Kernel, id: string) {
   if (!k.driving.has(id)) return;
-  await stop(k, id);
+  await stop(k, id, { background: false });
   for (let i = 0; i < 100 && k.driving.has(id); i++) await new Promise((r) => setTimeout(r, 200));
   if (k.driving.has(id)) throw new Error('Не удалось остановить текущую стадию');
 }

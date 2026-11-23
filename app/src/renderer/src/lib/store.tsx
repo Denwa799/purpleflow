@@ -89,11 +89,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (e.type === 'chat.deleted') dispatch({ t: 'chatDeleted', chatId: e.chatId });
       for (const fn of listeners) fn(e);
     });
+    const offSettings = bridge.settings.onRecovered(() => {
+      void bridge.settings.get().then((s) => dispatch({ t: 'settings', settings: s }));
+    });
     void (async () => {
       const s = await bridge.settings.get();
       dispatch({ t: 'settings', settings: s });
       // Первый запуск: сначала вход в PurpleSchool (можно пропустить; в сборке без аккаунта его нет), затем настройка инструментов.
-      if (!s.onboarded) dispatch({ t: 'view', view: { name: s.accountEnabled && !s.authPrompted && !s.account ? 'welcome' : 'settings' } });
+      if (!s.onboarded && !s.unreadable)
+        dispatch({ t: 'view', view: { name: s.accountEnabled && !s.authPrompted && !s.account ? 'welcome' : 'settings' } });
       await refreshRuns();
       bridge.core
         .listChats()
@@ -101,7 +105,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .catch(() => {});
       await refreshTools();
     })();
-    return off;
+    return () => {
+      off();
+      offSettings();
+    };
   }, [refreshRuns, refreshTools]);
 
   // Dev-хук для скриншотов: window.__purpleflowGo({ name: 'run', runId }).

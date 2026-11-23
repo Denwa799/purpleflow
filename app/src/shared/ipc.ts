@@ -33,6 +33,8 @@ export interface PublicSettings {
   authPrompted: boolean;
   /** Отчёты об ошибках и статистика использования — один выключатель. */
   diagnostics: boolean;
+  /** Файл настроек сейчас не читается (например, нет доступа): показаны значения по умолчанию, сохранить нельзя. */
+  unreadable: boolean;
 }
 
 export interface SettingsPatch {
@@ -248,6 +250,8 @@ export interface PurpleFlowBridge {
     get(): Promise<PublicSettings>;
     set(patch: SettingsPatch): Promise<PublicSettings>;
     encryptionAvailable(): Promise<boolean>;
+    /** Файл настроек снова прочитался после ошибки — настройки нужно перечитать. */
+    onRecovered(fn: () => void): () => void;
   };
   /** Модели AI-прокси PurpleSchool; null — список недоступен (нет сети и кэша или сборка без аккаунта). */
   proxyModels(): Promise<ProxyModels | null>;

@@ -39,6 +39,11 @@ const bridge: PurpleFlowBridge = {
     get: () => ipcRenderer.invoke('settings:get'),
     set: (patch) => ipcRenderer.invoke('settings:set', patch),
     encryptionAvailable: () => ipcRenderer.invoke('settings:encryption'),
+    onRecovered(fn) {
+      const h = () => fn();
+      ipcRenderer.on('settings:recovered', h);
+      return () => ipcRenderer.removeListener('settings:recovered', h);
+    },
   },
   proxyModels: () => ipcRenderer.invoke('models:list'),
   pickFolder: (title?: string) => ipcRenderer.invoke('dialog:folder', title),

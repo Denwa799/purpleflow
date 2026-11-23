@@ -8,7 +8,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { emptyUsage, type AgentResult, type AgentRunOptions } from './agents/common.js';
-import { restore } from './engine.js';
+import { halt, restore } from './engine.js';
 import { decide, waitGate } from './gates.js';
 import { Orchestrator } from './orchestrator.js';
 import { liveCount, run as runProc } from './proc.js';
@@ -355,6 +355,33 @@ test('Stop discards an old manager reply while a new request remains usable', un
   release();
   await old;
   assert.equal(k.store.readChat(run.id).at(-1)?.text, 'new reply');
+  assert.equal(k.managerBusy.has(run.id), false);
+});
+
+test('Остановка цикла перед сменой маршрута не теряет вопрос менеджеру', unix, async (t) => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let started = 0;
+  const { core, k, save } = setup(t, async (opts) => {
+    if (!/Ты — менеджер прогона/.test(opts.prompt)) return okReply();
+    started++;
+    await held;
+    return okReply(JSON.stringify({ reply: 'answer survives' }));
+  });
+  const run = save({ status: 'waiting', next: 'gate2' });
+  const asked = core.askManager(run.id, 'question during skip');
+  for (let i = 0; i < 200 && !started; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(started, 1);
+  // Цикл стадий «крутится» и отпускает прогон, как после StopSignal.
+  k.driving.add(run.id);
+  setTimeout(() => k.driving.delete(run.id), 50);
+  await halt(k, run.id);
+  assert.equal(k.managerBusy.has(run.id), true);
+  release();
+  const chat = await asked;
+  assert.equal(chat.at(-1)?.text, 'answer survives');
   assert.equal(k.managerBusy.has(run.id), false);
 });
 

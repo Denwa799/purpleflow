@@ -61,7 +61,19 @@ export function KnowledgeView({ repo, name }: { repo: string; name: string }) {
         setEditing(false);
       }
     } catch (e) {
-      setError(cleanErr(e));
+      const message = cleanErr(e);
+      // Знания могли поменяться параллельно (прогон, другое окно) — показываем актуальные, а не устаревший снимок.
+      const fresh = await bridge.core.getKnowledge(repo).catch(() => null);
+      if (fresh) {
+        setK(fresh);
+        // Правка профиля не теряется: текст остаётся в редакторе, а повторное «Сохранить» осознанно заменит новую версию.
+        if (editing && (fresh.profile ?? '') !== editingBase) {
+          setEditingBase(fresh.profile ?? '');
+          setError(`${message} Ваш текст остался в редакторе: «Сохранить» заменит им новую версию, «Отмена» — оставит её.`);
+          return;
+        }
+      }
+      setError(message);
     } finally {
       setBusy(null);
     }

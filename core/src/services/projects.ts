@@ -137,6 +137,7 @@ export async function ensureProfile(k: Kernel, run: RunFile, attempt: StageAttem
     return { ...kn, profile: res.text.trim(), profileAt: new Date().toISOString() };
   });
   if (saved) k.log(run, c.mint('✓ профиль проекта сохранён — его можно поправить в «Проекты → Знания о проекте»') + '\n');
+  else k.log(run, c.dim('Профиль проекта появился, пока я его собирал, — оставляю его, мой не сохраняю.') + '\n');
 }
 
 /** Пересобрать профиль по кнопке в «Знаниях о проекте». */
@@ -144,11 +145,14 @@ export async function refreshProfile(k: Kernel, repo: string): Promise<ProjectKn
   const previous = knowledgeOf(k, repo);
   const res = await profileFor(k, repo, repo, () => {}, `profile-${Date.now()}`);
   if (!res.ok || !res.text.trim()) throw new Error(res.error ?? 'Нейросеть вернула пустой профиль');
-  updateKnowledge(k, repo, (kn) =>
-    kn.profile === previous.profile && kn.profileAt === previous.profileAt
-      ? { ...kn, profile: res.text.trim(), profileAt: new Date().toISOString() }
-      : kn,
-  );
+  updateKnowledge(k, repo, (kn) => {
+    // Профиль поправили или пересобрали, пока шла сборка: не затираем чужую версию молча.
+    if (kn.profile !== previous.profile || kn.profileAt !== previous.profileAt)
+      throw new Error(
+        'Профиль изменился, пока он пересобирался, — новая версия не сохранена, чтобы не затереть изменения. Пересоберите ещё раз.',
+      );
+    return { ...kn, profile: res.text.trim(), profileAt: new Date().toISOString() };
+  });
   return knowledgeOf(k, repo);
 }
 
@@ -156,7 +160,7 @@ export async function refreshProfile(k: Kernel, repo: string): Promise<ProjectKn
 export function saveKnowledgeProfile(k: Kernel, repo: string, profile: string, expectedProfile?: string): ProjectKnowledge {
   updateKnowledge(k, repo, (kn) => {
     if (expectedProfile !== undefined && kn.profile !== expectedProfile) {
-      throw new Error('Профиль изменился. Откройте вкладку заново перед сохранением.');
+      throw new Error('Профиль изменился, пока вы его правили.');
     }
     return { ...kn, profile: profile.trim() || undefined };
   });
