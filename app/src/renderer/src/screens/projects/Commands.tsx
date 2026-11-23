@@ -227,43 +227,45 @@ export function CommandsPanel({ p, onSaved, onDirty }: { p: LoadedProject; onSav
           onChange={(v) => edit('url', v)}
           loading={aiBusy}
         />
-        {!root && (
-          <div className="cmd-row">
-            <span className="cmd-icon">
-              <GitCommitVertical size={17} />
+        <div className="cmd-row">
+          <span className="cmd-icon">
+            <GitCommitVertical size={17} />
+          </span>
+          <div className="cmd-label">
+            <strong>Хук pre-commit</strong>
+            <span>
+              {root
+                ? 'В каждом репозитории проекта, где он есть (husky, lint-staged…), — отдельной проверкой на изменениях прогона'
+                : 'Если в репозитории есть (husky, lint-staged…) — отдельной проверкой на изменениях прогона'}
             </span>
-            <div className="cmd-label">
-              <strong>Хук pre-commit</strong>
-              <span>Если в репозитории есть (husky, lint-staged…) — отдельной проверкой на изменениях прогона</span>
-            </div>
-            <div className="cmd-field">
-              <div className="segmented small" role="radiogroup" aria-label="Хук pre-commit">
-                {[
-                  { on: true, title: 'Проверять' },
-                  { on: false, title: 'Не запускать' },
-                ].map((o) => (
-                  <button
-                    key={String(o.on)}
-                    role="radio"
-                    aria-checked={gitHooks === o.on}
-                    className={gitHooks === o.on ? 'is-on' : ''}
-                    onClick={() => {
-                      setGitHooks(o.on);
-                      touch();
-                    }}
-                  >
-                    {o.title}
-                  </button>
-                ))}
-              </div>
-              <span className="cmd-note">
-                {gitHooks
-                  ? 'Хук не прошёл — работа уходит исполнителю, как красный линтер. Коммит прогона хук не запускает повторно.'
-                  : 'Хук не запускается: коммит прогона его не проверяет.'}
-              </span>
-            </div>
           </div>
-        )}
+          <div className="cmd-field">
+            <div className="segmented small" role="radiogroup" aria-label="Хук pre-commit">
+              {[
+                { on: true, title: 'Проверять' },
+                { on: false, title: 'Не запускать' },
+              ].map((o) => (
+                <button
+                  key={String(o.on)}
+                  role="radio"
+                  aria-checked={gitHooks === o.on}
+                  className={gitHooks === o.on ? 'is-on' : ''}
+                  onClick={() => {
+                    setGitHooks(o.on);
+                    touch();
+                  }}
+                >
+                  {o.title}
+                </button>
+              ))}
+            </div>
+            <span className="cmd-note">
+              {gitHooks
+                ? 'Хук не прошёл — работа уходит исполнителю, как красный линтер. Коммит прогона хук не запускает повторно.'
+                : 'Хук не запускается: коммит прогона его не проверяет.'}
+            </span>
+          </div>
+        </div>
         <div className="cmd-row">
           <span className="cmd-icon">
             <GitBranch size={17} />

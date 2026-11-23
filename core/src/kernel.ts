@@ -283,12 +283,14 @@ export class Kernel {
     return this.exec(run, command, [], timeoutMin, {}, true);
   }
 
-  /** Команда проверки в группе прогона: вывод — в лог, «Стоп» её прерывает. env дополняет окружение агентов. */
-  exec(run: RunFile, bin: string, args: string[], timeoutMin: number, env: NodeJS.ProcessEnv = {}, shell = false) {
+  /**
+   * Команда проверки в группе прогона: вывод — в лог, «Стоп» её прерывает. env дополняет окружение агентов.
+   * cwd — по умолчанию общая папка прогона (проект из нескольких репозиториев) или его рабочая копия.
+   */
+  exec(run: RunFile, bin: string, args: string[], timeoutMin: number, env: NodeJS.ProcessEnv = {}, shell = false, cwd?: string) {
     this.checkStop(run);
     return runProc(bin, args, {
-      // Проект из нескольких репозиториев: команды — из общей папки прогона.
-      cwd: run.root?.dir ?? run.worktreePath,
+      cwd: cwd ?? run.root?.dir ?? run.worktreePath,
       env: { ...this.opts.env, CI: '1', FORCE_COLOR: '1', ...env },
       shell,
       timeoutMs: Math.max(1, timeoutMin) * 60_000,

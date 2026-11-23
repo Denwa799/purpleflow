@@ -9,7 +9,7 @@ import type { BasePrep } from '../runtime.js';
 import { CHECK_NAME, MAX_TEST_OUTPUT, RUN_JSON_GLOB, StopSignal } from '../runtime.js';
 import { getProjectConfig } from '../services/projects.js';
 import { commitExcludes, envFilesOf } from '../services/workspace.js';
-import { repoChangedFiles, repoDiffText } from '../services/repos.js';
+import { repoChangedFiles, repoDiffText, repoSlots } from '../services/repos.js';
 import type { CheckResult, ReviewResult, RunFile, TestResult } from '../types.js';
 import { reviewFeedback, reviewLoop, reviewPass } from './review.js';
 /**
@@ -27,7 +27,7 @@ export async function runChecks(
   if (run.lintCommand) plan.push({ kind: 'lint', command: run.lintCommand });
   if (testCommand) plan.push({ kind: 'test', command: testCommand });
   const checks: CheckResult[] = [];
-  if (hooks && (await hookCheckNeeded(k, run))) checks.push(await runHookCheck(k, run, s.testTimeoutMin));
+  if (hooks) for (const repo of await hookRepos(k, run)) checks.push(await runHookCheck(k, run, repo, s.testTimeoutMin));
   for (const p of plan) checks.push(await runCheck(k, run, p.kind, p.command, s.testTimeoutMin));
   const failed = checks.filter((x) => !x.passed);
   const result: TestResult = checks.length
@@ -71,28 +71,54 @@ export async function runCheck(
 /** Как запускается хук: так его и показываем в логе и в выводе для исполнителя. */
 export const HOOK_COMMAND = 'git hook run pre-commit';
 
+/** Репозиторий прогона, где есть свой хук pre-commit: рабочая копия, что исключить из коммита, подпись в проекте из нескольких. */
+interface HookRepo {
+  worktree: string;
+  exclude: string[];
+  /** Команда в логе и в проверке: в проекте из нескольких репозиториев — с папкой репозитория. */
+  command: string;
+}
+
 /**
- * Хук pre-commit — отдельной проверкой, если он есть и не выключен в настройках проекта.
- * Проект из нескольких репозиториев пока без него: у каждого репозитория свои хуки.
+ * Где запускать хук pre-commit: в каждом репозитории прогона, где он есть, если он не выключен в настройках проекта.
+ * Исключения — те же, что у коммита на «Завершении»: у основного run.json быстрой правки и файлы окружения, у остальных — их файлы окружения.
  */
-async function hookCheckNeeded(k: Kernel, run: RunFile): Promise<boolean> {
-  if (run.root || getProjectConfig(k, run.projectPath)?.gitHooks === false) return false;
+async function hookRepos(k: Kernel, run: RunFile): Promise<HookRepo[]> {
+  if (getProjectConfig(k, run.projectPath)?.gitHooks === false) return [];
   const tools = await k.tools(['git']);
-  return Boolean(await new Git(tools.git, k.opts.env).preCommitHook(run.worktreePath));
+  const git = new Git(tools.git, k.opts.env);
+  const out: HookRepo[] = [];
+  for (const slot of run.root ? repoSlots(run) : repoSlots(run).slice(0, 1)) {
+    if (!(await git.preCommitHook(slot.worktreePath))) continue;
+    out.push({
+      worktree: slot.worktreePath,
+      exclude: slot.extra ? (slot.extra.envFiles ?? []) : commitExcludes(k, run),
+      command: run.root && slot.rel ? `cd ${slot.rel} && ${HOOK_COMMAND}` : HOOK_COMMAND,
+    });
+  }
+  return out;
 }
 
 /**
  * Хук pre-commit на том, что войдёт в коммит: изменения прогона — во временном индексе (lint-staged и подобные смотрят
  * на «застейдженное»), настоящий индекс worktree не трогаем. Коммит на «Завершении» идёт с --no-verify: хук уже прошёл здесь.
  */
-export async function runHookCheck(k: Kernel, run: RunFile, timeoutMin: number): Promise<CheckResult> {
+export async function runHookCheck(k: Kernel, run: RunFile, repo: HookRepo, timeoutMin: number): Promise<CheckResult> {
   const tools = await k.tools(['git']);
   const git = new Git(tools.git, k.opts.env);
-  k.log(run, c.sky(`$ ${HOOK_COMMAND}`) + c.dim(`  # ${CHECK_NAME.hooks}`) + '\n');
-  const staged = await git.stagedIndex(run.worktreePath, commitExcludes(k, run));
+  k.log(run, c.sky(`$ ${repo.command}`) + c.dim(`  # ${CHECK_NAME.hooks}`) + '\n');
+  const staged = await git.stagedIndex(repo.worktree, repo.exclude);
   let r: Awaited<ReturnType<Kernel['exec']>>;
   try {
-    r = await k.exec(run, tools.git, ['hook', 'run', 'pre-commit'], timeoutMin, { GIT_INDEX_FILE: staged.env.GIT_INDEX_FILE });
+    r = await k.exec(
+      run,
+      tools.git,
+      ['hook', 'run', 'pre-commit'],
+      timeoutMin,
+      { GIT_INDEX_FILE: staged.env.GIT_INDEX_FILE },
+      false,
+      repo.worktree,
+    );
   } finally {
     staged.cleanup();
   }
@@ -102,14 +128,14 @@ export async function runHookCheck(k: Kernel, run: RunFile, timeoutMin: number):
     k.log(run, c.amber('! git старше 2.36 не умеет запускать хуки отдельно — хук pre-commit пропущен. Обновите git.') + '\n');
     return {
       kind: 'hooks',
-      command: HOOK_COMMAND,
+      command: repo.command,
       passed: true,
       exitCode: 0,
       durationMs: r.durationMs,
       output: 'Пропущен: git старше 2.36.',
     };
   }
-  return checkResult(k, run, 'hooks', HOOK_COMMAND, r);
+  return checkResult(k, run, 'hooks', repo.command, r);
 }
 
 function checkResult(

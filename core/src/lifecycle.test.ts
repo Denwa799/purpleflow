@@ -198,6 +198,40 @@ test('хук pre-commit: core.hooksPath (husky) находится, выключ
   assert.deepEqual(await kinds(), ['hooks', 'test']);
 });
 
+test('хук pre-commit: проект из нескольких репозиториев — в каждом репозитории со своим хуком', unix, async (t) => {
+  const { k, repo, root, at: gitIn, save } = setup(t);
+  const web = path.join(root, 'web');
+  fs.mkdirSync(web);
+  const gw = gitIn(web);
+  gw('init', '-q', '-b', 'main');
+  fs.writeFileSync(path.join(web, 'w.txt'), 'w\n');
+  gw('add', '-A');
+  gw('commit', '-qm', 'init');
+  fs.writeFileSync(path.join(web, '.git', 'hooks', 'pre-commit'), REJECT_BAD, { mode: 0o755 });
+  const run = save({
+    next: 'tests',
+    root: { path: root, dir: root, main: 'repo' },
+    repos: [{ rel: 'web', path: web, worktreePath: web, baseCommit: gw('rev-parse', 'HEAD') }],
+  });
+  const hookChecks = async () =>
+    (await runChecks(k, run, 'true', { hooks: true })).result.checks?.filter((x) => x.kind === 'hooks').map((x) => [x.command, x.passed]);
+
+  // Хук только у web: плохая правка в основном репозитории его не касается, в web — ловится им.
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'BAD\n');
+  assert.deepEqual(await hookChecks(), [['cd web && git hook run pre-commit', true]]);
+  fs.writeFileSync(path.join(web, 'w.txt'), 'BAD\n');
+  assert.deepEqual(await hookChecks(), [['cd web && git hook run pre-commit', false]]);
+  assert.equal(gw('diff', '--cached', '--name-only'), '');
+
+  // Свой хук у основного — отдельная проверка, каждая по своему репозиторию.
+  fs.writeFileSync(path.join(repo, '.git', 'hooks', 'pre-commit'), REJECT_BAD, { mode: 0o755 });
+  fs.writeFileSync(path.join(web, 'w.txt'), 'хорошо\n');
+  assert.deepEqual(await hookChecks(), [
+    ['cd repo && git hook run pre-commit', false],
+    ['cd web && git hook run pre-commit', true],
+  ]);
+});
+
 // ——— Завершение ———
 
 test('финиш: коммит не прошёл — прогон не завершён, повтор доводит его до конца', unix, async (t) => {
