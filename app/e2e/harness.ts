@@ -95,7 +95,8 @@ export async function launch(box: Sandbox, env: Record<string, string> = {}, app
     cwd: appDir,
     // В контейнере CI нет прав на песочницу Chromium.
     // «.», а не путь к файлу: от каталога приложения окно ищет промпты ядра, как и при обычном запуске.
-    args: [...(process.platform === 'linux' ? ['--no-sandbox'] : []), '.'],
+    // На Linux-раннере нет системного хранилища ключей (libsecret): basic даёт safeStorage встроенный ключ, иначе ключ и токен не сохранить.
+    args: [...(process.platform === 'linux' ? ['--no-sandbox', '--password-store=basic'] : []), '.'],
     env: {
       ...process.env,
       PURPLEFLOW_USER_DATA: box.profile,

@@ -62,12 +62,16 @@ export class Git {
   /** Корень репозитория, внутри которого лежит папка, — если сама папка не корень (подпапка чужого репозитория). */
   async enclosingRoot(dir: string): Promise<string | null> {
     const root = await this.topLevel(dir);
+    // native раскрывает короткие имена Windows (RUNNER~1 → runneradmin): git отдаёт корень с полными именами,
+    // и без этого сама папка-корень выглядела бы подпапкой чужого репозитория. Регистр на Windows не различается.
     const real = (p: string) => {
+      let resolved: string;
       try {
-        return fs.realpathSync(p);
+        resolved = fs.realpathSync.native(p);
       } catch {
-        return path.resolve(p);
+        resolved = path.resolve(p);
       }
+      return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
     };
     return real(root) === real(dir) ? null : root;
   }
