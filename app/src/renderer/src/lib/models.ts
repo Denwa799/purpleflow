@@ -22,6 +22,8 @@ export const MODEL_OPTIONS: Record<AgentKind, DropOption<string>[]> = {
   ],
   // Свои модели opencode — из его провайдеров (`opencode models`), подмешиваются в useModelOptions.
   opencode: [],
+  // Модели agy — из его аккаунта (`agy models`): подмешиваются так же, встроенного списка нет.
+  agy: [],
 };
 
 /**
@@ -33,6 +35,8 @@ const OWN_FAMILY: Record<AgentKind, RegExp> = {
   codex: /^(gpt-|o\d|codex-)/,
   // «провайдер/модель» — провайдер пользователя; имя без провайдера opencode отправит в AI-прокси.
   opencode: /\//,
+  // agy работает только со своим аккаунтом Google: моделей прокси у него нет вовсе.
+  agy: /./,
 };
 /** Модель из списка, которая работает только через AI-прокси PurpleSchool. */
 export function proxyOnly(options: DropOption<string>[], model: string): boolean {
@@ -50,20 +54,29 @@ export const PROXY_ONLY_TITLE =
  * Модели не своего семейства видны всегда, с пометкой «подписка PurpleSchool»: без прокси выбор такой модели
  * ведёт ко входу или включению PurpleSchool (ModelInput), а не молча ломает запуск.
  */
-export function mergeModelOptions(remote: ProxyModels | null, opencode: string[] = []): Record<AgentKind, DropOption<string>[]> {
-  const own = withOpencode(MODEL_OPTIONS, opencode);
-  if (!remote) return own;
-  return withOpencode(mergeRemote(remote), opencode);
+export function mergeModelOptions(
+  remote: ProxyModels | null,
+  opencode: string[] = [],
+  agy: string[] = [],
+): Record<AgentKind, DropOption<string>[]> {
+  const base = remote ? mergeRemote(remote) : MODEL_OPTIONS;
+  return withLocal(withLocal(base, 'opencode', opencode), 'agy', agy);
 }
 
-/** Модели opencode из его провайдеров — первыми: они работают без AI-прокси. */
-function withOpencode(base: Record<AgentKind, DropOption<string>[]>, list: string[]): Record<AgentKind, DropOption<string>[]> {
+/** Модели, которые агент перечисляет сам (свои провайдеры, аккаунт) — первыми: они работают без AI-прокси. */
+function withLocal(
+  base: Record<AgentKind, DropOption<string>[]>,
+  agent: AgentKind,
+  list: string[],
+): Record<AgentKind, DropOption<string>[]> {
   if (!list.length) return base;
-  const known = new Set(base.opencode.map((o) => o.value));
+  const known = new Set(base[agent].map((o) => o.value));
   const local = list
     .filter((m) => !known.has(m))
     .map((m) => ({ value: m, label: m, hint: m.endsWith('-free') ? 'бесплатная' : undefined }));
-  return { ...base, opencode: [...local, ...base.opencode] };
+  const out: Record<AgentKind, DropOption<string>[]> = { ...base };
+  out[agent] = [...local, ...base[agent]];
+  return out;
 }
 
 function mergeRemote(remote: ProxyModels): Record<AgentKind, DropOption<string>[]> {
@@ -84,5 +97,11 @@ function mergeRemote(remote: ProxyModels): Record<AgentKind, DropOption<string>[
     }
     return [...base, ...extra];
   };
-  return { claude: add('claude', remote.anthropic), codex: add('codex', remote.openai), opencode: add('opencode', remote.openai) };
+  return {
+    claude: add('claude', remote.anthropic),
+    codex: add('codex', remote.openai),
+    opencode: add('opencode', remote.openai),
+    // Моделей agy в прокси PurpleSchool нет: он ходит только в свой аккаунт Google.
+    agy: MODEL_OPTIONS.agy,
+  };
 }

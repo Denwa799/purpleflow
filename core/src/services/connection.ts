@@ -21,7 +21,12 @@ export async function testConnection(k: Kernel): Promise<ConnectionCheck[]> {
       on.length === 1 ? `Не найден ${on[0]}. Укажите путь в настройках.` : 'Не найдены ни claude, ни codex. Укажите пути в настройках.',
     );
   }
-  const tools: Record<AgentKind, string> = { claude: found.claude.path!, codex: found.codex.path!, opencode: found.opencode.path! };
+  const tools: Record<AgentKind, string> = {
+    claude: found.claude.path!,
+    codex: found.codex.path!,
+    opencode: found.opencode.path!,
+    agy: found.agy.path!,
+  };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-check-'));
   const proxy = s.proxy.baseUrl ? s.proxy : undefined;
   const prompt = 'Это проверка подключения. Ответь ровно одним словом: готово';
@@ -48,7 +53,9 @@ export async function testConnection(k: Kernel): Promise<ConnectionCheck[]> {
         ? await k.claude(base)
         : agent === 'opencode'
           ? await k.opencode({ ...base, readOnly: true })
-          : await k.codex({ ...base, sandbox: 'read-only' });
+          : agent === 'agy'
+            ? await k.agy({ ...base, readOnly: true })
+            : await k.codex({ ...base, sandbox: 'read-only' });
     return {
       agent,
       ok: r.ok,
@@ -116,6 +123,36 @@ export async function listOpencodeModels(k: Kernel, dir?: string): Promise<strin
           ]
         : [],
     );
+  modelsCache.set(key, { at: Date.now(), list });
+  list.catch(() => modelsCache.delete(key));
+  return list;
+}
+
+/**
+ * Модели agy: `agy models` печатает «слаг<TAB>название» — слаги зависят от тарифа Google-аккаунта,
+ * поэтому встроенный список быстро устаревает. Список идёт через сеть, поэтому кэш на минуту
+ * и никакой блокировки окна: подсказки приходят, когда придут.
+ */
+export async function listAgyModels(k: Kernel): Promise<string[]> {
+  if (!(await k.hasTool('agy'))) return [];
+  const bin = (await k.tools(['agy'])).agy;
+  const key = `${bin}\0agy`;
+  const hit = modelsCache.get(key);
+  if (hit && Date.now() - hit.at < 60_000) return hit.list;
+  for (const [x, v] of modelsCache) if (Date.now() - v.at >= 60_000) modelsCache.delete(x);
+  const env = prependPath(k.opts.env, path.dirname(bin));
+  const list = run(bin, ['models'], { cwd: os.homedir(), env, timeoutMs: 60_000 }).then((r) =>
+    r.code === 0
+      ? [
+          ...new Set(
+            stripAnsi(r.stdout)
+              .split('\n')
+              .map((l) => l.split('\t')[0].trim())
+              .filter((l) => /^[\w.-]+$/.test(l)),
+          ),
+        ]
+      : [],
+  );
   modelsCache.set(key, { at: Date.now(), list });
   list.catch(() => modelsCache.delete(key));
   return list;

@@ -417,6 +417,20 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
         },
       });
       if (sid) chat.session = { agent, id: sid };
+    } else if (agent === 'agy') {
+      let conv = session;
+      res = await k.agy({
+        ...common,
+        // Картинки agy флагом не принимает — даём пути: он откроет их своим read_file.
+        prompt: images.length ? `${prompt}\n\nИзображения (открой и прочитай):\n${images.map((f) => `- ${f}`).join('\n')}` : prompt,
+        systemPrompt: session ? undefined : sys,
+        readOnly: !chat.edits,
+        resumeConversation: session,
+        onSession: (sid) => {
+          conv = sid;
+        },
+      });
+      if (conv) chat.session = { agent, id: conv };
     } else if (agent === 'codex') {
       let thread = session;
       res = await k.codex({

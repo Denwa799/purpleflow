@@ -10,6 +10,8 @@ export const TOOL_INFO: Record<ToolName, { title: string; install: string }> = {
   claude: { title: 'Claude Code', install: 'npm i -g @anthropic-ai/claude-code' },
   codex: { title: 'Codex CLI', install: 'npm i -g @openai/codex' },
   opencode: { title: 'OpenCode', install: 'npm i -g opencode-ai' },
+  // У Antigravity CLI нет пакета в npm — только установщик Google.
+  agy: { title: 'Antigravity CLI', install: 'antigravity.google/docs/cli/install' },
   openspec: { title: 'OpenSpec', install: 'npm i -g @fission-ai/openspec' },
 };
 export const ROLES: { id: Role; title: string; text: string }[] = [
@@ -25,6 +27,7 @@ export const MODEL_PLACEHOLDER: Record<AgentKind, string> = {
   claude: 'opus, sonnet, haiku или полное имя',
   codex: 'по умолчанию codex',
   opencode: 'провайдер/модель, по умолчанию — из настроек opencode',
+  agy: 'слаг из `agy models`, по умолчанию — из настроек agy',
 };
 /** Выбор CLI-агента для роли. */
 export function AgentSwitch({

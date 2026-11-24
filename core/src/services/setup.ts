@@ -30,6 +30,14 @@ function gitHint(): string {
   return 'Установите Git через пакетный менеджер системы.';
 }
 
+/**
+ * У Antigravity CLI нет пакета в npm: он ставится своим установщиком Google и требует входа в аккаунт.
+ * Молча качать чужой установщик из окна нельзя — человек ставит сам и указывает путь в настройках.
+ */
+function agyHint(): string {
+  return 'Antigravity CLI ставится установщиком с antigravity.google/docs/cli/install, отдельного npm-пакета нет. После установки укажите путь к agy в настройках, если он не попал в PATH.';
+}
+
 /** Последние строки вывода: в начале npm пишет предупреждения, причина сбоя — в конце. */
 const tail = (s: string) => s.trim().split('\n').slice(-3).join('\n').slice(-400);
 
@@ -83,7 +91,7 @@ export async function installNpmGlobal(
 
 export async function installTool(name: ToolName, env: NodeJS.ProcessEnv, manual?: string): Promise<ToolInstallResult> {
   const pkg = NPM_PACKAGES[name];
-  if (!pkg) return { name, ok: false, error: name === 'git' ? gitHint() : `Неизвестный инструмент: ${name}` };
+  if (!pkg) return { name, ok: false, error: name === 'git' ? gitHint() : name === 'agy' ? agyHint() : `Неизвестный инструмент: ${name}` };
   // Установка не исправит чужой путь: окно продолжит запускать файл, указанный вручную.
   if (manual?.trim()) return { name, ok: false, error: 'Указан путь вручную. Очистите его, чтобы установить инструмент автоматически.' };
   const r = await installNpmGlobal(name, pkg, env, ALLOW_SCRIPTS[name] ?? []);

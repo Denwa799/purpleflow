@@ -11,7 +11,7 @@ import { Kernel } from './kernel.js';
 import type { CoreOptions, Listener } from './runtime.js';
 import { getAttachment } from './services/attachments.js';
 import * as chat from './services/chat.js';
-import { listOpencodeModels, testConnection } from './services/connection.js';
+import { listAgyModels, listOpencodeModels, testConnection } from './services/connection.js';
 import { control } from './services/control.js';
 import { cleanStorage, getStorage } from './services/disk.js';
 import { askManager, getManagerChat, getManagerImage, resolveManagerAction } from './services/manager.js';
@@ -382,6 +382,9 @@ export class Orchestrator implements CoreApi {
   }
   async listOpencodeModels(dir?: string) {
     return listOpencodeModels(this.kernel, dir);
+  }
+  async listAgyModels() {
+    return listAgyModels(this.kernel);
   }
   async listChatSkills(projectPath?: string) {
     return chat.listChatSkills(this.kernel, projectPath);

@@ -145,5 +145,7 @@ export interface CoreApi {
   /** Модели opencode «провайдер/модель» из его настроенных провайдеров; opencode выключен или не найден — пусто. */
   /** dir — папка проекта: подмешиваются провайдеры из его opencode.json. */
   listOpencodeModels(dir?: string): Promise<string[]>;
+  /** Модели agy (слаги `agy models`, зависят от тарифа Google-аккаунта); agy выключен или не найден — пусто. */
+  listAgyModels(): Promise<string[]>;
   getChatChangedFiles(id: string): Promise<string[]>;
 }

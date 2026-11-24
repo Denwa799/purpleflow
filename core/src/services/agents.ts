@@ -89,6 +89,15 @@ async function serviceOn(k: Kernel, agent: AgentKind, model: string | undefined,
       readOnly: !o.fullAccess,
     });
   }
+  if (agent === 'agy') {
+    // Служебное на agy — без правки файлов: права сняты флагом, «только чтение» держит промпт.
+    return k.agy({
+      ...common,
+      model: model || agentModel(k, 'agy', s.agents, s.models) || undefined,
+      readOnly: !o.fullAccess,
+      addDirs: o.addDirs,
+    });
+  }
   if (agent === 'codex') {
     // Служебное на codex — в песочнице только для чтения: соседние каталоги он читает и так, список инструментов не нужен.
     return k.codex({
@@ -199,6 +208,22 @@ export async function runRole(
       readOnly: o.readOnly,
       images: o.images,
       resumeSession: o.resume,
+      onSession: o.onSession,
+    });
+  }
+  if (agent === 'agy') {
+    // Схему ответа agy не принимает: формат JSON задаёт промпт, ответ разбирает parse.ts.
+    // Беседу продолжает --conversation по ID, который CLI выдал сам (init/result).
+    // Картинки флагом он не принимает — даём пути, агент откроет их своим read_file.
+    const images = o.images?.filter((f) => fs.existsSync(f)) ?? [];
+    return k.agy({
+      ...base,
+      prompt: images.length ? `${o.prompt}\n\nИзображения (открой и прочитай):\n${images.map((f) => `- ${f}`).join('\n')}` : o.prompt,
+      systemPrompt: o.resume ? undefined : systemPrompt,
+      model,
+      effort,
+      readOnly: o.readOnly,
+      resumeConversation: o.resume,
       onSession: o.onSession,
     });
   }
