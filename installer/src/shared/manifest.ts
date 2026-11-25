@@ -77,3 +77,20 @@ export function pickAsset(m: Manifest, platform: string, arch: string): Asset | 
   }
   return null;
 }
+
+/**
+ * Ключ установки PurpleFlow в реестре Windows. Установщик NSIS от electron-builder пишет туда InstallLocation —
+ * настоящую папку, которая может отличаться от стандартной (выбрали при установке, «для всех пользователей»,
+ * перенесённая папка программ). GUID — UUID v5 от appId ru.purpleschool.purpleflow, как его считает electron-builder;
+ * тест сверяет это при каждом прогоне.
+ */
+export const PURPLEFLOW_WIN_GUID = 'a211f1fe-28a4-5d3d-9110-7a8aa8fd497e';
+
+/** Значение из вывода `reg query … /v <name>`: «    InstallLocation    REG_SZ    C:\…». */
+export function parseRegValue(output: string, name: string): string | undefined {
+  for (const line of output.split(/\r?\n/)) {
+    const m = /^\s*(\S+)\s+REG_(?:EXPAND_)?SZ\s+(.+?)\s*$/.exec(line);
+    if (m && m[1]!.toLowerCase() === name.toLowerCase()) return m[2];
+  }
+  return undefined;
+}

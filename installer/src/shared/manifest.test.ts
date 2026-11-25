@@ -84,3 +84,21 @@ test('ссылка на файл ведёт на конкретную верси
   const a = pickAsset(parseManifest(MAC), 'darwin', 'arm64')!;
   assert.equal(assetUrl(a), 'https://github.com/PurpleSchool/purpleflow/releases/download/0.7.0/PurpleFlow-0.7.0-arm64-mac.zip');
 });
+
+test('GUID установки PurpleFlow на Windows совпадает с тем, что считает electron-builder', async () => {
+  const { PURPLEFLOW_WIN_GUID } = await import('./manifest');
+  const { UUID } = await import('builder-util-runtime');
+  const fs = await import('node:fs');
+  const yml = fs.readFileSync(new URL('../../../app/electron-builder.yml', import.meta.url), 'utf8');
+  const appId = /^appId:\s*(\S+)/m.exec(yml)![1]!;
+  // То же пространство имён, что ELECTRON_BUILDER_NS_UUID в app-builder-lib (targets/nsis/NsisTarget).
+  assert.equal(UUID.v5(appId, UUID.parse('50e065bc-3134-11e6-9bab-38c9862bdaf3')), PURPLEFLOW_WIN_GUID);
+});
+
+test('путь установки читается из вывода reg query', async () => {
+  const { parseRegValue } = await import('./manifest');
+  const out =
+    '\r\nHKEY_CURRENT_USER\\Software\\a211f1fe-28a4-5d3d-9110-7a8aa8fd497e\r\n    InstallLocation    REG_SZ    D:\\Apps\\Purple Flow\r\n\r\n';
+  assert.equal(parseRegValue(out, 'InstallLocation'), 'D:\\Apps\\Purple Flow');
+  assert.equal(parseRegValue(out, 'ShortcutName'), undefined);
+});

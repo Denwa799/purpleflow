@@ -1,12 +1,21 @@
 // Сам PurpleFlow: найти уже установленный, иначе скачать последний выпуск, сверить sha512 и поставить без вопросов.
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { app, net, shell } from 'electron';
 import { run } from '@core/proc';
-import { assetUrl, manifestName, manifestUrl, parseManifest, pickAsset, type Asset } from '../shared/manifest';
+import {
+  PURPLEFLOW_WIN_GUID,
+  assetUrl,
+  manifestName,
+  manifestUrl,
+  parseManifest,
+  parseRegValue,
+  pickAsset,
+  type Asset,
+} from '../shared/manifest';
 import type { LaunchResult, StepState } from '../shared/types';
 
 type Emit = (s: StepState) => void;
@@ -22,7 +31,29 @@ const macDirs = () => {
   const dev = devDir();
   return dev ? [dev] : ['/Applications', path.join(home, 'Applications')];
 };
+/** InstallLocation из реестра — для текущего пользователя и для всех. Нет ключа или reg недоступен — пусто. */
+function winRegistryDirs(): string[] {
+  const reg = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe');
+  const dirs: string[] = [];
+  for (const hive of ['HKCU', 'HKLM']) {
+    try {
+      const out = execFileSync(reg, ['query', `${hive}\\Software\\${PURPLEFLOW_WIN_GUID}`, '/v', 'InstallLocation'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 10_000,
+      });
+      const dir = parseRegValue(out, 'InstallLocation');
+      if (dir) dirs.push(dir);
+    } catch {
+      /* ключа нет — PurpleFlow так не ставили */
+    }
+  }
+  return dirs;
+}
+
+/** Сначала настоящая папка из реестра, затем стандартные — на случай установки без записи в реестр. */
 const winExes = () => [
+  ...winRegistryDirs().map((d) => path.join(d, `${APP_NAME}.exe`)),
   path.join(process.env.LOCALAPPDATA ?? path.join(home, 'AppData', 'Local'), 'Programs', APP_NAME, `${APP_NAME}.exe`),
   path.join(process.env.ProgramFiles ?? 'C:\\Program Files', APP_NAME, `${APP_NAME}.exe`),
 ];
