@@ -56,11 +56,57 @@ export async function checkPurpleFlow(): Promise<StepState> {
   return { id: 'purpleflow', status: 'ok', detail: await installedVersion(p) };
 }
 
+type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
+
+/**
+ * Два сетевых стека: Chromium (net.fetch — системный прокси, сертификаты ОС) и Node (fetch, напрямую). На части
+ * машин один из них получает от CDN GitHub ошибку — прокси, VPN или антивирус с проверкой трафика вмешиваются по-
+ * разному, — поэтому при неудаче пробуем другой, а затем первый ещё раз после паузы.
+ */
+const ATTEMPTS: { name: string; fetch: Fetcher; delayMs: number }[] = [
+  { name: 'Chromium', fetch: (u, i) => net.fetch(u, i), delayMs: 0 },
+  { name: 'Node', fetch: (u, i) => fetch(u, i), delayMs: 0 },
+  { name: 'Chromium', fetch: (u, i) => net.fetch(u, i), delayMs: 3000 },
+];
+
+/** «HTTP 400 от release-assets.githubusercontent.com (AuthenticationFailed)» — чтобы по отчёту было видно, кто отказал. */
+async function describeFailure(res: Response): Promise<string> {
+  let host = '';
+  try {
+    host = new URL(res.url).host;
+  } catch {
+    /* адреса нет — опишем без него */
+  }
+  let body = '';
+  try {
+    body = (await res.text()).replace(/\s+/g, ' ').trim().slice(0, 200);
+  } catch {
+    /* тело не прочиталось */
+  }
+  const code = /<Code>([^<]+)<\/Code>/.exec(body)?.[1];
+  return `HTTP ${res.status}${host ? ` от ${host}` : ''}${code ? ` (${code})` : body ? `: ${body}` : ''}`;
+}
+
+/** Ответ с телом от первого стека, который смог; иначе — ошибка с причиной каждой попытки. */
+async function fetchOk(url: string, timeoutMs: number, what: string): Promise<Response> {
+  const failures: string[] = [];
+  for (const a of ATTEMPTS) {
+    if (a.delayMs) await new Promise((r) => setTimeout(r, a.delayMs));
+    try {
+      const res = await a.fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      if (res.ok && res.body) return res;
+      failures.push(`${a.name}: ${await describeFailure(res)}`);
+    } catch (e) {
+      failures.push(`${a.name}: ${(e as Error).message}`);
+    }
+  }
+  throw new Error(`Не удалось скачать ${what}. ${[...new Set(failures)].join('; ')}`);
+}
+
 async function latestAsset(): Promise<Asset> {
   const name = manifestName(process.platform);
   if (!name) throw new Error(`Для ${process.platform} сборки PurpleFlow нет`);
-  const res = await net.fetch(manifestUrl(name), { signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`GitHub ответил ${res.status}`);
+  const res = await fetchOk(manifestUrl(name), MANIFEST_TIMEOUT_MS, 'описание выпуска PurpleFlow');
   const asset = pickAsset(parseManifest(await res.text()), process.platform, process.arch);
   if (!asset) throw new Error(`Для ${process.platform}-${process.arch} сборки PurpleFlow нет`);
   return asset;
@@ -68,8 +114,8 @@ async function latestAsset(): Promise<Asset> {
 
 /** Скачивание потоком: файл в сотню мегабайт не держим в памяти, а сумму считаем на лету. */
 async function download(asset: Asset, dest: string, onProgress: (p: number) => void): Promise<void> {
-  const res = await net.fetch(assetUrl(asset), { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
-  if (!res.ok || !res.body) throw new Error(`Не удалось скачать PurpleFlow: HTTP ${res.status}`);
+  const res = await fetchOk(assetUrl(asset), DOWNLOAD_TIMEOUT_MS, 'PurpleFlow');
+  if (!res.body) throw new Error('Не удалось скачать PurpleFlow: пустой ответ');
   const total = Number(res.headers.get('content-length')) || asset.size;
   const hash = createHash('sha512');
   const out = fs.createWriteStream(dest);
