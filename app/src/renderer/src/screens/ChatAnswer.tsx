@@ -13,12 +13,15 @@ import {
   LockOpen,
   LoaderCircle,
   MessageCircleQuestion,
+  ShieldAlert,
+  ShieldOff,
   TriangleAlert,
   Wrench,
   X,
 } from 'lucide-react';
 import type { ChatMessage, ChatPart, ChatQuestion, ChatToolPart, ToolStatus } from '@purpleflow/core';
 import { Markdown } from '../components/Markdown';
+import { Button } from '../components/ui';
 import { cleanErr } from '../lib/api';
 import { answerFooter, answerText, chatBlocks, shownTools } from '../lib/chatBlocks';
 
@@ -77,19 +80,18 @@ export function AssistantMessage({
         />
       ))}
       {sandboxed && (
-        <div className="chat-question chat-mcp-approval">
-          <p className="chat-question-text">
-            <LockOpen size={14} />
-            <span>
-              Режим «Правки» не пустил команду: запись в <code>.git</code>, остановка процессов и файлы вне проекта в нём закрыты.
-            </span>
-          </p>
+        <div className="chat-banner">
+          <ShieldAlert size={16} />
+          <div className="chat-banner-text">
+            <strong>Нужен полный доступ</strong>
+            <p>
+              В режиме «Правки» закрыты запись в <code>.git</code>, остановка процессов и файлы вне проекта.
+            </p>
+          </div>
           {answerable && (
-            <div className="chat-question-options">
-              <button type="button" className="chat-question-send" onClick={onGrantFull}>
-                Дать полный доступ и повторить
-              </button>
-            </div>
+            <Button tone="ghost" icon={<ShieldOff size={14} />} onClick={onGrantFull}>
+              Дать доступ и повторить
+            </Button>
           )}
         </div>
       )}

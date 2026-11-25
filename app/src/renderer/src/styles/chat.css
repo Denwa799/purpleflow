@@ -532,6 +532,42 @@ input.chat-title:focus {
 .chat-notice.is-error {
   color: var(--err);
 }
+/* Плашка под ответом — как баннеры приложения: иконка и текст слева, кнопка справа; в узком окне кнопка уходит вниз. */
+.chat-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
+  padding: var(--s-3) var(--s-3) var(--s-3) var(--s-5);
+  border-radius: var(--r-l);
+  background: var(--bg-2);
+  animation: rise 0.45s var(--ease);
+}
+.chat-banner > svg {
+  flex: none;
+  color: var(--wait);
+}
+.chat-banner-text {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.chat-banner strong {
+  display: block;
+  font-weight: 500;
+  font-size: var(--fs-13);
+  color: var(--text-1);
+}
+.chat-banner p {
+  margin: 2px 0 0;
+  color: var(--text-3);
+  font-size: var(--fs-12);
+  line-height: 1.5;
+}
+.chat-banner .btn {
+  flex: none;
+  height: 32px;
+  margin-left: auto;
+}
 .chat-question {
   display: flex;
   flex-direction: column;

@@ -54,7 +54,11 @@ test('чат: агент без вызова просит полный дост�
     const input = page.locator('.chat-compose textarea');
     await input.fill('Закоммить молча');
     await input.press('Enter');
-    await expect(page.getByRole('button', { name: 'Дать полный доступ и повторить' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Дать доступ и повторить' })).toBeVisible();
+    if (process.env.PURPLEFLOW_SHOTS) {
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-access.png') });
+    }
   } finally {
     await quit(l);
     box.cleanup();
@@ -72,7 +76,7 @@ test('чат: песочница правок не пустила команду
     await input.fill('Закоммить правки');
     await input.press('Enter');
 
-    const grant = page.getByRole('button', { name: 'Дать полный доступ и повторить' });
+    const grant = page.getByRole('button', { name: 'Дать доступ и повторить' });
     await expect(grant).toBeVisible();
     await grant.click();
     await expect(page.getByRole('button', { name: 'Режим' })).toContainText('Полный доступ');
