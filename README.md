@@ -68,6 +68,14 @@ flowchart LR
 
 ## Быстрый старт
 
+**Не работали в терминале?** Скачайте установщик: он сам поставит PurpleFlow, Node.js, Git и агентов, а Claude Code, Codex и редакторы подключит к моделям PurpleSchool переключателями.
+
+| macOS | Windows | Linux |
+| --- | --- | --- |
+| [PurpleFlow-Installer.dmg](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer.dmg) | [x64](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x64.exe) · [ARM](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-arm64.exe) | [deb (Ubuntu, Debian)](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-amd64.deb) · [AppImage](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x86_64.AppImage) |
+
+Или по шагам:
+
 **1. Скачайте PurpleFlow** со страницы [Releases](https://github.com/PurpleSchool/purpleflow/releases/latest) для macOS, Windows или Linux. При первом запуске кнопка «Настроить» сама поставит недостающие Node.js, `claude`, `codex` и OpenSpec. Отдельно понадобится только git. Дальше приложение будет предлагать обновления.
 
 Можно поставить агентов и вручную:

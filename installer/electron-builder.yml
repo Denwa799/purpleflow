@@ -1,0 +1,43 @@
+appId: ru.purpleschool.purpleflow.installer
+electronVersion: 44.5.1
+productName: Установщик PurpleFlow
+directories:
+  output: release
+  # Свой значок установщика (build/icon.png из дизайна PurpleSchool); entitlements — общие с PurpleFlow.
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  # Значок для ярлыка PurpleFlow на Linux.
+  - from: ../app/build/icon.png
+    to: icon.png
+asarUnpack: []
+npmRebuild: false
+# Установщик не обновляется сам: каждый запуск берёт последний опубликованный выпуск PurpleFlow.
+publish: null
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [universal]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: ../app/build/entitlements.mac.plist
+  entitlementsInherit: ../app/build/entitlements.mac.plist
+  notarize: true
+dmg:
+  artifactName: PurpleFlow-Installer.dmg
+win:
+  # Один exe без собственной установки: скачал, запустил, закрыл.
+  target:
+    - target: portable
+      arch: [x64, arm64]
+  artifactName: PurpleFlow-Installer-${arch}.exe
+linux:
+  executableName: purpleflow-installer
+  # Ubuntu и Debian — deb; AppImage — для остальных дистрибутивов (собирается только на Linux или с Rosetta на Mac).
+  target: [deb, AppImage]
+  category: Development
+  maintainer: PurpleSchool
+  artifactName: PurpleFlow-Installer-${arch}.${ext}
