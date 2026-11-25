@@ -19,7 +19,7 @@ function fakeAgy(dir: string): string {
   const bin = path.join(dir, 'agy');
   fs.writeFileSync(
     bin,
-    '#!/bin/sh\nif [ "$1" = "models" ]; then printf "gemini-3.8-flash-low\\tGemini 3.8 Flash (Low)\\ngemini-3.8-flash-high\\tGemini 3.8 Flash (High)\\ngemini-4-hydrogen-medium\\tGemini 4 Hydrogen (Medium)\\n"; else echo "1.4.7"; fi\n',
+    '#!/bin/sh\nif [ "$1" = "models" ]; then printf "gemini-3.8-flash-low\\tGemini 3.8 Flash (Low)\\ngemini-3.8-flash-high\\tGemini 3.8 Flash (High)\\ngemini-4-hydrogen-medium\\tGemini 4 Hydrogen (Medium)\\n"; else echo "1.5.17"; fi\n',
     { mode: 0o755 },
   );
   return bin;

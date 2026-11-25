@@ -90,7 +90,7 @@ async function serviceOn(k: Kernel, agent: AgentKind, model: string | undefined,
     });
   }
   if (agent === 'agy') {
-    // Служебное на agy — без правки файлов: права сняты флагом, «только чтение» держит промпт.
+    // Служебное на agy — без правки файлов: запись и команды запрещает сам CLI (--settings), на старых версиях — отказ.
     return k.agy({
       ...common,
       model: model || agentModel(k, 'agy', s.agents, s.models) || undefined,

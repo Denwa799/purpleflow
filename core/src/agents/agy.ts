@@ -1,3 +1,4 @@
+import os from 'node:os';
 import { run } from '../proc.js';
 import {
   addUsage,
@@ -31,14 +32,54 @@ export interface AgyOptions extends AgentRunOptions {
 const ARGV_LIMIT = 8000;
 
 /**
+ * Жёсткий «только чтение»: --settings действует на один запуск и не трогает settings.json пользователя.
+ * deny сильнее --dangerously-skip-permissions — проверено на живом agy 1.5.17: write_file и run_command
+ * (в том числе из субагента) отклоняет сам CLI, файл не создаётся.
+ */
+export const AGY_READ_ONLY_SETTINGS = JSON.stringify({ permissions: { deny: ['write_file(*)', 'command(*)'] } });
+
+/** --settings появился в 1.5: раньше запретить запись флагом было нельзя. */
+const READ_ONLY_MIN: [number, number] = [1, 5];
+
+/** Версия agy умеет --settings — значит, «только чтение» можно запретить самим CLI, а не промптом. */
+export function agyReadOnlyReady(version: string | null): boolean {
+  const m = version?.match(/(\d+)\.(\d+)/);
+  if (!m) return false;
+  const [major, minor] = [Number(m[1]), Number(m[2])];
+  return major > READ_ONLY_MIN[0] || (major === READ_ONLY_MIN[0] && minor >= READ_ONLY_MIN[1]);
+}
+
+/** Отказ вместо тихого снятия прав: на старой версии стадия «только чтение» не запускается. */
+export function agyReadOnlyError(version: string | null): string {
+  return `agy: стадии «только чтение» требуют agy ${READ_ONLY_MIN.join('.')} или новее — жёсткий запрет записи и команд через --settings. Установлено: ${version ?? 'версию определить не удалось'}. Обновите Antigravity CLI (agy update).`;
+}
+
+const versions = new Map<string, { at: number; version: string | null }>();
+const VERSION_TTL_MS = 60_000;
+
+/** Версия agy с коротким кэшем: один --version на запуск, а запусков в стадии бывает несколько. */
+export async function agyVersion(bin: string, env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
+  const hit = versions.get(bin);
+  if (hit && Date.now() - hit.at < VERSION_TTL_MS) return hit.version;
+  const r = await run(bin, ['--version'], { cwd: os.homedir(), env: cleanEnv(env), timeoutMs: 15_000 });
+  const text = (r.stdout || r.stderr).trim();
+  const version = r.spawnError || r.code !== 0 ? null : ((text.match(/\d+\.\d+(?:\.\d+)?/) ?? [])[0] ?? null);
+  versions.set(bin, { at: Date.now(), version });
+  return version;
+}
+
+/**
  * Флаги agy 1.x. Права снимаются всегда: в headless-режиме подтвердить действие некому,
  * и без флага любой вызов инструмента ждёт ответа человека до таймаута, а не отклоняется.
- * Стадии только для чтения ограничивает промпт: у agy нет ни списка инструментов флагом,
- * ни отдельного конфига для запуска — правила прав живут в общих настройках пользователя.
+ * На стадиях только для чтения запись и команды дополнительно запрещает сам CLI (--settings).
  */
-export function agyArgs(o: Pick<AgyOptions, 'model' | 'effort' | 'addDirs' | 'resumeConversation'>, streamInput = false): string[] {
+export function agyArgs(
+  o: Pick<AgyOptions, 'model' | 'effort' | 'addDirs' | 'resumeConversation' | 'readOnly'>,
+  streamInput = false,
+): string[] {
   const args = ['--output-format', 'stream-json', '--dangerously-skip-permissions'];
   if (streamInput) args.push('--input-format', 'stream-json');
+  if (o.readOnly) args.push('--settings', AGY_READ_ONLY_SETTINGS);
   if (o.resumeConversation) args.push('--conversation', o.resumeConversation);
   if (o.model) args.push('--model', o.model);
   if (o.effort) args.push('--effort', o.effort);
@@ -49,7 +90,7 @@ export function agyArgs(o: Pick<AgyOptions, 'model' | 'effort' | 'addDirs' | 're
 /** Промпт стадии: системная часть у agy отдельного флага не имеет — она идёт тем же текстом. */
 export function agyPrompt(o: Pick<AgyOptions, 'prompt' | 'systemPrompt' | 'readOnly'>): string {
   const parts = [o.systemPrompt, o.prompt].filter(Boolean) as string[];
-  // Права сняты флагом, поэтому «только чтение» держится на этом запрете — как redirect у claude.
+  // Права уже запрещены --settings; в промпте повторяем, чтобы агент не тратил шаги на попытки записи.
   if (o.readOnly) parts.push('Работай только на чтение: не создавай и не меняй файлы, не выполняй команды, меняющие проект.');
   return parts.join('\n\n---\n\n');
 }
@@ -171,6 +212,13 @@ const STATUS_ERRORS: Record<string, string> = {
 /** Сбой agy понятной фразой: у него свой вход в Google-аккаунт, ключа и прокси PurpleSchool нет. */
 export function agyError(raw: string, status?: string): string {
   const t = raw.toLowerCase();
+  // Antigravity работает не во всех странах: аккаунт из неподдерживаемого региона получает отказ ещё до модели.
+  if (
+    /eligibility check failed|not eligible for antigravity|not (currently )?available in your (location|country|region)|unsupported (region|country)/.test(
+      t,
+    )
+  )
+    return 'agy: Antigravity недоступен из вашей страны — сервис работает не во всех регионах. Запустите CLI через сеть доступной страны (свой запускатель указывается путём к CLI в настройках) и войдите в аккаунт Google.';
   if (/authentication required|not logged in|not signed in|sign in|login required|reauth/.test(t))
     return 'agy: нужен вход в аккаунт Antigravity. Выполните в терминале «agy» и войдите, либо укажите путь к своему запускателю в настройках.';
   if (/model.*(not specified|not recognized|unknown)|unknown model|invalid model/.test(t))
@@ -209,13 +257,21 @@ export async function runAgy(o: AgyOptions): Promise<AgentResult> {
   const env = cleanEnv(o.env);
   let usage = emptyUsage();
   let finalText = '';
-  /** Ответ — текст последнего шага, в котором он был: до него шли вызовы инструментов. */
+  /** Ответ — текст последнего шага-ответа: до и после него идут вызовы инструментов. */
   let stepText = '';
+  /** step_index шага, из которого собран stepText: новый шаг начинает текст заново. */
+  let stepTextAt: unknown = undefined;
   let status = '';
   let resultError = '';
   let denied: string[] = [];
   let conversation = o.resumeConversation ?? '';
   const out = (s: string) => o.onOutput(crlf(s));
+
+  // «Только чтение» без --settings — это только промпт; на старой версии честнее отказаться, чем снять права тихо.
+  if (o.readOnly) {
+    const version = await agyVersion(o.bin, env);
+    if (!agyReadOnlyReady(version)) return { ok: false, text: '', usage, error: agyReadOnlyError(version) };
+  }
 
   const input = agyInput(o);
   const r = await run(o.bin, input.args, {
@@ -245,7 +301,13 @@ export async function runAgy(o: AgyOptions): Promise<AgentResult> {
         const s = (ev.step_update ?? {}) as Part;
         if (s.step_type === 'agent_response') {
           const t = typeof s.text_delta === 'string' ? s.text_delta : '';
-          if (t) stepText = stepText ? `${stepText}${t}` : t;
+          if (t) {
+            // Новый шаг — новый текст: stepText остаётся ответом последнего шага, а не склейкой всех.
+            if (s.step_index !== stepTextAt) {
+              stepTextAt = s.step_index;
+              stepText = t;
+            } else stepText += t;
+          }
           if (t.trim()) out(t);
         } else if (s.step_type === 'thinking' && s.text_delta) {
           out(c.dim(clip(String(s.text_delta), 500)) + '\n');

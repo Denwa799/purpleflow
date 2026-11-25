@@ -84,8 +84,9 @@ flowchart LR
 npm i -g @anthropic-ai/claude-code @openai/codex @fission-ai/openspec
 # по желанию — opencode и его провайдеры:
 npm i -g opencode-ai && opencode auth login
-# по желанию — Antigravity CLI: пакета в npm нет, ставится установщиком Google
-# (https://antigravity.google/docs/cli/install), вход — при первом запуске `agy`
+# по желанию — Antigravity CLI 1.5+: пакета в npm нет, ставится установщиком Google
+# (https://antigravity.google/docs/cli/install), вход — при первом запуске `agy`.
+# Работает не во всех странах: из неподдерживаемого региона аккаунт не пройдёт проверку доступности.
 ```
 
 **2. Опишите задачу:** выберите папку проекта и режим. PurpleFlow позовёт вас только на утверждение плана и приёмку.

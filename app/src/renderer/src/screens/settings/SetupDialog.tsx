@@ -108,6 +108,7 @@ export function SetupDialog({
                   ) : (
                     <>
                       Не найден. Поставим: <code>{TOOL_INFO[t].install}</code>
+                      {TOOL_INFO[t].note ? <> {TOOL_INFO[t].note}</> : null}
                     </>
                   )}
                 </span>

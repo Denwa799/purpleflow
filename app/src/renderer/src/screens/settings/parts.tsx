@@ -5,13 +5,17 @@ import { Button } from '../../components/ui';
 import { AGENT_KINDS, agentList } from '../../lib/tools';
 import type { SettingsDraft } from './useSettingsDraft';
 
-export const TOOL_INFO: Record<ToolName, { title: string; install: string }> = {
+export const TOOL_INFO: Record<ToolName, { title: string; install: string; note?: string }> = {
   git: { title: 'Git', install: 'git-scm.com' },
   claude: { title: 'Claude Code', install: 'npm i -g @anthropic-ai/claude-code' },
   codex: { title: 'Codex CLI', install: 'npm i -g @openai/codex' },
   opencode: { title: 'OpenCode', install: 'npm i -g opencode-ai' },
   // У Antigravity CLI нет пакета в npm — только установщик Google.
-  agy: { title: 'Antigravity CLI', install: 'antigravity.google/docs/cli/install' },
+  agy: {
+    title: 'Antigravity CLI',
+    install: 'antigravity.google/docs/cli/install',
+    note: 'Antigravity работает не во всех странах: из неподдерживаемого региона аккаунт не пройдёт проверку доступности.',
+  },
   openspec: { title: 'OpenSpec', install: 'npm i -g @fission-ai/openspec' },
 };
 export const ROLES: { id: Role; title: string; text: string }[] = [

@@ -5,12 +5,23 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import type { AgentStep } from './agents/common.js';
-import { agyArgs, agyError, agyInput, agySteps, agyToolInput, runAgy, type AgyOptions } from './agents/agy.js';
+import {
+  AGY_READ_ONLY_SETTINGS,
+  agyArgs,
+  agyError,
+  agyInput,
+  agyReadOnlyReady,
+  agySteps,
+  agyToolInput,
+  agyVersion,
+  runAgy,
+  type AgyOptions,
+} from './agents/agy.js';
 
 const unix = { skip: process.platform === 'win32' };
 
-/** Фейковый agy: печатает события, запоминает аргументы и stdin. */
-function fakeAgy(t: { after: (fn: () => void) => void }, lines: unknown[], o: { code?: number; stderr?: string } = {}) {
+/** Фейковый agy: печатает события, запоминает аргументы и stdin. На --version отвечает как настоящий. */
+function fakeAgy(t: { after: (fn: () => void) => void }, lines: unknown[], o: { code?: number; stderr?: string; version?: string } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-agy-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const out = path.join(dir, 'out.jsonl');
@@ -20,6 +31,7 @@ function fakeAgy(t: { after: (fn: () => void) => void }, lines: unknown[], o: { 
     bin,
     [
       '#!/bin/sh',
+      `[ "$1" = "--version" ] && { echo "${o.version ?? '1.5.17'}"; exit 0; }`,
       `printf '%s\\n' "$@" > "${dir}/args"`,
       `cat > "${dir}/stdin"`,
       `cat "${out}"`,
@@ -29,7 +41,7 @@ function fakeAgy(t: { after: (fn: () => void) => void }, lines: unknown[], o: { 
     { mode: 0o755 },
   );
   const read = (f: string) => fs.readFileSync(path.join(dir, f), 'utf8');
-  return { bin, args: () => read('args').trim().split('\n'), stdin: () => read('stdin') };
+  return { bin, dir, args: () => read('args').trim().split('\n'), stdin: () => read('stdin') };
 }
 
 function opts(bin: string, dir: string, p: Partial<AgyOptions> = {}) {
@@ -91,6 +103,20 @@ test('agyArgs: потоковая разметка, снятые права и �
   // Промпт потоком — только вместе с --input-format: иначе agy ждёт его аргументом -p.
   assert.ok(agyArgs({}, true).includes('--input-format'));
   assert.ok(!agyArgs({}).includes('--input-format'));
+  // Только чтение — правила прав на один запуск: запись и команды запрещает сам CLI.
+  const ro = agyArgs({ readOnly: true });
+  assert.equal(ro[ro.indexOf('--settings') + 1], AGY_READ_ONLY_SETTINGS);
+  assert.deepEqual(JSON.parse(AGY_READ_ONLY_SETTINGS), { permissions: { deny: ['write_file(*)', 'command(*)'] } });
+  assert.ok(!agyArgs({}).includes('--settings'));
+});
+
+test('agyReadOnlyReady: жёсткий запрет записи есть только с agy 1.5', () => {
+  assert.equal(agyReadOnlyReady('1.5.0'), true);
+  assert.equal(agyReadOnlyReady('1.5.17'), true);
+  assert.equal(agyReadOnlyReady('2.0.0'), true);
+  // В 1.4.7 флага --settings нет: запускать readOnly там нельзя.
+  assert.equal(agyReadOnlyReady('1.4.7'), false);
+  assert.equal(agyReadOnlyReady(null), false);
 });
 
 test('agyInput: системный промпт и запрет записи идут тем же текстом, промпт — сразу за -p', () => {
@@ -173,6 +199,36 @@ test('runAgy: продолжение беседы — через --conversation,
   assert.ok(!fresh.args().includes('--conversation'));
 });
 
+test('runAgy: только чтение запрещает запись и команды самим CLI', unix, async (t) => {
+  const fake = fakeAgy(t, [init(), result()]);
+  await runAgy(opts(fake.bin, os.tmpdir(), { readOnly: true }).o);
+  const args = fake.args();
+  assert.equal(args[args.indexOf('--settings') + 1], AGY_READ_ONLY_SETTINGS);
+  assert.ok(args.includes('--dangerously-skip-permissions'));
+});
+
+test('runAgy: на agy 1.4 стадия только для чтения не запускается — отказ, а не тихие права', unix, async (t) => {
+  const fake = fakeAgy(t, [init(), result()], { version: '1.4.7' });
+  const r = await runAgy(opts(fake.bin, os.tmpdir(), { readOnly: true }).o);
+  assert.equal(r.ok, false);
+  assert.match(r.error ?? '', /1\.5/);
+  assert.match(r.error ?? '', /1\.4\.7/);
+  // CLI даже не запускался: аргументы запуска не записаны.
+  assert.equal(fs.existsSync(path.join(fake.dir, 'args')), false);
+});
+
+test('runAgy: запасной ответ — текст последнего шага, а не склейка всех шагов', unix, async (t) => {
+  const fake = fakeAgy(t, [
+    init(),
+    step({ step_index: 0, step_type: 'agent_response', text_delta: 'первый' }),
+    step({ step_index: 1, step_type: 'tool', tool_name: 'read_file', tool_info: { name: 'read_file', output: 'x' } }),
+    step({ step_index: 2, step_type: 'agent_response', text_delta: 'второй' }),
+    result({ response: '' }),
+  ]);
+  const r = await runAgy(opts(fake.bin, os.tmpdir()).o);
+  assert.equal(r.text, 'второй');
+});
+
 test('runAgy: статус ERROR — это ошибка запуска, а не пустой ответ', unix, async (t) => {
   const fake = fakeAgy(t, [init(), result({ status: 'ERROR', response: '', error: 'model gemini-0 is not recognized as a known model' })], {
     code: 1,
@@ -182,11 +238,23 @@ test('runAgy: статус ERROR — это ошибка запуска, а не
   assert.match(r.error ?? '', /agy models/);
 });
 
+test('agyVersion: версия читается из --version того же бинаря, что и запуск', unix, async (t) => {
+  const fake = fakeAgy(t, [], { version: '1.5.17' });
+  assert.equal(await agyVersion(fake.bin, { ...process.env }), '1.5.17');
+});
+
 test('agyError: вход в аккаунт, лимиты и отказы прав — понятными фразами', () => {
   assert.match(agyError('authentication required'), /войдите/);
   assert.match(agyError('RESOURCE_EXHAUSTED: quota exceeded'), /лимит/);
   assert.match(agyError('', 'CANCELED'), /отменён/);
   assert.match(agyError('plan model not specified'), /agy models/);
+  // Региональный гейт: так выглядит первый запуск у пользователя из неподдерживаемой страны.
+  assert.match(
+    agyError(
+      'Eligibility check failed: Your current account is not eligible for Antigravity, because it is not currently available in your location.',
+    ),
+    /не во всех регионах/,
+  );
 });
 
 test('runAgy: отказ в правах из denied_actions виден человеку', unix, async (t) => {

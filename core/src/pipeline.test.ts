@@ -938,7 +938,7 @@ test(
     }) as never;
     // Установлен только agy, и включён только он.
     const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-bin-'));
-    fs.writeFileSync(path.join(bin, 'agy'), '#!/bin/sh\necho "1.4.7"\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, 'agy'), '#!/bin/sh\necho "1.5.17"\n', { mode: 0o755 });
     const settings = {
       toolPaths: { agy: path.join(bin, 'agy'), claude: path.join(bin, 'нет-claude'), codex: path.join(bin, 'нет-codex') },
       proxy: { baseUrl: '', apiKey: '' },
