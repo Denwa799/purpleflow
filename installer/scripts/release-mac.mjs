@@ -32,7 +32,7 @@ if (upload) {
 
 fs.rmSync(path.join(dir, 'release'), { recursive: true, force: true });
 run('npx', ['electron-vite', 'build']);
-run('npx', ['electron-builder', '--mac', '--publish', 'never']);
+run('node', ['scripts/dist.mjs', '--mac', '--publish', 'never']);
 
 const dmg = path.join(dir, 'release', 'PurpleFlow-Installer.dmg');
 if (!fs.existsSync(dmg)) fail(`Не найден ${dmg}`);

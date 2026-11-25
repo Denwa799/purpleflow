@@ -41,3 +41,12 @@ linux:
   category: Development
   maintainer: PurpleSchool
   artifactName: PurpleFlow-Installer-${arch}.${ext}
+  # Сборка для Linux идёт с латинским productName (scripts/dist.mjs) — в меню показываем русское название.
+  desktop:
+    entry:
+      Name: Установщик PurpleFlow
+      Comment: Ставит PurpleFlow и подключает агентов к моделям PurpleSchool
+deb:
+  # Имя пакета — только латиница: по умолчанию electron-builder берёт productName («Установщик PurpleFlow»),
+  # и dpkg отказывается ставить пакет. В меню приложений название остаётся русским.
+  packageName: purpleflow-installer

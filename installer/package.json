@@ -12,10 +12,10 @@
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "tsx --tsconfig tsconfig.node.json --test \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
-    "dist:mac": "electron-vite build && electron-builder --mac",
-    "dist:win": "electron-vite build && electron-builder --win",
-    "dist:linux": "electron-vite build && electron-builder --linux",
-    "dist:dir": "electron-vite build && electron-builder --dir",
+    "dist:mac": "electron-vite build && node scripts/dist.mjs --mac",
+    "dist:win": "electron-vite build && node scripts/dist.mjs --win",
+    "dist:linux": "electron-vite build && node scripts/dist.mjs --linux",
+    "dist:dir": "electron-vite build && node scripts/dist.mjs --dir",
     "release:mac": "node scripts/release-mac.mjs"
   },
   "devDependencies": {

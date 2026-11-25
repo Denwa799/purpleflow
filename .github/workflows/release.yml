@@ -94,7 +94,7 @@ jobs:
         run: |
           test "$(node -p "require('./package.json').version")" = "$TAG"
           npx electron-vite build
-          npx electron-builder --publish never
+          node scripts/dist.mjs --publish never
           shopt -s nullglob
           # Отдельные файлы под архитектуру; общий PurpleFlow-Installer.exe на обе — вдвое тяжелее, его не выкладываем.
           files=(release/PurpleFlow-Installer-*.exe release/PurpleFlow-Installer-*.AppImage release/PurpleFlow-Installer-*.deb)
@@ -127,7 +127,7 @@ jobs:
           gh release view "$TAG" --json tagName > /dev/null
           test "$(node -p "require('./package.json').version")" = "$TAG"
           npx electron-vite build
-          npx electron-builder --publish never
+          node scripts/dist.mjs --publish never
           shopt -s nullglob
           files=(release/PurpleFlow-Installer-*.exe release/PurpleFlow-Installer-*.AppImage release/PurpleFlow-Installer-*.deb)
           if [ ${#files[@]} -eq 0 ]; then echo "::error::Установщик не собрался: нет файлов в installer/release"; exit 1; fi
