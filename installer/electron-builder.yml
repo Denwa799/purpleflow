@@ -36,8 +36,9 @@ win:
   artifactName: PurpleFlow-Installer-${arch}.exe
 linux:
   executableName: purpleflow-installer
-  # Ubuntu и Debian — deb; AppImage — для остальных дистрибутивов (собирается только на Linux или с Rosetta на Mac).
-  target: [deb, AppImage]
+  # Ubuntu и Debian — deb; Fedora, RHEL, openSUSE — rpm; AppImage — для остальных. Собирается на Linux (CI):
+  # на Mac для AppImage нужен Rosetta, для rpm — rpmbuild.
+  target: [deb, rpm, AppImage]
   category: Development
   maintainer: PurpleSchool
   artifactName: PurpleFlow-Installer-${arch}.${ext}
@@ -49,4 +50,7 @@ linux:
 deb:
   # Имя пакета — только латиница: по умолчанию electron-builder берёт productName («Установщик PurpleFlow»),
   # и dpkg отказывается ставить пакет. В меню приложений название остаётся русским.
+  packageName: purpleflow-installer
+rpm:
+  # То же для rpm: имя пакета — латиницей, как у deb.
   packageName: purpleflow-installer

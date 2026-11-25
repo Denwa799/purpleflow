@@ -97,7 +97,7 @@ jobs:
           node scripts/dist.mjs --publish never
           shopt -s nullglob
           # Отдельные файлы под архитектуру; общий PurpleFlow-Installer.exe на обе — вдвое тяжелее, его не выкладываем.
-          files=(release/PurpleFlow-Installer-*.exe release/PurpleFlow-Installer-*.AppImage release/PurpleFlow-Installer-*.deb)
+          files=(release/PurpleFlow-Installer-*.exe release/PurpleFlow-Installer-*.AppImage release/PurpleFlow-Installer-*.deb release/PurpleFlow-Installer-*.rpm)
           if [ ${#files[@]} -eq 0 ]; then echo "::error::Установщик не собрался: нет файлов в installer/release"; exit 1; fi
           gh release upload "$TAG" "${files[@]}" --clobber
 
@@ -116,6 +116,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # rpm-пакет собирается утилитой rpmbuild — на раннере Ubuntu её нет.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
       - name: Сборка и загрузка в релиз
         shell: bash
         working-directory: installer
@@ -129,6 +132,6 @@ jobs:
           npx electron-vite build
           node scripts/dist.mjs --publish never
           shopt -s nullglob
-          files=(release/PurpleFlow-Installer-*.exe release/PurpleFlow-Installer-*.AppImage release/PurpleFlow-Installer-*.deb)
+          files=(release/PurpleFlow-Installer-*.exe release/PurpleFlow-Installer-*.AppImage release/PurpleFlow-Installer-*.deb release/PurpleFlow-Installer-*.rpm)
           if [ ${#files[@]} -eq 0 ]; then echo "::error::Установщик не собрался: нет файлов в installer/release"; exit 1; fi
           gh release upload "$TAG" "${files[@]}" --clobber

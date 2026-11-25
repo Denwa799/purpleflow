@@ -74,7 +74,7 @@ flowchart LR
 
 | macOS | Windows | Linux |
 | --- | --- | --- |
-| [PurpleFlow-Installer.dmg](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer.dmg) | [x64](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x64.exe) · [ARM](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-arm64.exe) | [deb (Ubuntu, Debian)](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-amd64.deb) · [AppImage](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x86_64.AppImage) |
+| [PurpleFlow-Installer.dmg](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer.dmg) | [x64](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x64.exe) · [ARM](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-arm64.exe) | [deb (Ubuntu, Debian)](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-amd64.deb) · [rpm (Fedora, RHEL)](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x86_64.rpm) · [AppImage](https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x86_64.AppImage) |
 
 Or step by step:
 

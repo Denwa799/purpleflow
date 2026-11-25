@@ -30,7 +30,7 @@ npm run dist:mac -w @purpleflow/installer
 
 - https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer.dmg
 - https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x64.exe и https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-arm64.exe
-- https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-amd64.deb и https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x86_64.AppImage
+- https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-amd64.deb, https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x86_64.rpm и https://github.com/PurpleSchool/purpleflow/releases/latest/download/PurpleFlow-Installer-x86_64.AppImage
 
 Установщик не обновляется сам и не публикует `latest*.yml`, поэтому файлы автообновления PurpleFlow он не задевает.
 
