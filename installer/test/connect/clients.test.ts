@@ -884,20 +884,22 @@ test('connect: an invalid portable profile stops before any request', unix, () =
   }
 });
 
+// Пробу окружения установщик передаёт в stdin (`snap run --shell`, `flatpak run --command=sh`). Заглушка обязана её
+// дочитать, как настоящая оболочка (встроенным read: в PATH песочницы только sh), иначе она выходит раньше записи — EPIPE, путь к настройкам не находится, тест мигает.
 function stubSandboxEditor(s: ReturnType<typeof sandbox>, kind: 'snap' | 'flatpak', config?: string) {
   if (kind === 'snap') {
     write(s.dir, 'snap-mount/usr/share/code/resources/app/product.json', { applicationName: 'code', nameShort: 'Code' });
     stub(
       s,
       'snap',
-      `case "$1" in\nlist) printf "code 1.100.0\\n";;\nrun) case "$2" in\n--shell) printf "PURPLESCHOOL_HOME=%s\\nPURPLESCHOOL_CONFIG=%s\\nPURPLESCHOOL_SNAP=%s\\n" "$HOME" "${config ?? '$HOME/snap/code/current/.config'}" "$HOME/snap-mount";;\n*) printf "%s\\n" "$*" >> "$HOME/editor-calls"; case "$*" in *--version*) printf "1.100.0\\n";; *) printf "anthropic.claude-code@2.1.300\\nopenai.chatgpt@1.0.0\\n";; esac;;\nesac;;\nesac`,
+      `case "$1" in\nlist) printf "code 1.100.0\\n";;\nrun) case "$2" in\n--shell) while read -r _; do :; done; printf "PURPLESCHOOL_HOME=%s\\nPURPLESCHOOL_CONFIG=%s\\nPURPLESCHOOL_SNAP=%s\\n" "$HOME" "${config ?? '$HOME/snap/code/current/.config'}" "$HOME/snap-mount";;\n*) printf "%s\\n" "$*" >> "$HOME/editor-calls"; case "$*" in *--version*) printf "1.100.0\\n";; *) printf "anthropic.claude-code@2.1.300\\nopenai.chatgpt@1.0.0\\n";; esac;;\nesac;;\nesac`,
     );
   } else {
     write(s.dir, 'flatpak-mount/files/extra/vscode/resources/app/product.json', { applicationName: 'code', nameShort: 'Code' });
     stub(
       s,
       'flatpak',
-      'case "$1" in\ninfo) case "$*" in *--user*) printf "%s\\n" "$HOME/flatpak-mount";; *) exit 1;; esac;;\nrun) case "$*" in\n*--command=sh*) printf "PURPLESCHOOL_HOME=%s\\nPURPLESCHOOL_CONFIG=%s\\nPURPLESCHOOL_SNAP=\\n" "$HOME" "$HOME/.var/app/com.visualstudio.code/config";;\n*) printf "%s\\n" "$*" >> "$HOME/editor-calls"; case "$*" in *--version*) printf "1.100.0\\n";; *) printf "anthropic.claude-code@2.1.300\\nopenai.chatgpt@1.0.0\\n";; esac;;\nesac;;\nesac',
+      'case "$1" in\ninfo) case "$*" in *--user*) printf "%s\\n" "$HOME/flatpak-mount";; *) exit 1;; esac;;\nrun) case "$*" in\n*--command=sh*) while read -r _; do :; done; printf "PURPLESCHOOL_HOME=%s\\nPURPLESCHOOL_CONFIG=%s\\nPURPLESCHOOL_SNAP=\\n" "$HOME" "$HOME/.var/app/com.visualstudio.code/config";;\n*) printf "%s\\n" "$*" >> "$HOME/editor-calls"; case "$*" in *--version*) printf "1.100.0\\n";; *) printf "anthropic.claude-code@2.1.300\\nopenai.chatgpt@1.0.0\\n";; esac;;\nesac;;\nesac',
     );
   }
 }
