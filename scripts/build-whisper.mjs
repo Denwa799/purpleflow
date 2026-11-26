@@ -33,7 +33,8 @@ if (!fs.existsSync(src)) {
   const res = await fetch(`https://github.com/ggml-org/whisper.cpp/archive/refs/tags/${VERSION}.tar.gz`);
   if (!res.ok) throw new Error(`Не скачался whisper.cpp ${VERSION}: HTTP ${res.status}`);
   fs.writeFileSync(tar, Buffer.from(await res.arrayBuffer()));
-  run('tar', ['-xzf', tar]);
+  // Имя без пути: tar из Git для Windows читает «C:» в пути как адрес удалённой машины.
+  run('tar', ['-xzf', path.basename(tar)]);
 }
 
 const build = path.join(src, 'build');
