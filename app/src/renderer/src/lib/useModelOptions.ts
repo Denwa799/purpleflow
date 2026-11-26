@@ -10,6 +10,7 @@ let loaded: Promise<ProxyModels | null> | null = null;
 let last: ProxyModels | null = null;
 let opencodeLoaded: Promise<string[]> | null = null;
 let opencodeLast: string[] = [];
+let agyLast: string[] = [];
 
 /**
  * Подсказки моделей: сразу встроенные, следом — с моделями AI-прокси, когда список придёт.
@@ -19,6 +20,7 @@ let opencodeLast: string[] = [];
 export function useModelOptions(dir?: string): Record<AgentKind, DropOption<string>[]> {
   const [remote, setRemote] = useState(last);
   const [opencode, setOpencode] = useState(opencodeLast);
+  const [agy, setAgy] = useState(agyLast);
   useEffect(() => {
     let alive = true;
     loaded ??= bridge.proxyModels().catch(() => null);
@@ -32,9 +34,15 @@ export function useModelOptions(dir?: string): Record<AgentKind, DropOption<stri
       opencodeLast = m;
       if (alive) setOpencode(m);
     });
+    // Слаги agy зависят от тарифа Google-аккаунта, поэтому список тоже спрашиваем каждый раз, а не держим в памяти.
+    const agyList = bridge.core.listAgyModels().catch(() => []);
+    void agyList.then((m: string[]) => {
+      agyLast = m;
+      if (alive) setAgy(m);
+    });
     return () => {
       alive = false;
     };
   }, [dir]);
-  return useMemo(() => mergeModelOptions(remote, opencode), [remote, opencode]);
+  return useMemo(() => mergeModelOptions(remote, opencode, agy), [remote, opencode, agy]);
 }

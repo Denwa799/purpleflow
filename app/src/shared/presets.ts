@@ -16,6 +16,8 @@ export const TIERS: Record<AgentKind, Record<Tier, string>> = {
   codex: { low: 'gpt-6-luna', mid: 'gpt-6.1-terra', high: 'gpt-6-sol', max: 'gpt-6-astra' },
   // У opencode ступени выбирает человек из моделей своих провайдеров (opencodeTiers); с AI-прокси по умолчанию — линейка прокси.
   opencode: { low: '', mid: '', high: '', max: '' },
+  // Слаги agy: модели выдаёт аккаунт Google, полный список — `agy models`. Эти — из линейки Gemini, её видит любой тариф.
+  agy: { low: 'gemini-3.8-flash-low', mid: 'gemini-3.8-flash-high', high: 'gemini-4-hydrogen-medium', max: 'gemini-4-hydrogen-xhigh' },
 };
 
 /**
