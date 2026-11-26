@@ -1,5 +1,5 @@
 // Скиллы и команды, которые видят агенты: экран проекта и вкладка «Сессия» чата.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import type { AgentKind, ChatSkill } from '@purpleflow/core';
 import { bridge } from '../lib/api';
@@ -35,11 +35,14 @@ export function SkillList({
   agent,
   compact,
   limit,
+  actions,
 }: {
   skills: ChatSkill[];
   agent?: AgentKind;
   compact?: boolean;
   limit?: number;
+  /** Кнопки справа в строке скилла (вкладка «Сессия»: открыть, удалить). */
+  actions?: (s: ChatSkill) => ReactNode;
 }) {
   const { state } = useStore();
   const enabled = state.settings?.enabledAgents ?? ['claude', 'codex'];
@@ -73,6 +76,7 @@ export function SkillList({
                       {a}
                     </span>
                   ))}
+                {actions?.(s)}
               </div>
               {s.description && <p className="skill-desc">{s.description}</p>}
               {compact && !native && <p className="skill-desc">{agent} сам не найдёт — вызовите через «/»</p>}

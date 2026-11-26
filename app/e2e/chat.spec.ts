@@ -93,7 +93,14 @@ test('чат: песочница правок не пустила команду
 
 test('чат: панель под полем ввода, таблица и блок кода в ответе', async () => {
   const box = makeSandbox();
-  const l = await launch(box);
+  // Свой HOME: github — ваш MCP-сервер claude, его можно изменить и удалить с вкладки «Сессия».
+  const home = path.join(box.root, 'home');
+  fs.mkdirSync(home);
+  fs.writeFileSync(
+    path.join(home, '.claude.json'),
+    JSON.stringify({ mcpServers: { github: { type: 'http', url: 'https://gh.example/mcp' } } }),
+  );
+  const l = await launch(box, { HOME: home });
   const { page } = l;
   try {
     await page.getByRole('button', { name: /Создать/ }).click();
@@ -161,7 +168,13 @@ test('чат: панель под полем ввода, таблица и бл�
     const ses = page.locator('.ses');
     await expect(ses.locator('.ses-ctx-num')).toHaveText('50 тыс. из 200 тыс.');
     await expect(ses).toContainText('занято 25% окна модели');
-    await expect(ses.locator('.ses-mcp li', { hasText: 'github' })).toContainText('подключён');
+    const gh = ses.locator('.ses-mcp li', { hasText: 'github' });
+    await expect(gh).toContainText('подключён');
+    await gh.getByRole('button', { name: 'Изменить github' }).click();
+    const edit = page.getByRole('dialog', { name: 'Изменить github' });
+    await expect(edit.getByLabel('Адрес')).toHaveValue('https://gh.example/mcp');
+    await edit.getByRole('button', { name: 'Отмена' }).click();
+    await expect(edit).toHaveCount(0);
     await expect(ses.getByText('Вопросы — только чтение')).toBeVisible();
     await expect(ses.getByText('fake')).toBeVisible();
 
@@ -172,6 +185,13 @@ test('чат: панель под полем ввода, таблица и бл�
     await expect(ses.getByText('В этой сессии контекст уже сжимался.')).toBeVisible();
     expect(box.calls().at(-1)?.prompt).toBe('/compact');
     expect(box.calls().at(-1)?.args.join(' ')).toMatch(/--resume /);
+
+    // Удалить MCP-сервер прямо из сессии: два шага, агент подхватит при следующем запуске.
+    await gh.getByRole('button', { name: 'Удалить github' }).click();
+    await ses.getByRole('button', { name: 'Удалить у claude во всех проектах?' }).click();
+    await expect(ses.locator('.ses-mcp li', { hasText: 'github' })).toHaveCount(0);
+    await expect(ses).toContainText('Агент подхватит изменения при следующем запуске.');
+    expect(box.calls().some((c) => c.args.join(' ') === 'mcp remove github -s user')).toBe(true);
   } finally {
     await quit(l);
     box.cleanup();

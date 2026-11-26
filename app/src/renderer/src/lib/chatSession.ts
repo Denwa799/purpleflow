@@ -50,6 +50,8 @@ export function mcpStatus(status: string): { label: string; tone: 'ok' | 'warn' 
       return { label: 'нужен вход', tone: 'warn' };
     case 'pending':
       return { label: 'подключается', tone: 'idle' };
+    case 'unknown':
+      return { label: 'не проверен', tone: 'idle' };
     default:
       return { label: status || 'неизвестно', tone: 'idle' };
   }

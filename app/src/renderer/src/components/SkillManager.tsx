@@ -1,5 +1,6 @@
 // Управление скиллами проекта: список по агентам с удалением и окно поиска по каталогу skills.sh с установкой.
 import { Check, ChevronRight, Copy, Download, LoaderCircle, Search, Trash2, TriangleAlert, X } from 'lucide-react';
+import { OpenSkill } from './RowActions';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentKind, ChatSkill, SkillHit } from '@purpleflow/core';
@@ -14,7 +15,7 @@ import { Button } from './ui';
 const SOURCE_TITLE: Record<ChatSkill['source'], string> = { project: 'Проект', user: 'Ваши — для всех проектов' };
 
 /** Удалить скилл: что не убрал `skills` CLI (положен руками), окно отправляет в корзину системы. */
-async function removeSkill(projectPath: string | undefined, s: ChatSkill): Promise<ChatSkill[]> {
+export async function removeSkill(projectPath: string | undefined, s: ChatSkill): Promise<ChatSkill[]> {
   const r = await bridge.core.removeSkill({ projectPath, name: s.name, source: s.source });
   if (r.leftovers.length) await bridge.trashSkill(r.leftovers);
   return r.leftovers.length ? bridge.core.listChatSkills(projectPath) : r.skills;
@@ -191,6 +192,7 @@ function SkillRow({
               {copying ? <LoaderCircle size={14} className="spin" /> : <Copy size={14} />}
             </button>
           ))}
+        <OpenSkill s={s} />
         {!s.plugin &&
           (confirm ? (
             <button

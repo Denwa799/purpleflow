@@ -1,24 +1,58 @@
-// MCP-серверы проекта: по агентам, как скиллы, — удаление, копирование другому агенту и установка из реестра MCP.
-import { Check, ChevronRight, Copy, LoaderCircle, Plus, Search, Trash2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+// MCP-серверы проекта: по агентам, как скиллы, — работают ли они, правка, удаление, копирование другому агенту
+// и установка из реестра MCP.
+import { Check, ChevronRight, Copy, LoaderCircle, Pencil, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { AgentKind, McpEntry, McpHit, McpInstall, McpScope } from '@purpleflow/core';
+import type { AgentKind, McpEntry, McpHit, McpInstall, McpScope, McpStatus } from '@purpleflow/core';
 import { bridge, cleanErr } from '../lib/api';
+import { mcpStatus } from '../lib/chatSession';
 import { useStore } from '../lib/store';
 import { useDialogClose } from '../lib/useDialogClose';
 import { Select } from './Dropdown';
 import { PillTabs } from './PillTabs';
+import { ConfirmDelete } from './RowActions';
 import { Button } from './ui';
 
 const SCOPE_TITLE: Record<McpScope, string> = { project: 'Проект', user: 'Ваши — для всех проектов' };
 /** У codex и agy MCP-серверы только глобальные. */
 const GLOBAL_ONLY: AgentKind[] = ['codex', 'agy'];
 
+/** Ключ сервера: у одного агента имя может повторяться в проекте и в ваших. */
+const keyOf = (s: { agent: AgentKind; scope: McpScope; local?: boolean; name: string }) =>
+  `${s.agent}:${s.scope}:${s.local ? 'l' : ''}:${s.name}`;
+
+/** Проверка серверов: null — ещё идёт. Сервер запускается и спрашивается так же, как это сделает агент. */
+export function useMcpHealth(projectPath: string | undefined, servers: McpEntry[] | null) {
+  const [health, setHealth] = useState<Map<string, McpStatus['status']> | null>(null);
+  const [tick, setTick] = useState(0);
+  const ready = servers !== null;
+  useEffect(() => {
+    if (!ready) return;
+    let live = true;
+    setHealth(null);
+    bridge.core
+      .checkMcp(projectPath)
+      .then((list) => live && setHealth(new Map(list.map((s) => [keyOf(s), s.status]))))
+      .catch(() => live && setHealth(new Map()));
+    return () => {
+      live = false;
+    };
+  }, [projectPath, ready, tick]);
+  return { health, recheck: useCallback(() => setTick((t) => t + 1), []) };
+}
+
+/** Точка состояния сервера; пока проверка идёт — серая и пульсирует. */
+export function McpDot({ status }: { status?: McpStatus['status'] | null }) {
+  const st = status ? mcpStatus(status) : { label: 'проверяю…', tone: 'idle' as const };
+  return <span className={`ses-dot is-${st.tone} ${status ? '' : 'is-checking'}`} title={st.label} aria-label={st.label} role="img" />;
+}
+
 /** Панель «MCP-серверы» экрана проекта. */
 export function McpPanel({ repo }: { repo: string }) {
   const [servers, setServers] = useState<McpEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const { health, recheck } = useMcpHealth(repo, servers);
   useEffect(() => {
     let live = true;
     setServers(null);
@@ -30,11 +64,45 @@ export function McpPanel({ repo }: { repo: string }) {
       live = false;
     };
   }, [repo]);
+  // Список поменялся (поставили, изменили, удалили) — проверяем заново.
+  const change = (s: McpEntry[]) => {
+    setServers(s);
+    recheck();
+  };
+  const active = servers?.filter((s) => !s.disabled) ?? [];
+  const states = active.map((s) => health?.get(keyOf(s)));
+  const ok = states.filter((h) => h === 'connected').length;
+  const bad = states.some((h) => h === 'failed' || h === 'needs-auth');
+  const all = ok === active.length;
   return (
     <section className="panel overview-mcp">
       <header className="overview-runs-head">
         <h3>MCP-серверы</h3>
         <span className="muted">{servers?.length || ''}</span>
+        {active.length > 0 && (
+          <span className={`mcp-health ${bad ? 'is-bad' : ''}`} aria-live="polite">
+            {health ? (
+              <>
+                <McpDot status={all ? 'connected' : bad ? 'failed' : 'unknown'} />
+                {all ? 'все работают' : `работают ${ok} из ${active.length}`}
+              </>
+            ) : (
+              <>
+                <McpDot /> проверяю…
+              </>
+            )}
+            <button
+              type="button"
+              className="skill-del"
+              aria-label="Проверить снова"
+              title="Проверить снова"
+              disabled={!health}
+              onClick={recheck}
+            >
+              <RefreshCw size={13} />
+            </button>
+          </span>
+        )}
         <span className="grow" />
         <Button tone="ghost" icon={<Plus size={14} />} onClick={() => setAdding(true)}>
           Добавить MCP
@@ -45,16 +113,26 @@ export function McpPanel({ repo }: { repo: string }) {
       {!servers ? (
         <p className="muted">…</p>
       ) : servers.length ? (
-        <McpGroups servers={servers} projectPath={repo} onChange={setServers} />
+        <McpGroups servers={servers} health={health} projectPath={repo} onChange={change} />
       ) : (
         <p className="muted">MCP-серверов пока нет — добавьте из реестра.</p>
       )}
-      {adding && <McpSearchDialog projectPath={repo} onClose={() => setAdding(false)} onInstalled={setServers} />}
+      {adding && <McpSearchDialog projectPath={repo} onClose={() => setAdding(false)} onInstalled={change} />}
     </section>
   );
 }
 
-function McpGroups({ servers, projectPath, onChange }: { servers: McpEntry[]; projectPath: string; onChange: (s: McpEntry[]) => void }) {
+function McpGroups({
+  servers,
+  health,
+  projectPath,
+  onChange,
+}: {
+  servers: McpEntry[];
+  health: Map<string, McpStatus['status']> | null;
+  projectPath: string;
+  onChange: (s: McpEntry[]) => void;
+}) {
   const { state } = useStore();
   const enabled = state.settings?.enabledAgents ?? ['claude', 'codex'];
   const groups = enabled.map((agent) => ({ agent, items: servers.filter((s) => s.agent === agent) })).filter((g) => g.items.length);
@@ -98,13 +176,14 @@ function McpGroups({ servers, projectPath, onChange }: { servers: McpEntry[]; pr
                 <ul className="skill-list">
                   {items.map((s) => (
                     <McpRow
-                      key={`${s.scope}:${s.name}:${s.local ? 'l' : ''}`}
+                      key={keyOf(s)}
                       s={s}
+                      status={s.disabled ? 'unknown' : health?.get(keyOf(s))}
+                      projectPath={projectPath}
                       copyTo={enabled.filter((a) => a !== s.agent && !servers.some((x) => x.agent === a && x.name === s.name))}
                       onCopy={(to) => act(() => bridge.core.copyMcp({ projectPath, agent: s.agent, name: s.name, scope: s.scope, to }))}
-                      onRemove={() =>
-                        act(() => bridge.core.removeMcp({ projectPath, agent: s.agent, name: s.name, scope: s.scope, local: s.local }))
-                      }
+                      onRemove={() => act(() => removeServer(projectPath, s))}
+                      onSaved={onChange}
                     />
                   ))}
                 </ul>
@@ -117,33 +196,37 @@ function McpGroups({ servers, projectPath, onChange }: { servers: McpEntry[]; pr
   );
 }
 
+export const removeServer = (projectPath: string | undefined, s: McpEntry) =>
+  bridge.core.removeMcp({ projectPath, agent: s.agent, name: s.name, scope: s.scope, local: s.local });
+
+/** Текст вопроса перед удалением: где сервер пропадёт. */
+export const removeAsk = (s: McpEntry) => (s.scope === 'user' ? `Удалить у ${s.agent} во всех проектах?` : 'Удалить из проекта?');
+
 function McpRow({
   s,
+  status,
+  projectPath,
   copyTo,
   onCopy,
   onRemove,
+  onSaved,
 }: {
   s: McpEntry;
+  status: McpStatus['status'] | null | undefined;
+  projectPath: string;
   copyTo: AgentKind[];
   onCopy: (to: AgentKind) => Promise<void>;
   onRemove: () => Promise<void>;
+  onSaved: (s: McpEntry[]) => void;
 }) {
-  const [confirm, setConfirm] = useState(false);
-  const [busy, setBusy] = useState<'copy' | 'remove' | null>(null);
+  const [copying, setCopying] = useState(false);
   const [picking, setPicking] = useState(false);
-  const timer = useRef(0);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
-  const run = async (kind: 'copy' | 'remove', fn: () => Promise<void>) => {
-    setBusy(kind);
-    await fn();
-    setBusy(null);
-    setPicking(false);
-    setConfirm(false);
-  };
+  const [editing, setEditing] = useState(false);
   const keys = [...s.env, ...s.headers];
   return (
     <li title={s.command ?? s.url}>
       <div className="skill-head">
+        <McpDot status={status} />
         <code className="skill-name">{s.name}</code>
         <span className="tag">{s.transport === 'stdio' ? 'локальный' : s.transport}</span>
         {s.local && (
@@ -152,6 +235,7 @@ function McpRow({
           </span>
         )}
         {s.disabled && <span className="tag">выключен</span>}
+        {(status === 'failed' || status === 'needs-auth') && <span className="tag is-wait">{mcpStatus(status).label}</span>}
         <span className="grow" />
         {copyTo.length > 0 &&
           (picking ? (
@@ -161,8 +245,14 @@ function McpRow({
                   key={a}
                   type="button"
                   className="skill-del is-copy"
-                  disabled={busy !== null}
-                  onClick={() => void run('copy', () => onCopy(a))}
+                  disabled={copying}
+                  onClick={() => {
+                    setCopying(true);
+                    void onCopy(a).finally(() => {
+                      setCopying(false);
+                      setPicking(false);
+                    });
+                  }}
                 >
                   <Copy size={13} /> в {a}
                 </button>
@@ -177,38 +267,131 @@ function McpRow({
               className="skill-del"
               aria-label={`Скопировать ${s.name} другому агенту`}
               title="Скопировать другому агенту (вместе с ключами)"
-              disabled={busy !== null}
+              disabled={copying}
               onClick={() => setPicking(true)}
             >
-              {busy === 'copy' ? <LoaderCircle size={14} className="spin" /> : <Copy size={14} />}
+              {copying ? <LoaderCircle size={14} className="spin" /> : <Copy size={14} />}
             </button>
           ))}
-        {confirm ? (
-          <button type="button" className="skill-del is-confirm" disabled={busy !== null} onClick={() => void run('remove', onRemove)}>
-            {busy === 'remove' ? <LoaderCircle size={13} className="spin" /> : <Trash2 size={13} />}
-            {s.scope === 'user' ? `Удалить у ${s.agent} во всех проектах?` : 'Удалить из проекта?'}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="skill-del"
-            aria-label={`Удалить ${s.name}`}
-            title="Удалить"
-            onClick={() => {
-              setConfirm(true);
-              window.clearTimeout(timer.current);
-              timer.current = window.setTimeout(() => setConfirm(false), 4000);
-            }}
-          >
-            <Trash2 size={14} />
-          </button>
-        )}
+        <button type="button" className="skill-del" aria-label={`Изменить ${s.name}`} title="Изменить" onClick={() => setEditing(true)}>
+          <Pencil size={14} />
+        </button>
+        <ConfirmDelete name={s.name} ask={removeAsk(s)} onConfirm={onRemove} />
       </div>
       <p className="skill-desc mcp-target">
         <code>{s.url ?? s.command}</code>
         {keys.length > 0 && <span className="muted"> · {keys.join(', ')}</span>}
       </p>
+      {editing && <McpEditDialog entry={s} projectPath={projectPath} onClose={() => setEditing(false)} onSaved={onSaved} />}
     </li>
+  );
+}
+
+/** Окно «Изменить MCP»: адрес или команда и новые значения ключей. Старые значения не показываем. */
+export function McpEditDialog({
+  entry,
+  projectPath,
+  onClose: closeNow,
+  onSaved,
+}: {
+  entry: McpEntry;
+  projectPath?: string;
+  onClose: () => void;
+  onSaved: (s: McpEntry[]) => void;
+}) {
+  const { closing, close } = useDialogClose(closeNow);
+  const initial = entry.url ?? entry.command ?? '';
+  const [target, setTarget] = useState(initial);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const remote = entry.transport !== 'stdio';
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [close]);
+  const changed = target.trim() !== initial || Object.values(values).some((v) => v.trim());
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const s = await bridge.core.updateMcp({
+        projectPath,
+        agent: entry.agent,
+        name: entry.name,
+        scope: entry.scope,
+        local: entry.local,
+        target: target.trim() !== initial ? target.trim() : undefined,
+        values,
+      });
+      onSaved(s);
+      close();
+    } catch (e) {
+      setError(cleanErr(e));
+      setBusy(false);
+    }
+  };
+  return createPortal(
+    <div className={`qs-scrim ${closing ? 'is-closing' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <div className="qs mcp-edit" role="dialog" aria-modal aria-labelledby="mcp-edit-title">
+        <header className="qs-head">
+          <div>
+            <h2 id="mcp-edit-title">Изменить {entry.name}</h2>
+            <p>
+              {entry.agent} · {entry.scope === 'user' ? 'для всех проектов' : entry.local ? 'этот проект, только у вас' : 'этот проект'}
+            </p>
+          </div>
+          <button className="qs-close" aria-label="Закрыть" onClick={() => close()}>
+            <X size={16} />
+          </button>
+        </header>
+        <form
+          className="mcp-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (changed && !busy) void save();
+          }}
+        >
+          <label className="mcp-field">
+            <span>{remote ? 'Адрес' : 'Команда запуска'}</span>
+            <input
+              className="input mono"
+              value={target}
+              aria-label={remote ? 'Адрес' : 'Команда запуска'}
+              onChange={(e) => setTarget(e.target.value)}
+            />
+          </label>
+          {[...entry.env, ...entry.headers].map((key) => (
+            <label key={key} className="mcp-field">
+              <span>
+                {key}
+                <small>{entry.env.includes(key) ? 'переменная окружения' : 'заголовок'} · пусто — оставить как есть</small>
+              </span>
+              <input
+                className="input mono"
+                type="password"
+                aria-label={key}
+                placeholder="••••••  без изменений"
+                value={values[key] ?? ''}
+                onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
+              />
+            </label>
+          ))}
+          {error && <p className="inline-error">{error}</p>}
+        </form>
+        <footer className="qs-foot">
+          <span className="grow" />
+          <Button tone="ghost" onClick={() => close()}>
+            Отмена
+          </Button>
+          <Button tone="primary" busy={busy} disabled={!changed} onClick={() => void save()}>
+            Сохранить
+          </Button>
+        </footer>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

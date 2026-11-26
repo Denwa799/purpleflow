@@ -2448,3 +2448,15 @@ body.is-side-resizing webview {
   color: var(--text-2);
   font-size: var(--fs-13);
 }
+.ses-mcp-body {
+  flex: 1;
+  min-width: 0;
+}
+.ses-mcp-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.skill-list.is-compact .skill-head .skill-del {
+  flex: none;
+}

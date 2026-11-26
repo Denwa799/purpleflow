@@ -1,12 +1,15 @@
 // Вкладка «Сессия» правой панели чата и индикатор контекста на свёрнутой панели.
 import { useEffect, useState, type ReactNode } from 'react';
-import { Check, Copy, FoldVertical } from 'lucide-react';
-import type { ChatFile } from '@purpleflow/core';
+import { Check, Copy, FoldVertical, Pencil } from 'lucide-react';
+import type { ChatFile, ChatSkill, McpEntry } from '@purpleflow/core';
 import { Button } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
 import { chatSession, mcpStatus, type ChatSessionSummary } from '../lib/chatSession';
 import { shortPath, tokens, when } from '../lib/format';
 import { SkillList, useSkills } from '../components/SkillList';
+import { removeSkill } from '../components/SkillManager';
+import { McpEditDialog, removeAsk, removeServer } from '../components/McpManager';
+import { ConfirmDelete, OpenSkill } from '../components/RowActions';
 import { EFFORT_LEVELS, effortOf } from '../lib/effort';
 import { accessOf } from '../lib/chatAccess';
 
@@ -141,7 +144,10 @@ function ContextCard({ s, chat, busy }: { s: ChatSessionSummary; chat: ChatFile;
 
 /** Скиллы, которые видит агент чата, — рядом с MCP-серверами. */
 function ChatSkills({ chat }: { chat: ChatFile }) {
-  const skills = useSkills(chat.projectPath);
+  const loaded = useSkills(chat.projectPath);
+  const [changed, setChanged] = useState<ChatSkill[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const skills = changed ?? loaded;
   const [all, setAll] = useState(false);
   if (!skills) return null;
   if (!skills.length)
@@ -158,12 +164,115 @@ function ChatSkills({ chat }: { chat: ChatFile }) {
   return (
     <div className="ses-skills">
       <span className="ses-label">Скиллы · {skills.length}</span>
-      <SkillList skills={shown} agent={chat.agent} compact />
+      <SkillList
+        skills={shown}
+        agent={chat.agent}
+        compact
+        actions={(x) => (
+          <>
+            <OpenSkill s={x} />
+            {!x.plugin && (
+              <ConfirmDelete
+                name={x.name}
+                ask={x.source === 'user' ? 'Во всех проектах?' : 'Из проекта?'}
+                onConfirm={async () => {
+                  setError(null);
+                  try {
+                    setChanged(await removeSkill(chat.projectPath, x));
+                  } catch (e) {
+                    setError(cleanErr(e));
+                  }
+                }}
+              />
+            )}
+          </>
+        )}
+      />
+      {error && <p className="ses-note">{error}</p>}
       {sorted.length > shown.length && (
         <button className="link ses-more" onClick={() => setAll(true)}>
           Показать все ({sorted.length})
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * MCP-серверы сессии — как их видит агент. Серверы из настроек агента (не подключения claude.ai)
+ * можно изменить и удалить; агент подхватит изменения при следующем запуске.
+ */
+function ChatMcp({ chat, mcp }: { chat: ChatFile; mcp: { name: string; status: string }[] }) {
+  const [entries, setEntries] = useState<McpEntry[]>([]);
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [editing, setEditing] = useState<McpEntry | null>(null);
+  const [touched, setTouched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    bridge.core
+      .listMcp(chat.projectPath)
+      .then((l) => live && setEntries(l.filter((e) => e.agent === chat.agent)))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [chat.projectPath, chat.agent]);
+  // Имя может быть и в проекте, и в ваших — агент берёт проектный.
+  const entryOf = (name: string) => entries.find((e) => e.name === name && e.scope === 'project') ?? entries.find((e) => e.name === name);
+  const saved = (l: McpEntry[]) => {
+    setEntries(l.filter((e) => e.agent === chat.agent));
+    setTouched(true);
+  };
+  return (
+    <div className="ses-mcp">
+      <span className="ses-label">MCP-серверы</span>
+      <div className="ses-mcp-body">
+        <ul>
+          {mcp
+            .filter((m) => !removed.includes(m.name))
+            .map((m) => {
+              const st = mcpStatus(m.status);
+              const e = entryOf(m.name);
+              return (
+                <li key={m.name}>
+                  <span className={`ses-dot is-${st.tone}`} />
+                  <span className="ses-mcp-name">{m.name}</span>
+                  <span className="ses-hint">{st.label}</span>
+                  {e && (
+                    <span className="ses-mcp-actions">
+                      <button
+                        type="button"
+                        className="skill-del"
+                        aria-label={`Изменить ${m.name}`}
+                        title="Изменить"
+                        onClick={() => setEditing(e)}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <ConfirmDelete
+                        name={m.name}
+                        ask={removeAsk(e)}
+                        onConfirm={async () => {
+                          setError(null);
+                          try {
+                            saved(await removeServer(chat.projectPath, e));
+                            setRemoved((r) => [...r, m.name]);
+                          } catch (err) {
+                            setError(cleanErr(err));
+                          }
+                        }}
+                      />
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+        </ul>
+        {error && <p className="ses-note">{error}</p>}
+        {touched && <p className="ses-hint">Агент подхватит изменения при следующем запуске.</p>}
+      </div>
+      {editing && <McpEditDialog entry={editing} projectPath={chat.projectPath} onClose={() => setEditing(null)} onSaved={saved} />}
     </div>
   );
 }
@@ -208,21 +317,7 @@ export function ChatSessionPane({ chat, model, busy }: { chat: ChatFile; model: 
           {folder ? <span title={folder}>{shortPath(folder)}</span> : <span className="ses-hint">временная папка чата</span>}
         </Row>
         {s.mcp?.length ? (
-          <div className="ses-mcp">
-            <span className="ses-label">MCP-серверы</span>
-            <ul>
-              {s.mcp.map((m) => {
-                const st = mcpStatus(m.status);
-                return (
-                  <li key={m.name}>
-                    <span className={`ses-dot is-${st.tone}`} />
-                    <span className="ses-mcp-name">{m.name}</span>
-                    <span className="ses-hint">{st.label}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+          <ChatMcp chat={chat} mcp={s.mcp} />
         ) : (
           <Row label="MCP-серверы">
             <span className="ses-hint">{s.answers ? 'нет' : 'станут известны после ответа'}</span>

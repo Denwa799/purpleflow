@@ -44,7 +44,12 @@ test('mcp: список проекта, поиск в реестре с поля
   fs.mkdirSync(home);
   fs.writeFileSync(
     path.join(box.repo, '.mcp.json'),
-    JSON.stringify({ mcpServers: { postgres: { command: 'npx', args: ['-y', 'pg-mcp'], env: { PG_URL: 'postgres://секрет' } } } }),
+    JSON.stringify({
+      mcpServers: {
+        postgres: { command: 'npx', args: ['-y', 'pg-mcp'], env: { PG_URL: 'postgres://секрет' } },
+        'broken-api': { type: 'http', url: 'https://broken.example/mcp' },
+      },
+    }),
   );
   const l = await launch(box, { PURPLEFLOW_MCP_REGISTRY_URL: url, HOME: home });
   const { page } = l;
@@ -59,6 +64,37 @@ test('mcp: список проекта, поиск в реестре с поля
     await expect(panel).toContainText('PG_URL');
     await expect(page.getByText('postgres://секрет')).toHaveCount(0);
     await expect(panel.getByRole('button', { name: 'Удалить postgres' })).toBeVisible();
+    // Проверка серверов: claude сам говорит, кто подключился.
+    await expect(panel.locator('.mcp-health')).toHaveText(/работают 1 из 2/);
+    await expect(panel.getByRole('listitem').filter({ hasText: 'broken-api' })).toContainText('не подключился');
+    await expect(panel.getByRole('listitem').filter({ hasText: 'postgres' }).getByRole('img', { name: 'подключён' })).toBeVisible();
+
+    // Правка: новая команда и ключ; пустой ключ остаётся прежним.
+    await panel.getByRole('button', { name: 'Изменить postgres' }).click();
+    const edit = page.getByRole('dialog', { name: 'Изменить postgres' });
+    await expect(edit.getByLabel('Команда запуска')).toHaveValue('npx -y pg-mcp');
+    await expect(edit.getByRole('button', { name: 'Сохранить' })).toBeDisabled();
+    await edit.getByLabel('Команда запуска').fill('npx -y pg-mcp@2');
+    await edit.getByLabel('PG_URL').fill('postgres://новый');
+    if (process.env.PURPLEFLOW_SHOTS) {
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: path.join(box.root, '..', 'pf-mcp-edit.png') });
+    }
+    await edit.getByRole('button', { name: 'Сохранить' }).click();
+    await expect(edit).toHaveCount(0);
+    await expect(panel).toContainText('npx -y pg-mcp@2');
+    const saved = JSON.parse(fs.readFileSync(path.join(box.repo, '.mcp.json'), 'utf8')) as {
+      mcpServers: Record<string, { args: string[]; env: Record<string, string> }>;
+    };
+    expect(saved.mcpServers.postgres).toMatchObject({ args: ['-y', 'pg-mcp@2'], env: { PG_URL: 'postgres://новый' } });
+    await expect(page.getByText('postgres://новый')).toHaveCount(0);
+
+    // Удаление в два шага.
+    await panel.getByRole('button', { name: 'Удалить broken-api' }).click();
+    await panel.getByRole('button', { name: 'Удалить из проекта?' }).click();
+    await expect(panel.getByText('broken-api')).toHaveCount(0);
+    await expect(panel.locator('.mcp-health')).toHaveText(/все работают/);
+    if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-mcp-panel.png') });
 
     await panel.getByRole('button', { name: 'Добавить MCP' }).click();
     const dialog = page.getByRole('dialog', { name: 'Добавить MCP' });

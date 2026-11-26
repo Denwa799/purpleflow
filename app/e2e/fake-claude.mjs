@@ -9,6 +9,26 @@ if (args.includes('--version')) {
   process.exit(0);
 }
 
+// `claude mcp …` — только серверы проекта в .mcp.json папки запуска. «broken…» не подключаются.
+if (args[0] === 'mcp') {
+  const file = path.join(process.cwd(), '.mcp.json');
+  const cfg = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { mcpServers: {} };
+  const save = () => fs.writeFileSync(file, JSON.stringify(cfg));
+  if (process.env.FAKE_CLAUDE_LOG) fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, `${JSON.stringify({ args })}\n`);
+  if (args[1] === 'list') {
+    console.log('Checking MCP server health…\n');
+    for (const name of Object.keys(cfg.mcpServers))
+      console.log(`${name}: x - ${name.startsWith('broken') ? '✗ Failed to connect' : '✔ Connected'}`);
+  } else if (args[1] === 'remove') {
+    delete cfg.mcpServers[args[2]];
+    save();
+  } else if (args[1] === 'add-json') {
+    cfg.mcpServers[args[2]] = JSON.parse(args[3]);
+    save();
+  }
+  process.exit(0);
+}
+
 let prompt = '';
 for await (const chunk of process.stdin) prompt += chunk;
 // Для скриншотов: шкала прогона с мгновенными стадиями выглядела бы пустой.

@@ -152,6 +152,14 @@ export interface SkillHit {
 
 /** Где записан MCP-сервер: в проекте или у вас (для всех проектов). */
 export type McpScope = 'project' | 'user';
+/** Проверка сервера: подключился, не подключился, нужен вход, не знаем (выключен или агент не ответил). */
+export interface McpStatus {
+  agent: AgentKind;
+  name: string;
+  scope: McpScope;
+  local?: boolean;
+  status: 'connected' | 'failed' | 'needs-auth' | 'unknown';
+}
 
 /** MCP-сервер из настроек агента. Значения переменных и заголовков не передаются — только имена. */
 export interface McpEntry {

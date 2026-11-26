@@ -6,7 +6,20 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Kernel } from './kernel.js';
-import { copyMcp, installMcp, installsOf, listMcp, removeMcp, shortName } from './services/mcpstore.js';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import {
+  checkMcp,
+  copyMcp,
+  installMcp,
+  installsOf,
+  listMcp,
+  parseClaudeList,
+  removeMcp,
+  shortName,
+  splitCommand,
+  updateMcp,
+} from './services/mcpstore.js';
 import type { CoreSettings, McpInstall } from './types.js';
 
 const unix = { skip: process.platform === 'win32' };
@@ -31,8 +44,10 @@ function setup(t: { after: (fn: () => void) => void }, agents = ['claude', 'code
       `#!/bin/sh
 [ "$1" = "--version" ] && { echo "${name} 1.0.0"; exit 0; }
 [ "$1 $2 $3" = "mcp list --json" ] && { cat "${root}/codex.json" 2>/dev/null || echo '[]'; exit 0; }
+[ "$1 $2 $#" = "mcp list 2" ] && { cat "${root}/${name}-list.txt" 2>/dev/null; exit 0; }
 printf '%s' "${name}" >> "${log}"; for a in "$@"; do printf ' [%s]' "$a" >> "${log}"; done; echo >> "${log}"
 [ -f "${root}/fail-${name}" ] && { echo "сломался" >&2; exit 1; }
+[ -f "${root}/fail-${name}-$2" ] && { echo "сломался" >&2; exit 1; }
 exit 0
 `,
       { mode: 0o755 },
@@ -216,4 +231,106 @@ test('installsOf и shortName: варианты из записи реестра
     default: 'Bearer {token}',
   });
   assert.equal(shortName('io.github.acme/acme-mcp'), 'acme-mcp');
+});
+
+test('updateMcp: новый ключ и команда — удалить и записать заново; пустое значение оставляет прежнее', unix, async (t) => {
+  const { k, home, project, calls, write } = setup(t);
+  write(path.join(home, '.claude.json'), {
+    projects: { [project]: { mcpServers: { db: { command: 'pg', args: ['--old'], env: { DB_URL: 'old', DB_USER: 'me' } } } } },
+  });
+  await updateMcp(k, {
+    projectPath: project,
+    agent: 'claude',
+    name: 'db',
+    scope: 'project',
+    local: true,
+    target: 'pg "--host=a b"',
+    values: { DB_URL: 'new', DB_USER: ' ' },
+  });
+  assert.deepEqual(calls(), [
+    'claude [mcp] [remove] [db] [-s] [local]',
+    `claude [mcp] [add-json] [db] [${JSON.stringify({ type: 'stdio', command: 'pg', args: ['--host=a b'], env: { DB_URL: 'new', DB_USER: 'me' } })}] [-s] [local]`,
+  ]);
+  // opencode: правка на месте.
+  write(path.join(project, 'opencode.json'), { mcp: { linear: { type: 'remote', url: 'https://a.example/mcp', headers: { X: '1' } } } });
+  await updateMcp(k, {
+    projectPath: project,
+    agent: 'opencode',
+    name: 'linear',
+    scope: 'project',
+    target: 'https://b.example/mcp',
+    values: { X: '2' },
+  });
+  const oc = JSON.parse(fs.readFileSync(path.join(project, 'opencode.json'), 'utf8')) as {
+    mcp: Record<string, { url: string; headers: unknown }>;
+  };
+  assert.deepEqual([oc.mcp.linear.url, oc.mcp.linear.headers], ['https://b.example/mcp', { X: '2' }]);
+  await assert.rejects(
+    updateMcp(k, { projectPath: project, agent: 'opencode', name: 'linear', scope: 'project', target: 'ftp://x' }),
+    /http/,
+  );
+});
+
+test('updateMcp: не записалось — пробуем вернуть прежний сервер', unix, async (t) => {
+  const { k, root, home, calls, write } = setup(t);
+  write(path.join(home, '.gemini/config/mcp_config.json'), { mcpServers: { gh: { command: 'gh-mcp', env: { T: 'old' } } } });
+  fs.writeFileSync(path.join(root, 'fail-agy-add'), '');
+  await assert.rejects(updateMcp(k, { agent: 'agy', name: 'gh', scope: 'user', values: { T: 'new' } }), /сломался/);
+  assert.deepEqual(calls(), [
+    'agy [mcp] [remove] [gh]',
+    'agy [mcp] [add] [--env] [T=new] [gh] [--] [gh-mcp]',
+    'agy [mcp] [add] [--env] [T=old] [gh] [--] [gh-mcp]',
+  ]);
+});
+
+test('checkMcp: claude — по его проверке, остальные — пробуем подключиться', unix, async (t) => {
+  const { k, root, home, project, write } = setup(t);
+  const server = http.createServer((req, res) => {
+    res.statusCode = req.url === '/locked' ? 401 : 200;
+    res.end('{}');
+  });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const ok = path.join(root, 'ok-mcp.mjs');
+  fs.writeFileSync(
+    ok,
+    `process.stdin.on('data', () => { process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }) + '\\n'); });\n`,
+  );
+  write(path.join(home, '.claude.json'), { mcpServers: { figma: { type: 'http', url: 'https://x' }, gone: { command: 'nope' } } });
+  fs.writeFileSync(
+    path.join(root, 'claude-list.txt'),
+    'Checking MCP server health…\n\nfigma: https://x (HTTP) - ✔ Connected\ngone: nope - ✗ Failed to connect\n',
+  );
+  write(path.join(project, 'opencode.json'), {
+    mcp: {
+      local: { type: 'local', command: [process.execPath, ok] },
+      broken: { type: 'local', command: [process.execPath, '-e', 'process.exit(1)'] },
+      remote: { type: 'remote', url: `${base}/mcp` },
+      locked: { type: 'remote', url: `${base}/locked` },
+    },
+  });
+  const st = await checkMcp(k, project);
+  const of = (agent: string, name: string) => st.find((s) => s.agent === agent && s.name === name)?.status;
+  assert.equal(of('claude', 'figma'), 'connected');
+  assert.equal(of('claude', 'gone'), 'failed');
+  assert.equal(of('opencode', 'local'), 'connected');
+  assert.equal(of('opencode', 'broken'), 'failed');
+  assert.equal(of('opencode', 'remote'), 'connected');
+  assert.equal(of('opencode', 'locked'), 'needs-auth');
+});
+
+test('splitCommand и parseClaudeList', () => {
+  assert.deepEqual(splitCommand(`npx -y "@a/b c" 'd e' f`), ['npx', '-y', '@a/b c', 'd e', 'f']);
+  const m = parseClaudeList(
+    'Checking MCP server health…\n\nclaude.ai Gmail: https://g/mcp - ✔ Connected\nsentry: https://s - ⚠ Needs authentication\nx: y - ✗ Failed to connect\n',
+  );
+  assert.deepEqual(
+    [...m],
+    [
+      ['claude.ai Gmail', 'connected'],
+      ['sentry', 'needs-auth'],
+      ['x', 'failed'],
+    ],
+  );
 });

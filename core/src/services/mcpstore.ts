@@ -7,7 +7,7 @@ import path from 'node:path';
 import type { Kernel } from '../kernel.js';
 import { enabledAgents } from '../model/settings.js';
 import { run } from '../proc.js';
-import type { AgentKind, McpEntry, McpHit, McpInstall, McpScope } from '../types.js';
+import type { AgentKind, McpEntry, McpHit, McpInstall, McpScope, McpStatus } from '../types.js';
 
 /** Полное описание сервера: то, что пишется в настройки агента. */
 export interface McpDef {
@@ -149,7 +149,14 @@ function editOpencode(file: string, fn: (mcp: Record<string, unknown>) => void) 
 }
 
 /** Добавить сервер одному агенту. codex и agy — всегда глобально. */
-async function addTo(k: Kernel, agent: AgentKind, name: string, def: McpDef, scope: McpScope, projectPath?: string): Promise<void> {
+async function addTo(
+  k: Kernel,
+  agent: AgentKind,
+  name: string,
+  def: McpDef,
+  scope: McpScope | 'local',
+  projectPath?: string,
+): Promise<void> {
   const env = Object.entries(def.env ?? {});
   const headers = Object.entries(def.headers ?? {});
   const remote = def.transport !== 'stdio';
@@ -157,12 +164,7 @@ async function addTo(k: Kernel, agent: AgentKind, name: string, def: McpDef, sco
     const json = remote
       ? { type: def.transport, url: def.url, ...(headers.length ? { headers: def.headers } : {}) }
       : { type: 'stdio', command: def.command, args: def.args ?? [], ...(env.length ? { env: def.env } : {}) };
-    return cli(
-      k,
-      'claude',
-      ['mcp', 'add-json', name, JSON.stringify(json), '-s', scope === 'project' ? 'project' : 'user'],
-      projectPath ?? home(),
-    );
+    return cli(k, 'claude', ['mcp', 'add-json', name, JSON.stringify(json), '-s', scope], projectPath ?? home());
   }
   if (agent === 'codex') {
     if (remote && headers.length)
@@ -179,7 +181,7 @@ async function addTo(k: Kernel, agent: AgentKind, name: string, def: McpDef, sco
       : ['mcp', 'add', ...flags, name, '--', def.command!, ...(def.args ?? [])];
     return cli(k, 'agy', args, home());
   }
-  editOpencode(opencodeFile(scope, projectPath), (mcp) => {
+  editOpencode(opencodeFile(scope === 'user' ? 'user' : 'project', projectPath), (mcp) => {
     mcp[name] = remote
       ? { type: 'remote', url: def.url, ...(headers.length ? { headers: def.headers } : {}), enabled: true }
       : { type: 'local', command: [def.command, ...(def.args ?? [])], ...(env.length ? { environment: def.env } : {}), enabled: true };
@@ -251,6 +253,169 @@ export async function copyMcp(
   if (!enabledAgents(k.opts.getSettings()).includes(o.to)) throw new Error(`${o.to} выключен в настройках`);
   await addTo(k, o.to, o.name, found.def, scopeFor(o.to, o.scope), o.projectPath);
   return listMcp(k, o.projectPath);
+}
+
+/** Командная строка → слова: пробелы делят, кавычки держат вместе. */
+export function splitCommand(line: string): string[] {
+  const out: string[] = [];
+  for (const m of line.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)) out.push(m[1] ?? m[2] ?? m[3]);
+  return out;
+}
+
+/**
+ * Изменить сервер: адрес или команду запуска и значения ключей. Пустое значение — ключ остаётся прежним.
+ * Агенты не умеют править сервер на месте: удаляем и записываем заново; не вышло — возвращаем как было.
+ */
+export async function updateMcp(
+  k: Kernel,
+  o: {
+    projectPath?: string;
+    agent: AgentKind;
+    name: string;
+    scope: McpScope;
+    local?: boolean;
+    /** URL (http, sse) или командная строка (stdio). */
+    target?: string;
+    values?: Record<string, string>;
+  },
+): Promise<McpEntry[]> {
+  const found = (await scan(k, o.projectPath)).find(
+    (f) => f.entry.agent === o.agent && f.entry.name === o.name && f.entry.scope === o.scope && !!f.entry.local === !!o.local,
+  );
+  if (!found) throw new Error('Сервер не найден');
+  const old = found.def;
+  const def: McpDef = { ...old, env: { ...old.env }, headers: { ...old.headers } };
+  const target = o.target?.trim();
+  if (target) {
+    if (def.transport === 'stdio') {
+      const [command, ...args] = splitCommand(target);
+      Object.assign(def, { command, args });
+    } else if (/^https?:\/\/\S+$/.test(target)) def.url = target;
+    else throw new Error('Адрес сервера: http:// или https://');
+  }
+  for (const [key, v] of Object.entries(o.values ?? {})) {
+    if (!v.trim()) continue;
+    if (key in (def.env ?? {})) def.env![key] = v.trim();
+    else if (key in (def.headers ?? {})) def.headers![key] = v.trim();
+  }
+  const scope = o.agent === 'claude' && o.local ? 'local' : scopeFor(o.agent, o.scope);
+  if (o.agent === 'opencode') {
+    await addTo(k, o.agent, o.name, def, scope, o.projectPath);
+    return listMcp(k, o.projectPath);
+  }
+  await removeMcp(k, o);
+  try {
+    await addTo(k, o.agent, o.name, def, scope, o.projectPath);
+  } catch (e) {
+    await addTo(k, o.agent, o.name, old, scope, o.projectPath).catch(() => undefined);
+    throw e;
+  }
+  return listMcp(k, o.projectPath);
+}
+
+type McpHealth = McpStatus['status'];
+
+/** Строки `claude mcp list`: «имя: адрес - ✔ Connected» → состояние по имени. */
+export function parseClaudeList(out: string): Map<string, McpHealth> {
+  const m = new Map<string, McpHealth>();
+  for (const line of out.split('\n')) {
+    const at = line.indexOf(': ');
+    const dash = line.lastIndexOf(' - ');
+    if (at < 1 || dash < at) continue;
+    const tail = line.slice(dash + 3).toLowerCase();
+    const status: McpHealth =
+      tail.includes('connected') && !tail.includes('fail')
+        ? 'connected'
+        : tail.includes('auth')
+          ? 'needs-auth'
+          : tail.includes('fail')
+            ? 'failed'
+            : 'unknown';
+    m.set(line.slice(0, at).trim(), status);
+  }
+  return m;
+}
+
+const INIT = JSON.stringify({
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'purpleflow', version: '1' } },
+});
+
+/** Сами спрашиваем сервер initialize: удалённый — запросом, локальный — запуском (как это сделает агент). */
+async function probe(k: Kernel, def: McpDef, cwd: string): Promise<McpHealth> {
+  if (def.transport !== 'stdio') {
+    try {
+      const res = await fetch(def.url!, {
+        method: def.transport === 'sse' ? 'GET' : 'POST',
+        headers: {
+          accept: 'application/json, text/event-stream',
+          ...(def.transport === 'sse' ? {} : { 'content-type': 'application/json' }),
+          ...def.headers,
+        },
+        body: def.transport === 'sse' ? undefined : INIT,
+        signal: AbortSignal.timeout(10_000),
+      });
+      void res.body?.cancel().catch(() => undefined);
+      return res.status === 401 || res.status === 403 ? 'needs-auth' : res.ok ? 'connected' : 'failed';
+    } catch {
+      return 'failed';
+    }
+  }
+  if (!def.command) return 'failed';
+  let ok = false;
+  let stdin: { end: () => void } | null = null;
+  await run(def.command, def.args ?? [], {
+    cwd,
+    env: { ...k.opts.env, ...def.env },
+    timeoutMs: 30_000,
+    onStdin: (s) => {
+      stdin = s;
+      s.write(`${INIT}\n`);
+    },
+    onStdoutLine: (line) => {
+      if (!ok && /"id"\s*:\s*1\b/.test(line) && line.includes('"result"')) {
+        ok = true;
+        stdin?.end();
+      }
+    },
+  });
+  return ok ? 'connected' : 'failed';
+}
+
+/**
+ * Работают ли серверы: у claude — его собственная проверка (`claude mcp list`, с его входами в сервисы),
+ * у остальных — пробуем подключиться сами. Одинаковые серверы разных агентов проверяются один раз.
+ */
+export async function checkMcp(k: Kernel, projectPath?: string): Promise<McpStatus[]> {
+  const found = await scan(k, projectPath);
+  const cwd = projectPath ?? home();
+  const claude = found.some((f) => f.entry.agent === 'claude')
+    ? await (async () => {
+        const bin = (await k.tools(['claude'])).claude;
+        const r = await run(bin, ['mcp', 'list'], { cwd, env: k.opts.env, timeoutMs: 90_000 });
+        return parseClaudeList(r.stdout);
+      })().catch(() => new Map<string, McpHealth>())
+    : new Map<string, McpHealth>();
+  const probes = new Map<string, Promise<McpHealth>>();
+  return Promise.all(
+    found.map(async ({ entry: e, def }) => {
+      let status: McpHealth;
+      if (e.disabled) status = 'unknown';
+      else if (e.agent === 'claude') status = claude.get(e.name) ?? 'unknown';
+      else {
+        const key = JSON.stringify(def);
+        if (!probes.has(key))
+          probes.set(
+            key,
+            probe(k, def, cwd).catch(() => 'failed' as const),
+          );
+        status = await probes.get(key)!;
+      }
+      return { agent: e.agent, name: e.name, scope: e.scope, ...(e.local ? { local: true } : {}), status };
+    }),
+  );
 }
 
 /** Поиск в официальном реестре MCP: только последние версии и варианты, которые умеем поставить. */

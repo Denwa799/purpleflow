@@ -1378,3 +1378,26 @@ code.mcp-target {
   color: var(--text-3);
   font-size: var(--fs-12);
 }
+.qs.mcp-edit {
+  width: min(520px, calc(100vw - 48px));
+}
+.qs.mcp-edit .mcp-form {
+  margin: 0 0 var(--s-4);
+}
+.mcp-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: var(--s-2);
+  font-size: var(--fs-12);
+  color: var(--text-3);
+}
+.mcp-health.is-bad {
+  color: var(--text-2);
+}
+.overview-mcp .skill-head .ses-dot {
+  margin-right: 2px;
+}
+.ses-dot.is-checking {
+  animation: breathe 1.4s var(--ease) infinite;
+}

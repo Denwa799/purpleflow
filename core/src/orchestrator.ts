@@ -402,6 +402,12 @@ export class Orchestrator implements CoreApi {
   async copyMcp(o: Parameters<typeof mcpstore.copyMcp>[1]) {
     return mcpstore.copyMcp(this.kernel, o);
   }
+  async updateMcp(o: Parameters<typeof mcpstore.updateMcp>[1]) {
+    return mcpstore.updateMcp(this.kernel, o);
+  }
+  async checkMcp(projectPath?: string) {
+    return mcpstore.checkMcp(this.kernel, projectPath);
+  }
   async searchSkills(query: string) {
     return skillstore.searchSkills(query);
   }

@@ -1,6 +1,6 @@
 // API ядра, доступное окну: каждый метод выполняется в utilityProcess и вызывается через IPC.
 // Orchestrator реализует этот интерфейс; список методов для моста — CORE_METHODS в app/src/shared/ipc.ts.
-import type { ChatFile, ChatFileContent, ChatSkill, ChatSummary, McpEntry, McpHit, McpInstall, McpScope, SkillHit } from './chat.js';
+import type { ChatFile, ChatFileContent, ChatSkill, ChatSummary, McpEntry, McpHit, McpInstall, McpScope, McpStatus, SkillHit } from './chat.js';
 import type { GitGraph } from './git.js';
 import type { MergeCheck, PrDetails, PrStatus } from './pr.js';
 import type {
@@ -155,6 +155,18 @@ export interface CoreApi {
   }): Promise<{ servers: McpEntry[]; failed: { agent: AgentKind; error: string }[] }>;
   removeMcp(o: { projectPath?: string; agent: AgentKind; name: string; scope: McpScope; local?: boolean }): Promise<McpEntry[]>;
   copyMcp(o: { projectPath?: string; agent: AgentKind; name: string; scope: McpScope; to: AgentKind }): Promise<McpEntry[]>;
+  /** Изменить адрес или команду и значения ключей сервера (пустое значение — оставить прежнее). */
+  updateMcp(o: {
+    projectPath?: string;
+    agent: AgentKind;
+    name: string;
+    scope: McpScope;
+    local?: boolean;
+    target?: string;
+    values?: Record<string, string>;
+  }): Promise<McpEntry[]>;
+  /** Работают ли MCP-серверы: подключаются ли они сейчас. */
+  checkMcp(projectPath?: string): Promise<McpStatus[]>;
   /** Каталог скиллов skills.sh. */
   searchSkills(query: string): Promise<SkillHit[]>;
   /** Поставить скилл через `npx skills` для включённых агентов; без projectPath — глобально. */

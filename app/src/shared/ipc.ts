@@ -242,6 +242,8 @@ export const CORE_METHODS: Record<CoreMethod, true> = {
   installMcp: true,
   removeMcp: true,
   copyMcp: true,
+  updateMcp: true,
+  checkMcp: true,
   searchSkills: true,
   installSkill: true,
   copySkill: true,
