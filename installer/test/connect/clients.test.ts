@@ -129,6 +129,9 @@ for (const [family, id] of cases) {
           const config = read(s.dir, '.config/opencode/opencode.json');
           assert.equal(config.model, `purpleschool-${family}/${model}`);
           assert.equal(config.provider.other.name, 'Other');
+          // Окно контекста Claude — явно: без него OpenCode сжимает переписку на 200K.
+          const entry = config.provider[`purpleschool-${family}`].models[model];
+          assert.deepEqual(entry.limit, family === 'anthropic' ? { context: 1_000_000, output: 128_000 } : undefined);
         } else if (id!.includes('pi-cli')) {
           assert.equal(read(s.dir, '.pi/agent/settings.json').defaultModel, model);
           assert.equal(read(s.dir, '.pi/agent/models.json').providers.other.apiKey, '$OTHER');

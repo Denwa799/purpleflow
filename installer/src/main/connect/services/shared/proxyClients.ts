@@ -25,6 +25,18 @@ function selectedModel(ctx: SetupContext): string {
   return ctx.model;
 }
 
+/**
+ * Окно контекста и предел ответа модели Claude. Клиенты со своим провайдером (OpenCode, Crush) не знают модели
+ * прокси и без этих чисел берут 200K — и сжимают переписку задолго до настоящего предела. У всех Claude из
+ * каталога прокси окно 1M и ответ до 128K, кроме Haiku 4.5: 200K и 64K. Не Claude — undefined: решает клиент.
+ */
+export function claudeLimit(id: string): { context: number; output: number } | undefined {
+  if (!/^claude-/.test(id)) return undefined;
+  // До 4.6 (claude-3-*, *-4-0…4-5, claude-sonnet-4-20250514) и Haiku 4.5 — 200K.
+  if (/^claude-(3|[a-z]+-4-[0-5](-|$)|[a-z]+-4-\d{8})/.test(id)) return { context: 200_000, output: 64_000 };
+  return { context: 1_000_000, output: 128_000 };
+}
+
 function providerId(family: Family): string {
   return `purpleschool-${family}`;
 }
@@ -59,7 +71,12 @@ export function buildOpenCode(family: Family): Target {
       writeJsoncField(
         configPath,
         ['provider', provider, 'models'],
-        Object.fromEntries(Object.entries(models).map(([id, name]) => [id, { name }])),
+        Object.fromEntries(
+          Object.entries(models).map(([id, name]) => {
+            const limit = claudeLimit(id);
+            return [id, limit ? { name, limit } : { name }];
+          }),
+        ),
       );
       writeJsoncField(configPath, ['model'], `${provider}/${model}`);
       return {
@@ -300,7 +317,7 @@ export function buildCrush(family: Family): Target {
         `provider add ${provider} --type ${family === 'anthropic' ? 'messages' : 'responses'} --base-url ${sq(`${ctx.baseUrl}/v1`)} --api-key "$${keyName(family)}"`,
         ...models.map(
           ([id, name]) =>
-            `model add ${sq(`${provider}/${id}`)} --name ${sq(name)} --context-window ${family === 'anthropic' ? 200000 : 128000} --default-max-tokens ${family === 'anthropic' ? 32000 : 16000}`,
+            `model add ${sq(`${provider}/${id}`)} --name ${sq(name)} --context-window ${claudeLimit(id)?.context ?? (family === 'anthropic' ? 200000 : 128000)} --default-max-tokens ${family === 'anthropic' ? 32000 : 16000}`,
         ),
         end,
         '',
