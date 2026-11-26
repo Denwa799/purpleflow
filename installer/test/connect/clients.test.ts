@@ -1131,3 +1131,20 @@ test('JetBrains is detected by any IDE settings folder', async () => {
     fs.rmSync(s.dir, { recursive: true, force: true });
   }
 });
+
+test('OpenCode keeps the key in its own config, so the desktop app works without shell variables', () => {
+  const s = sandbox();
+  try {
+    for (const [family, id] of [
+      ['anthropic', 'opencode'],
+      ['openai', 'openai-opencode'],
+    ] as const) {
+      assert.equal(invoke(s, family, id).status, 0);
+      const provider = read(s.dir, '.config/opencode/opencode.json').provider[`purpleschool-${family}`];
+      assert.equal(provider.options.apiKey, 'test-only-key-not-a-real-secret');
+      assert.doesNotMatch(provider.options.apiKey, /\{env:/);
+    }
+  } finally {
+    fs.rmSync(s.dir, { recursive: true, force: true });
+  }
+});

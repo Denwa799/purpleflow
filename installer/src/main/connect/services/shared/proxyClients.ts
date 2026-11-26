@@ -52,7 +52,9 @@ export function buildOpenCode(family: Family): Target {
       writeJsoncField(configPath, ['provider', provider, 'npm'], family === 'anthropic' ? '@ai-sdk/anthropic' : '@ai-sdk/openai');
       writeJsoncField(configPath, ['provider', provider, 'name'], `PurpleSchool ${family === 'anthropic' ? 'Anthropic' : 'OpenAI'}`);
       writeJsoncField(configPath, ['provider', provider, 'options', 'baseURL'], `${ctx.baseUrl}/v1`);
-      writeJsoncField(configPath, ['provider', provider, 'options', 'apiKey'], `{env:${keyName(family)}}`);
+      // Сам ключ, а не {env:…}: у OpenCode есть приложение с окном, и запущенное из Dock или меню «Пуск» оно не видит
+      // переменных из ~/.zshrc — получало «Unauthorized». Так же Codex хранит ключ в своём config.toml.
+      writeJsoncField(configPath, ['provider', provider, 'options', 'apiKey'], ctx.apiKey);
       const models = ctx.proxyModels ?? { [model]: model };
       writeJsoncField(
         configPath,
