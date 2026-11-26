@@ -57,11 +57,20 @@ function describe(file: string): string | undefined {
   }
   const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
   if (fm) {
-    const d = /^description:\s*(.+)$/m
+    let d = /^description:\s*(.+)$/m
       .exec(fm[1])?.[1]
       ?.trim()
       .replace(/^["']|["']$/g, '')
       .replace(/\\(["'\\])/g, '$1');
+    // Многострочное значение YAML («>», «|», «>-»): текст — в следующих строках с отступом.
+    if (d && /^[>|][-+]?$/.test(d)) {
+      const block = /^description:[^\n]*\n((?:[ \t]+[^\n]*\n?)+)/m.exec(fm[1])?.[1] ?? '';
+      d = block
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .join(' ');
+    }
     if (d) return clip(d);
   }
   const body = fm ? text.slice(fm[0].length) : text;
@@ -152,7 +161,7 @@ function commandsIn(dir: string, source: ChatSkill['source'], agents: Who): Chat
 const PROJECT_DIRS: [string, 'skill' | 'command', Who][] = [
   ['.claude/skills', 'skill', ['claude', 'opencode']],
   ['.codex/skills', 'skill', ['codex']],
-  ['.agents/skills', 'skill', ['codex', 'opencode']],
+  ['.agents/skills', 'skill', ['codex', 'opencode', 'agy']],
   ['.opencode/skill', 'skill', ['opencode']],
   ['.opencode/skills', 'skill', ['opencode']],
   ['.claude/commands', 'command', ['claude']],
@@ -162,6 +171,7 @@ const USER_DIRS: [string, 'skill' | 'command', Who][] = [
   ['.claude/skills', 'skill', ['claude', 'opencode']],
   ['.codex/skills', 'skill', ['codex']],
   ['.agents/skills', 'skill', ['codex', 'opencode']],
+  ['.gemini/config/skills', 'skill', ['agy']],
   ['.config/opencode/skill', 'skill', ['opencode']],
   ['.config/opencode/skills', 'skill', ['opencode']],
   ['.claude/commands', 'command', ['claude']],
@@ -188,8 +198,12 @@ export function listSkills(o: { projectPath?: string; userConfig: boolean; home?
   const byName = new Map<string, ChatSkill>();
   for (const s of all) {
     const had = byName.get(s.name);
-    if (!had) byName.set(s.name, { ...s, agents: [...(s.agents ?? [])] });
-    else if (had.kind === s.kind) had.agents = [...new Set([...(had.agents ?? []), ...(s.agents ?? [])])];
+    if (!had) byName.set(s.name, { ...s, agents: [...(s.agents ?? [])], paths: [s.path] });
+    else if (had.kind === s.kind) {
+      had.agents = [...new Set([...(had.agents ?? []), ...(s.agents ?? [])])];
+      // Копии из того же источника — чтобы удалить скилл целиком; одноимённый ваш не трогаем, если есть проектный.
+      if (had.source === s.source && !had.paths!.includes(s.path)) had.paths!.push(s.path);
+    }
   }
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

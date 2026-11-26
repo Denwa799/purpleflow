@@ -70,7 +70,7 @@ test('listSkills: скиллы и команды проекта и пользо�
   // Кто найдёт сам: .claude/skills — claude и opencode, .agents — codex и opencode, ~/.codex/prompts — codex, плагин — claude.
   const who = (n: string) => all.find((s) => s.name === n)!.agents;
   assert.deepEqual(who('review'), ['claude', 'opencode']);
-  assert.deepEqual(who('shared'), ['codex', 'opencode']);
+  assert.deepEqual(who('shared'), ['codex', 'opencode', 'agy']);
   assert.deepEqual(who('explain'), ['codex']);
   assert.deepEqual([who('tools:lint'), all.find((s) => s.name === 'tools:lint')!.plugin], [['claude'], 'tools']);
   assert.equal(all.find((s) => s.name === 'deploy')!.kind, 'command');
@@ -112,4 +112,27 @@ test('listSkills: экранированные кавычки в описани�
   assert.ok(d.startsWith('Use "your own" browser.'));
   assert.equal(d.length, 200);
   assert.ok(d.endsWith('…'));
+});
+
+test('listSkills: описание YAML-блоком («>», «|»), скиллы agy и все копии скилла для удаления', (t) => {
+  const project = tree(t, {
+    '.claude/skills/fsd/SKILL.md': '---\nname: fsd\ndescription: >\n  Архитектура\n  по слоям\nlicense: MIT\n---\n',
+    '.claude/skills/lit/SKILL.md': '---\ndescription: |-\n  Первая строка\n---\n',
+    // Поставленный через npx skills: копия в .agents/skills и такая же в .claude/skills.
+    '.agents/skills/rn/SKILL.md': '---\ndescription: RN\n---',
+    '.claude/skills/rn/SKILL.md': '---\ndescription: RN\n---',
+  });
+  const home = tree(t, { '.gemini/config/skills/g/SKILL.md': '---\ndescription: Для agy\n---' });
+  const all = listSkills({ projectPath: project, userConfig: true, home });
+  const by = (n: string) => all.find((s) => s.name === n)!;
+  assert.equal(by('fsd').description, 'Архитектура по слоям');
+  assert.equal(by('lit').description, 'Первая строка');
+  assert.deepEqual(by('g').agents, ['agy']);
+  assert.ok(by('rn').agents!.includes('agy'));
+  assert.deepEqual(
+    by('rn')
+      .paths!.map((p) => path.relative(project, p))
+      .sort(),
+    ['.agents/skills/rn/SKILL.md', '.claude/skills/rn/SKILL.md'],
+  );
 });

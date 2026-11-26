@@ -1,13 +1,14 @@
 // Вкладка «Обзор»: ветка, origin, готовность к PR, статистика и прогоны проекта.
-import type { ProjectKnowledge, ProjectOverview, ProjectStats } from '@purpleflow/core';
-import { GitBranch, GitPullRequest, MessageSquare, TriangleAlert } from 'lucide-react';
+import type { ProjectKnowledge, ProjectOverview, ProjectStats, ChatSkill } from '@purpleflow/core';
+import { GitBranch, GitPullRequest, MessageSquare, Plus, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '../../components/ui';
 import { shortPath, tokens, when } from '../../lib/format';
 import { MODES, stageTitle } from '../../lib/stages';
 import { useStore, type ProjectTab } from '../../lib/store';
 import { CmdChips, InitRepoButton, type LoadedProject, plural } from './common';
-import { SkillList, useSkills } from '../../components/SkillList';
+import { useSkills } from '../../components/SkillList';
+import { SkillGroups, SkillSearchDialog } from '../../components/SkillManager';
 import { bridge, cleanErr } from '../../lib/api';
 
 export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: ProjectTab) => void; onReload: () => void }) {
@@ -226,8 +227,12 @@ export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: 
 }
 // ——— Скиллы ———
 function SkillsPanel({ repo }: { repo: string }) {
-  const skills = useSkills(repo);
-  const [all, setAll] = useState(false);
+  const loaded = useSkills(repo);
+  // После установки или удаления — свежий список из ответа ядра, без повторной загрузки.
+  const [fresh, setFresh] = useState<{ repo: string; skills: ChatSkill[] } | null>(null);
+  const skills = fresh?.repo === repo ? fresh.skills : loaded;
+  const [adding, setAdding] = useState(false);
+  const update = (s: ChatSkill[]) => setFresh({ repo, skills: s });
   const { state, go } = useStore();
   const userConfig = state.settings?.userConfig ?? true;
   const own = skills?.filter((s) => s.source === 'project').length ?? 0;
@@ -236,6 +241,10 @@ function SkillsPanel({ repo }: { repo: string }) {
       <header className="overview-runs-head">
         <h3>Скиллы и команды</h3>
         <span className="muted">{skills?.length || ''}</span>
+        <span className="grow" />
+        <Button tone="ghost" icon={<Plus size={14} />} onClick={() => setAdding(true)}>
+          Добавить скиллы
+        </Button>
       </header>
       <p className="muted skill-intro">
         Агенты подключают их сами, когда задача подходит под описание; в чате любой можно вызвать через «/».
@@ -252,16 +261,12 @@ function SkillsPanel({ repo }: { repo: string }) {
       {!skills ? (
         <p className="muted">…</p>
       ) : skills.length ? (
-        <>
-          <SkillList skills={skills} limit={all ? undefined : 8} />
-          {!all && skills.length > 8 && (
-            <button className="link ses-more" onClick={() => setAll(true)}>
-              Показать все ({skills.length})
-            </button>
-          )}
-        </>
+        <SkillGroups skills={skills} projectPath={repo} onChange={update} />
       ) : (
-        <p className="muted">Скиллов пока нет.</p>
+        <p className="muted">Скиллов пока нет — добавьте из каталога.</p>
+      )}
+      {adding && skills && (
+        <SkillSearchDialog projectPath={repo} installed={skills} onClose={() => setAdding(false)} onInstalled={update} />
       )}
     </section>
   );

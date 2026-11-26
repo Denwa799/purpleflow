@@ -1,6 +1,6 @@
 // API ядра, доступное окну: каждый метод выполняется в utilityProcess и вызывается через IPC.
 // Orchestrator реализует этот интерфейс; список методов для моста — CORE_METHODS в app/src/shared/ipc.ts.
-import type { ChatFile, ChatFileContent, ChatSkill, ChatSummary } from './chat.js';
+import type { ChatFile, ChatFileContent, ChatSkill, ChatSummary, SkillHit } from './chat.js';
 import type { GitGraph } from './git.js';
 import type { MergeCheck, PrDetails, PrStatus } from './pr.js';
 import type {
@@ -141,6 +141,12 @@ export interface CoreApi {
   getGitCommitDiff(projectPath: string, hash: string): Promise<DiffFile[]>;
   /** Скиллы и команды для «/»: из проекта и, если агенты видят настройки пользователя, из ~/.claude и ~/.codex. */
   listChatSkills(projectPath?: string): Promise<ChatSkill[]>;
+  /** Каталог скиллов skills.sh. */
+  searchSkills(query: string): Promise<SkillHit[]>;
+  /** Поставить скилл через `npx skills` для включённых агентов; без projectPath — глобально. */
+  installSkill(o: { projectPath?: string; source: string; skill: string }): Promise<ChatSkill[]>;
+  /** Удалить скилл; leftovers — что не убрал `skills` CLI (положено руками): окно отправит в корзину. */
+  removeSkill(o: { projectPath?: string; name: string; source: 'project' | 'user' }): Promise<{ skills: ChatSkill[]; leftovers: string[] }>;
   /** Сжать контекст сессии claude в чате (/compact); идёт в фоне, как ход. */
   compactChat(id: string): Promise<void>;
   /** Модель чата по умолчанию для агента (из настроек ролей); пусто — модель выбирает CLI. */

@@ -1118,3 +1118,117 @@
   border-radius: 18px;
   background: var(--bg-2);
 }
+
+/* ——— Управление скиллами: группы по агентам, удаление, окно поиска ——— */
+.skill-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+.skill-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-1);
+  font-size: var(--fs-12);
+  font-weight: 500;
+}
+.skill-del {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--text-3);
+  font-size: var(--fs-12);
+  opacity: 0;
+  transition:
+    opacity 0.15s var(--ease),
+    background 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+.skill-list > li:hover .skill-del,
+.skill-del:focus-visible,
+.skill-del.is-confirm {
+  opacity: 1;
+}
+.skill-del:hover {
+  background: var(--bg-5);
+  color: var(--err);
+}
+.skill-del.is-confirm {
+  background: var(--err-wash);
+  color: var(--err);
+  animation: rise 0.2s var(--ease) both;
+}
+.qs.skill-search {
+  width: min(640px, calc(100vw - 48px));
+}
+.skill-search-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 var(--s-6) var(--s-3);
+  padding: 0 var(--s-3);
+  height: 40px;
+  border-radius: var(--r-m);
+  background: var(--bg-2);
+  color: var(--text-3);
+}
+.skill-search-bar input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--fs-14, 14px);
+}
+.skill-search-error {
+  margin: 0 var(--s-6) var(--s-2);
+}
+.skill-search-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 380px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 var(--s-6) var(--s-3);
+  list-style: none;
+}
+.skill-search-list > li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  animation: expandIn 0.2s var(--ease) both;
+}
+.skill-search-list > li:first-child {
+  border-top: 0;
+}
+.skill-search-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--fs-12);
+}
+.skill-search-text .skill-name {
+  align-self: flex-start;
+  max-width: 100%;
+}
+.skill-search-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ok);
+  font-size: var(--fs-13);
+}
+.skill-search-empty {
+  padding: var(--s-4) 0 !important;
+  font-size: var(--fs-13);
+}

@@ -11,6 +11,7 @@ import { Kernel } from './kernel.js';
 import type { CoreOptions, Listener } from './runtime.js';
 import { getAttachment } from './services/attachments.js';
 import * as chat from './services/chat.js';
+import * as skillstore from './services/skillstore.js';
 import { listAgyModels, listOpencodeModels, testConnection } from './services/connection.js';
 import { control } from './services/control.js';
 import { cleanStorage, getStorage } from './services/disk.js';
@@ -384,6 +385,15 @@ export class Orchestrator implements CoreApi {
   }
   async listAgyModels() {
     return listAgyModels(this.kernel);
+  }
+  async searchSkills(query: string) {
+    return skillstore.searchSkills(query);
+  }
+  async installSkill(o: { projectPath?: string; source: string; skill: string }) {
+    return skillstore.installSkill(this.kernel, o);
+  }
+  async removeSkill(o: { projectPath?: string; name: string; source: 'project' | 'user' }) {
+    return skillstore.removeSkill(this.kernel, o);
   }
   async listChatSkills(projectPath?: string) {
     return chat.listChatSkills(this.kernel, projectPath);

@@ -137,6 +137,17 @@ export interface ChatSkill {
   plugin?: string;
   /** Проектный, но не в git: в отдельной рабочей копии прогона его не будет. */
   untracked?: boolean;
+  /** Все копии с этим именем из того же источника: скилл бывает в .agents/skills и ссылкой в .claude/skills. */
+  paths?: string[];
+}
+
+/** Найденный в каталоге скилл: source — репозиторий (owner/repo), skill — имя скилла в нём. */
+export interface SkillHit {
+  id: string;
+  name: string;
+  source: string;
+  skill: string;
+  installs: number;
 }
 
 export interface ChatFile {

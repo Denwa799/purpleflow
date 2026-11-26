@@ -228,14 +228,27 @@ test('чат: «@» подставляет файл проекта, «/» — с
     await page.getByRole('button', { name: 'Открыть папку…' }).click();
     await page.getByRole('tab', { name: 'Обзор' }).click();
     const panel = page.locator('.overview-skills');
-    await expect(panel.locator('li').filter({ has: page.locator('.skill-name', { hasText: /^review$/ }) })).toContainText(
-      'Ревью по чек-листу',
-    );
-    await expect(panel.locator('li').filter({ has: page.locator('.skill-name', { hasText: /^review$/ }) })).toContainText('claude');
+    // Скиллы — группами по агентам: review из .claude/skills — у claude.
+    const claude = panel.locator('.skill-group').filter({ has: page.locator('.skill-group-head', { hasText: 'claude' }) });
+    const review = claude.locator('li').filter({ has: page.locator('.skill-name', { hasText: /^review$/ }) });
+    await expect(review).toContainText('Ревью по чек-листу');
     if (process.env.PF_SHOT) {
       await panel.scrollIntoViewIfNeeded();
       await page.screenshot({ path: process.env.PF_SHOT });
     }
+
+    // Удаление: положенный руками скилл уходит в корзину системы (здесь — заглушка), после подтверждения.
+    await l.app.evaluate(({ shell }) => {
+      shell.trashItem = (async (p: string) => {
+        const fs = process.getBuiltinModule('node:fs');
+        fs.rmSync(p, { recursive: true, force: true });
+      }) as typeof shell.trashItem;
+    });
+    await review.hover();
+    await review.getByRole('button', { name: 'Удалить review' }).click();
+    await review.getByRole('button', { name: 'Удалить из проекта?' }).click();
+    await expect(panel.locator('.skill-name', { hasText: /^review$/ })).toHaveCount(0);
+    expect(fs.existsSync(path.dirname(skill))).toBe(false);
     expect(l.errors).toEqual([]);
   } finally {
     await quit(l);

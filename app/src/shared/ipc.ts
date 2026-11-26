@@ -237,6 +237,9 @@ export const CORE_METHODS: Record<CoreMethod, true> = {
   listChatSkills: true,
   chatDefaultModel: true,
   listOpencodeModels: true,
+  searchSkills: true,
+  installSkill: true,
+  removeSkill: true,
   listAgyModels: true,
   compactChat: true,
 };
@@ -274,6 +277,8 @@ export interface PurpleFlowBridge {
   proxyModels(): Promise<ProxyModels | null>;
   /** Выбор папки; title — заголовок диалога. */
   pickFolder(title?: string): Promise<string | null>;
+  /** Папки скиллов и файлы команд — в корзину системы (только внутри каталогов скиллов агентов). */
+  trashSkill(paths: string[]): Promise<void>;
   /** Диктовка: локальное распознавание речи (whisper.cpp). */
   dictation: {
     status(): Promise<DictationStatus>;

@@ -47,6 +47,7 @@ const bridge: PurpleFlowBridge = {
   },
   proxyModels: () => ipcRenderer.invoke('models:list'),
   pickFolder: (title?: string) => ipcRenderer.invoke('dialog:folder', title),
+  trashSkill: (paths: string[]) => ipcRenderer.invoke('skills:trash', paths),
   dictation: {
     status: () => ipcRenderer.invoke('dictation:status'),
     download: (id) => ipcRenderer.invoke('dictation:download', id),

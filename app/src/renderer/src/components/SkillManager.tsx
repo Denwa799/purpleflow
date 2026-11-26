@@ -1,0 +1,283 @@
+// Управление скиллами проекта: список по агентам с удалением и окно поиска по каталогу skills.sh с установкой.
+import { Check, Download, LoaderCircle, Search, Trash2, TriangleAlert, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { AgentKind, ChatSkill, SkillHit } from '@purpleflow/core';
+import { bridge, cleanErr } from '../lib/api';
+import { useStore } from '../lib/store';
+import { useDialogClose } from '../lib/useDialogClose';
+import { Select } from './Dropdown';
+import { Button } from './ui';
+
+const SOURCE: Record<ChatSkill['source'], string> = { project: 'проект', user: 'ваш' };
+
+/** Удалить скилл: что не убрал `skills` CLI (положен руками), окно отправляет в корзину системы. */
+async function removeSkill(projectPath: string | undefined, s: ChatSkill): Promise<ChatSkill[]> {
+  const r = await bridge.core.removeSkill({ projectPath, name: s.name, source: s.source });
+  if (r.leftovers.length) await bridge.trashSkill(r.leftovers);
+  return r.leftovers.length ? bridge.core.listChatSkills(projectPath) : r.skills;
+}
+
+/**
+ * Скиллы по агентам: у каждого включённого агента — те, что он найдёт сам. Один скилл бывает у нескольких агентов —
+ * удаление убирает его у всех. Скиллы плагинов claude удаляются в самом claude, поэтому без кнопки.
+ */
+export function SkillGroups({
+  skills,
+  projectPath,
+  onChange,
+}: {
+  skills: ChatSkill[];
+  projectPath?: string;
+  onChange: (skills: ChatSkill[]) => void;
+}) {
+  const { state } = useStore();
+  const enabled = state.settings?.enabledAgents ?? ['claude', 'codex'];
+  const [error, setError] = useState<string | null>(null);
+  const groups: { agent: AgentKind | null; items: ChatSkill[] }[] = enabled
+    .map((agent) => ({ agent, items: skills.filter((s) => s.agents?.includes(agent)) }))
+    .filter((g) => g.items.length);
+  // Скиллы, которые не найдёт ни один включённый агент (например, только для выключенного): вызываются через «/» в чате.
+  const orphan = skills.filter((s) => !s.agents?.some((a) => enabled.includes(a)));
+  if (orphan.length) groups.push({ agent: null, items: orphan });
+
+  return (
+    <div className="skill-groups">
+      {error && <p className="inline-error">{error}</p>}
+      {groups.map((g) => (
+        <section key={g.agent ?? 'other'} className="skill-group">
+          <h4 className="skill-group-head">
+            {g.agent ? <span className={`qs-agent qs-agent-${g.agent}`}>{g.agent}</span> : <span className="muted">Только через «/»</span>}
+            <span className="muted">{g.items.length}</span>
+          </h4>
+          <ul className="skill-list">
+            {[...g.items]
+              .sort((a, b) => Number(a.source !== 'project') - Number(b.source !== 'project') || a.name.localeCompare(b.name))
+              .map((s) => (
+                <SkillRow
+                  key={`${s.source}:${s.name}`}
+                  s={s}
+                  others={(s.agents ?? []).filter((a) => a !== g.agent && enabled.includes(a))}
+                  onRemove={async () => {
+                    setError(null);
+                    try {
+                      onChange(await removeSkill(projectPath, s));
+                    } catch (e) {
+                      setError(cleanErr(e));
+                    }
+                  }}
+                />
+              ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function SkillRow({ s, others, onRemove }: { s: ChatSkill; others: AgentKind[]; onRemove: () => Promise<void> }) {
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const timer = useRef<number>(0);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const ask = () => {
+    setConfirm(true);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setConfirm(false), 4000);
+  };
+  const remove = async () => {
+    setBusy(true);
+    await onRemove();
+    setBusy(false);
+    setConfirm(false);
+  };
+  return (
+    <li title={s.path}>
+      <div className="skill-head">
+        <code className="skill-name">
+          {s.kind === 'command' ? '/' : ''}
+          {s.name}
+        </code>
+        <span className="tag">{s.plugin ? `плагин ${s.plugin}` : SOURCE[s.source]}</span>
+        {s.kind === 'command' && <span className="tag">команда</span>}
+        {s.untracked && (
+          <span className="tag is-wait" title="Скилл не в git: прогон в отдельной рабочей копии его не увидит. Закоммитьте его.">
+            <TriangleAlert size={11} /> не в git
+          </span>
+        )}
+        <span className="grow" />
+        {!s.plugin &&
+          (confirm ? (
+            <button
+              type="button"
+              className="skill-del is-confirm"
+              disabled={busy}
+              onClick={() => void remove()}
+              title={others.length ? `Скилл удалится и у ${others.join(', ')}` : undefined}
+            >
+              {busy ? <LoaderCircle size={13} className="spin" /> : <Trash2 size={13} />}
+              {s.source === 'user' ? 'Удалить во всех проектах?' : 'Удалить из проекта?'}
+            </button>
+          ) : (
+            <button type="button" className="skill-del" aria-label={`Удалить ${s.name}`} title="Удалить" onClick={ask}>
+              <Trash2 size={14} />
+            </button>
+          ))}
+      </div>
+      {s.description && <p className="skill-desc">{s.description}</p>}
+    </li>
+  );
+}
+
+const installsText = (n: number) =>
+  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace('.0', '')} млн` : n >= 1000 ? `${Math.round(n / 1000)} тыс.` : String(n);
+
+/** Окно «Добавить скиллы»: поиск по каталогу skills.sh и установка через `npx skills` для включённых агентов. */
+export function SkillSearchDialog({
+  projectPath,
+  installed,
+  onClose: closeNow,
+  onInstalled,
+}: {
+  projectPath?: string;
+  installed: ChatSkill[];
+  onClose: () => void;
+  onInstalled: (skills: ChatSkill[]) => void;
+}) {
+  const { closing, close } = useDialogClose(closeNow);
+  const [query, setQuery] = useState('');
+  const [hits, setHits] = useState<SkillHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [done, setDone] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [scope, setScope] = useState<'project' | 'user'>(projectPath ? 'project' : 'user');
+  const input = useRef<HTMLInputElement>(null);
+  const has = new Set(installed.map((s) => s.name));
+
+  useEffect(() => {
+    input.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [close]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return setHits(null);
+    let live = true;
+    setSearching(true);
+    const t = window.setTimeout(() => {
+      bridge.core
+        .searchSkills(q)
+        .then((r) => live && (setHits(r), setError(null)))
+        .catch((e) => live && setError(cleanErr(e)))
+        .finally(() => live && setSearching(false));
+    }, 300);
+    return () => {
+      live = false;
+      window.clearTimeout(t);
+    };
+  }, [query]);
+
+  const install = async (h: SkillHit) => {
+    setBusy(h.id);
+    setError(null);
+    try {
+      const skills = await bridge.core.installSkill({
+        projectPath: scope === 'project' ? projectPath : undefined,
+        source: h.source,
+        skill: h.skill,
+      });
+      setDone((d) => [...d, h.id]);
+      onInstalled(skills);
+    } catch (e) {
+      setError(cleanErr(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return createPortal(
+    <div className={`qs-scrim ${closing ? 'is-closing' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <div className="qs skill-search" role="dialog" aria-modal aria-labelledby="skill-search-title">
+        <header className="qs-head">
+          <div>
+            <h2 id="skill-search-title">Добавить скиллы</h2>
+            <p>Каталог skills.sh. Скилл ставится через npx skills для агентов, включённых в настройках.</p>
+          </div>
+          <button className="qs-close" aria-label="Закрыть" onClick={() => close()}>
+            <X size={16} />
+          </button>
+        </header>
+        <div className="skill-search-bar">
+          <Search size={15} />
+          <input
+            ref={input}
+            value={query}
+            placeholder="Например: react native, testing, figma"
+            aria-label="Поиск скиллов"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {searching && <LoaderCircle size={15} className="spin" />}
+        </div>
+        {error && <p className="inline-error skill-search-error">{error}</p>}
+        <ul className="skill-search-list" aria-label="Найденные скиллы">
+          {hits?.map((h) => {
+            const isDone = done.includes(h.id) || has.has(h.skill);
+            return (
+              <li key={h.id}>
+                <div className="skill-search-text">
+                  <code className="skill-name">{h.name}</code>
+                  <span className="muted">
+                    {h.source} · {installsText(h.installs)} установок
+                  </span>
+                </div>
+                {isDone ? (
+                  <span className="skill-search-done">
+                    <Check size={14} /> Установлен
+                  </span>
+                ) : (
+                  <Button
+                    tone="ghost"
+                    icon={<Download size={14} />}
+                    busy={busy === h.id}
+                    disabled={Boolean(busy)}
+                    onClick={() => void install(h)}
+                  >
+                    Установить
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+          {hits && !hits.length && <li className="muted skill-search-empty">Ничего не нашлось — попробуйте другие слова.</li>}
+          {!hits && <li className="muted skill-search-empty">Введите, что нужно агентам: технологию, задачу или сервис.</li>}
+        </ul>
+        <footer className="qs-foot">
+          {projectPath ? (
+            <span className="dictation-lang">
+              Куда ставить
+              <Select<'project' | 'user'>
+                ariaLabel="Куда ставить"
+                value={scope}
+                minWidth={260}
+                onChange={setScope}
+                options={[
+                  { value: 'project', label: 'В этот проект', hint: 'Папки скиллов в проекте — закоммитьте их, чтобы видели прогоны' },
+                  { value: 'user', label: 'Для всех проектов', hint: 'В ваши папки агентов (~/.claude, ~/.agents…)' },
+                ]}
+              />
+            </span>
+          ) : (
+            <span className="grow" />
+          )}
+          <Button tone="primary" onClick={() => close()}>
+            Готово
+          </Button>
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}

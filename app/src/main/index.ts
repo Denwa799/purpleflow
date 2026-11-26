@@ -512,6 +512,21 @@ handle('dialog:folder', async (_e, title?: string) => {
   });
   return r.canceled ? null : r.filePaths[0];
 });
+// Скиллы, положенные руками, — в корзину системы. Только папка скилла или файл команды внутри каталогов агентов
+// (.claude/skills, .agents/skills, …/commands, .codex/prompts): ничего другого окно так удалить не может.
+handle('skills:trash', async (_e, paths: unknown) => {
+  if (!Array.isArray(paths)) throw new Error('Нет путей');
+  const holders = new Set(['skills', 'skill', 'commands', 'command', 'prompts']);
+  // Папки агентов, в которых лежат каталоги скиллов: .claude/skills, ~/.config/opencode/skill, ~/.gemini/config/skills…
+  const agentDirs = new Set(['.claude', '.agents', '.codex', '.opencode', 'opencode', 'config']);
+  for (const p of paths) {
+    if (typeof p !== 'string' || !path.isAbsolute(p)) throw new Error('Неверный путь');
+    const parts = path.resolve(p).split(path.sep);
+    const ok = parts.some((x, i) => holders.has(x) && i > 0 && agentDirs.has(parts[i - 1]) && i < parts.length - 1);
+    if (!ok) throw new Error(`Это не скилл: ${p}`);
+    if (fs.existsSync(p) || fs.lstatSync(p, { throwIfNoEntry: false })) await shell.trashItem(p);
+  }
+});
 handle('dictation:status', () => dictationStatus());
 handle('dictation:download', (_e, id: string) =>
   downloadModel(String(id), (share) => win?.webContents.send('dictation:progress', String(id), share)),
