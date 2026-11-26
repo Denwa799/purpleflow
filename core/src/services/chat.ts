@@ -28,6 +28,7 @@ import { PROXY_DEFAULT_MODEL } from '../agents/opencode.js';
 import { agentModel, service, serviceAgent } from './agents.js';
 import { findMentions, listSkills, mentionsBlock, walkFiles } from './mentions.js';
 import { launchPreview, stopPreview } from './preview.js';
+import { chatBrowser, closeChatBrowser } from './chatbrowser.js';
 import { getProjectConfig, knowledgeOf } from './projects.js';
 
 /**
@@ -231,6 +232,7 @@ export async function deleteChat(k: Kernel, id: string): Promise<void> {
   liveOf(k).delete(id);
   await killGroup(group(id));
   await stopPreview(k, id);
+  await closeChatBrowser(k, id, chatFilesDir(k, id)).catch(() => undefined);
   k.chatBusy.delete(id);
   fs.rmSync(chatFile(k, id), { force: true });
   fs.rmSync(chatFilesDir(k, id), { recursive: true, force: true });
@@ -467,7 +469,11 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
     const before = git && repo ? await snapshot(git, repo) : null;
 
     const session = chat.session?.agent === agent ? chat.session.id : undefined;
-    const sys = systemPrompt(k, chat, cwd);
+    // Браузер для агента (pw): открывает ядро, экран — во вкладке «Браузер» чата.
+    const browser = compact
+      ? null
+      : await chatBrowser(k, { id, dir: chatFilesDir(k, id), text: said, readOnly: !chat.edits }).catch(() => null);
+    const sys = systemPrompt(k, chat, cwd) + (browser ? `\n${browser.block}` : '');
     const images = attachments.filter(isImageFile);
     const others = attachments.filter((f) => !isImageFile(f));
     let prompt = (session ? '' : historyBlock(prevMessages)) + (text.trim() || 'Посмотри вложения.');
@@ -476,6 +482,7 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
     const dirs = (chat.dirs ?? []).filter((d) => fs.existsSync(d));
     if (!compact) prompt += dirsBlock(dirs);
     prompt += mentionsBlock(findMentions(said, cwd, listSkills({ projectPath: chat.projectPath, userConfig: Boolean(s.userConfig) })));
+    if (browser) prompt += `\n\n${browser.note}`;
     // Сжатие — встроенная команда CLI: только она, без истории и вложений.
     if (compact) prompt = '/compact';
     const model = (agent === chat.agent ? chat.model : '') || chatDefaultModel(k, agent) || undefined;
@@ -484,7 +491,7 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
     const common = {
       bin: tools[agent],
       cwd,
-      env: k.opts.env,
+      env: browser?.env ?? k.opts.env,
       model,
       effort,
       group: group(id),
@@ -494,7 +501,9 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
       onStep,
       proxy: s.proxy.baseUrl ? s.proxy : undefined,
       userConfig: s.userConfig,
-      addDirs: [...dirs, ...(attachments.length ? [path.dirname(attachments[0])] : [])].filter((d, i, all) => all.indexOf(d) === i),
+      addDirs: [...dirs, ...(attachments.length ? [path.dirname(attachments[0])] : []), ...(browser ? [browser.dir] : [])].filter(
+        (d, i, all) => all.indexOf(d) === i,
+      ),
     };
     if (agent === 'opencode') {
       let sid = session;
@@ -586,6 +595,7 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
         tools: chat.edits ? undefined : ['Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch'],
         // Правки без полного доступа: bash в песочнице Claude Code — запись только в проект, .git закрыт.
         sandbox: chat.edits && !chat.fullAccess ? cwd : undefined,
+        sandboxSockets: browser?.sockets,
       });
       // Сессия сохраняется, только если claude успел её начать.
       if (res.ok || parts.length) chat.session = { agent, id: sessionId };
@@ -746,6 +756,14 @@ export async function startChatPreview(k: Kernel, id: string): Promise<PreviewSt
 }
 
 /** Файлы проекта для «@»: из git (без игнорируемых), без git — обходом папки. */
+/** Рабочая папка чата без проекта: агент работает в ней, вкладка «Файлы» показывает её. */
+export function chatWorkDir(k: Kernel, id: string): string {
+  must(k, id);
+  const dir = path.join(chatFilesDir(k, id), 'work');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 export async function listChatFiles(k: Kernel, projectPath: string): Promise<string[]> {
   if (!projectPath || !fs.existsSync(projectPath)) return [];
   if (await k.hasTool('git')) {

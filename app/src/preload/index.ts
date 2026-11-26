@@ -65,6 +65,11 @@ const bridge: PurpleFlowBridge = {
   pickFile: () => ipcRenderer.invoke('dialog:file'),
   openPath: (p) => ipcRenderer.invoke('shell:open', p),
   previewEmulate: (id, mobile) => ipcRenderer.invoke('preview:emulate', id, mobile),
+  onPreviewNewTab(fn) {
+    const h = (_: unknown, fromId: number, url: string) => fn(fromId, url);
+    ipcRenderer.on('preview:new-tab', h);
+    return () => ipcRenderer.removeListener('preview:new-tab', h);
+  },
   appCache: { size: () => ipcRenderer.invoke('cache:size'), clear: () => ipcRenderer.invoke('cache:clear') },
   onChime(fn) {
     const h = () => fn();

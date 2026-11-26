@@ -23,7 +23,17 @@ import { questionsOf, todosOf, toolName, toolView } from './tools.js';
 export function claudeArgs(
   o: Pick<
     AgentRunOptions,
-    'model' | 'effort' | 'systemPrompt' | 'addDirs' | 'tools' | 'sessionId' | 'resume' | 'userConfig' | 'partial' | 'sandbox'
+    | 'model'
+    | 'effort'
+    | 'systemPrompt'
+    | 'addDirs'
+    | 'tools'
+    | 'sessionId'
+    | 'resume'
+    | 'userConfig'
+    | 'partial'
+    | 'sandbox'
+    | 'sandboxSockets'
   >,
 ): string[] {
   const args = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'bypassPermissions'];
@@ -45,6 +55,8 @@ export function claudeArgs(
       autoAllowBashIfSandboxed: true,
       allowUnsandboxedCommands: false,
       filesystem: { denyWrite: [path.join(o.sandbox, '.git')] },
+      // Сокет браузера чата: pw в песочнице говорит с браузером, который ядро открыло снаружи.
+      ...(o.sandboxSockets?.length ? { network: { allowUnixSockets: o.sandboxSockets } } : {}),
     };
     settings.permissions = { deny: [`Edit(/${path.join(o.sandbox, '.git').replaceAll('\\', '/')}/**)`] };
   }

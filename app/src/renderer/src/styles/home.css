@@ -44,7 +44,7 @@
     background 0.25s var(--ease),
     box-shadow 0.25s var(--ease);
 }
-.home-card.is-chat {
+.home-card.is-task {
   animation-delay: 0.06s;
 }
 .home-card:hover {

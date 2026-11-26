@@ -40,6 +40,8 @@ export interface AgentRunOptions {
   partial?: boolean;
   /** claude: папка проекта — bash в песочнице Claude Code, запись только в неё, .git закрыт (правки в чате без полного доступа). */
   sandbox?: string;
+  /** claude в песочнице: папки с unix-сокетами, к которым можно подключаться (браузер чата, открытый ядром снаружи). */
+  sandboxSockets?: string[];
   /** codex: ID сессии (thread), чтобы продолжить её в следующем ходе чата. */
   onSession?: (id: string) => void;
 }

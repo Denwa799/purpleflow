@@ -108,6 +108,8 @@ export async function launch(box: Sandbox, env: Record<string, string> = {}, app
       ELECTRON_DISABLE_SECURITY_WARNINGS: '1',
       // Окно не всплывает и не забирает фокус, пока идут тесты. Посмотреть глазами: PURPLEFLOW_E2E_SHOW=1.
       ...(process.env.PURPLEFLOW_E2E_SHOW ? {} : { PURPLEFLOW_HIDDEN: '1' }),
+      // Браузер агента чата (Playwright) в e2e не запускаем: фейковому claude он не нужен.
+      PURPLEFLOW_CHAT_BROWSER: 'off',
       PURPLEFLOW_E2E_PLAIN_STORAGE: '1',
       ...env,
     } as Record<string, string>,

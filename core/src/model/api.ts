@@ -1,5 +1,6 @@
 // API ядра, доступное окну: каждый метод выполняется в utilityProcess и вызывается через IPC.
 // Orchestrator реализует этот интерфейс; список методов для моста — CORE_METHODS в app/src/shared/ipc.ts.
+import type { ChatBrowserAction } from '../services/chatbrowser.js';
 import type {
   ChatFile,
   ChatFileContent,
@@ -144,6 +145,10 @@ export interface CoreApi {
   getChatDiff(id: string): Promise<DiffFile[]>;
   /** Файлы проекта для «@» в поле ввода чата (пути от корня проекта). */
   listChatFiles(projectPath: string): Promise<string[]>;
+  /** Рабочая папка чата без проекта — для вкладки «Файлы». */
+  chatWorkDir(id: string): Promise<string>;
+  /** Человек управляет браузером агента чата из вкладки «Браузер»: навигация, телефон, мышь, клавиши, скрипт выбора. */
+  controlChatBrowser(id: string, action: ChatBrowserAction): Promise<unknown>;
   /** Файл проекта для просмотра в чате: до 512 КБ, двоичный — без содержимого. */
   readChatFile(projectPath: string, rel: string): Promise<ChatFileContent>;
   /** Вкладка «Git»: ветки и история с графом (только просмотр). */

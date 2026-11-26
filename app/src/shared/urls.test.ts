@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isLocalUrl, isSamePage, isWebUrl } from './urls';
+import { isLocalUrl, isSamePage, isWebUrl, normalizeAddress } from './urls';
 
 test('isLocalUrl: только http(s) на этой машине', () => {
   for (const u of ['http://localhost:3000/a', 'https://127.0.0.1/', 'http://[::1]:5173/']) assert.ok(isLocalUrl(u), u);
@@ -32,4 +32,18 @@ test('isSamePage: параметры и якорь не меняют путь п
   assert.ok(!isSamePage('http://localhost:5173/README.md', dev));
   assert.ok(!isSamePage('file:///tmp/dropped.html', prod));
   assert.ok(!isSamePage('не адрес', dev));
+});
+
+test('normalizeAddress: домен — https, локальный — http, путь — от страницы, остальное — поиск', () => {
+  assert.equal(normalizeAddress('ya.ru'), 'https://ya.ru');
+  assert.equal(normalizeAddress('github.com/anthropics'), 'https://github.com/anthropics');
+  assert.equal(normalizeAddress('localhost:3000/admin'), 'http://localhost:3000/admin');
+  assert.equal(normalizeAddress('127.0.0.1:5173'), 'http://127.0.0.1:5173');
+  assert.equal(normalizeAddress('http://example.com'), 'http://example.com');
+  assert.equal(normalizeAddress('/login', 'http://localhost:3000/app'), 'http://localhost:3000/login');
+  assert.equal(
+    normalizeAddress('как работает git rebase'),
+    'https://www.google.com/search?q=%D0%BA%D0%B0%D0%BA%20%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D0%B5%D1%82%20git%20rebase',
+  );
+  assert.equal(normalizeAddress(''), 'about:blank');
 });

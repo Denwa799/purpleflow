@@ -65,18 +65,18 @@ export function HomeScreen() {
         <h1 className="home-title">Что делаем?</h1>
         <div className="home-cards">
           <Card
-            kind="task"
-            title="Создать задачу"
-            desc="Агенты ведут задачу до готового результата и показывают каждый шаг."
-            icon={<Workflow size={26} />}
-            onOpen={() => go({ name: 'new' })}
-          />
-          <Card
             kind="chat"
             title="Новый чат"
             desc="Вопросы по коду и небольшие правки — без конвейера, сразу с агентом."
             icon={<MessageSquare size={26} />}
             onOpen={() => go({ name: 'chat' })}
+          />
+          <Card
+            kind="task"
+            title="Создать задачу"
+            desc="Агенты ведут задачу до готового результата и показывают каждый шаг."
+            icon={<Workflow size={26} />}
+            onOpen={() => go({ name: 'new' })}
           />
         </div>
         {waiting.length > 0 && (

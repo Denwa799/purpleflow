@@ -167,16 +167,17 @@ test('чат: панель под полем ввода, таблица и бл�
     await rail.click();
     const ses = page.locator('.ses');
     await expect(ses.locator('.ses-ctx-num')).toHaveText('50 тыс. из 200 тыс.');
-    // «Скрыть панель» — кружок справа от вкладок, на одной строке с ними.
-    const side = page.locator('.chat-side .tab-groups');
-    const hide = side.getByRole('button', { name: 'Скрыть панель' });
-    const [tb, hb] = [await side.locator('> .tabs').boundingBox(), await hide.boundingBox()];
-    expect(Math.abs(tb!.y + tb!.height / 2 - (hb!.y + hb!.height / 2))).toBeLessThan(2);
-    expect(hb!.x).toBeGreaterThan(tb!.x + tb!.width);
-    // На узкой панели вкладки прокручиваются, а кнопка остаётся внутри панели.
-    const panel = page.locator('.chat-side');
-    const pb = (await panel.boundingBox())!;
-    expect(hb!.x + hb!.width).toBeLessThanOrEqual(pb.x + pb.width);
+    // Полоса значков всегда на месте: «Сессия» открыта слева от неё, с заголовком, значок нажат.
+    const sidePanel = page.getByRole('region', { name: 'Код и браузер' });
+    await expect(sidePanel.getByRole('heading', { name: 'Сессия' })).toBeVisible();
+    await expect(rail).toHaveAttribute('aria-pressed', 'true');
+    const railBox = (await page.getByRole('complementary', { name: 'Панель чата' }).boundingBox())!;
+    expect((await sidePanel.boundingBox())!.x).toBeLessThan(railBox.x);
+    // Чат без проекта: «Файлы» — рабочая папка чата.
+    await page.getByRole('navigation', { name: 'Вкладки панели' }).getByRole('button', { name: 'Файлы чата' }).click();
+    await expect(sidePanel.getByRole('heading', { name: 'Файлы чата' })).toBeVisible();
+    await rail.click();
+    await expect(sidePanel.getByRole('heading', { name: 'Сессия' })).toBeVisible();
     if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-side-tabs.png') });
     await expect(ses).toContainText('занято 25% окна модели');
     const gh = ses.locator('.ses-mcp li', { hasText: 'github' });
@@ -331,53 +332,21 @@ test('чат: вкладка «Файлы» — дерево проекта, с�
     // Свёрнутая панель: иконка вкладки открывает сразу её.
     await page.getByRole('navigation', { name: 'Вкладки панели' }).getByRole('button', { name: 'Файлы проекта' }).click();
     const tree = page.getByRole('tree', { name: 'Файлы проекта' });
-    // Самая узкая панель со всеми вкладками проекта: вкладки прокручиваются, «Скрыть панель» остаётся внутри панели.
+    // Инструмент — слева от полосы, с заголовком; самая узкая ширина — полоса остаётся на месте.
+    const filesPanel = page.getByRole('region', { name: 'Код и браузер' });
+    await expect(filesPanel.getByRole('heading', { name: 'Файлы проекта' })).toBeVisible();
+    // Панель выезжает с анимацией — тянем ручку, когда она встала на место.
+    await page.waitForTimeout(500);
     const grip = (await page.locator('.side-resize').boundingBox())!;
     await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
     await page.mouse.down();
     await page.mouse.move(grip.x + 2000, grip.y + grip.height / 2, { steps: 5 });
     await page.mouse.up();
-    const sideBox = (await page.locator('.chat-side').boundingBox())!;
-    expect(sideBox.width).toBeLessThan(420);
-    const hideBox = (await page.locator('.chat-side .tab-groups').getByRole('button', { name: 'Скрыть панель' }).boundingBox())!;
-    expect(hideBox.x + hideBox.width).toBeLessThanOrEqual(sideBox.x + sideBox.width);
-    // Тесно — вкладки сжались до иконок: все шесть видны целиком, подписи — в подсказках.
-    const sideTabs = page.locator('.chat-side .tab-groups > .tabs');
-    await expect(sideTabs).toHaveClass(/is-compact/);
-    // Подписи съезжаются с анимацией — ждём, пока последняя вкладка встанет внутрь.
-    await expect
-      .poll(async () => {
-        const t = (await sideTabs.boundingBox())!;
-        const b = (await sideTabs.getByRole('tab', { name: 'Браузер' }).boundingBox())!;
-        return b.x + b.width - (t.x + t.width);
-      })
-      .toBeLessThanOrEqual(1);
-    await expect(sideTabs.getByRole('tab', { name: 'Git' }).locator('.tab-label')).toBeHidden();
+    const narrow = (await filesPanel.boundingBox())!;
+    expect(narrow.width).toBeLessThan(420);
+    const strip = (await page.getByRole('complementary', { name: 'Панель чата' }).boundingBox())!;
+    expect(narrow.x + narrow.width).toBeLessThanOrEqual(strip.x);
     if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-side-narrow.png') });
-    if (process.env.PURPLEFLOW_SHOTS) {
-      // Кадры анимации: подпись выбранной разъезжается, прежней — съезжается.
-      const g = (await page.locator('.side-resize').boundingBox())!;
-      await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(g.x - Number(process.env.PF_WIDEN ?? 130), g.y + g.height / 2, { steps: 5 });
-      await page.mouse.up();
-      await page.waitForTimeout(500);
-      const clip = (await page.locator('.chat-side .tab-groups').boundingBox())!;
-      await page.screenshot({ path: path.join(box.root, '..', 'pf-tabs-0.png') });
-      await sideTabs.getByRole('tab', { name: 'Git' }).click();
-      await page.waitForTimeout(120);
-      await page.screenshot({ path: path.join(box.root, '..', 'pf-tabs-1.png'), clip });
-      await page.waitForTimeout(500);
-      await page.screenshot({ path: path.join(box.root, '..', 'pf-tabs-2.png'), clip });
-      await sideTabs.getByRole('tab', { name: 'Файлы' }).click();
-    }
-    // Шире — подписи возвращаются.
-    const grip2 = (await page.locator('.side-resize').boundingBox())!;
-    await page.mouse.move(grip2.x + grip2.width / 2, grip2.y + grip2.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(grip2.x - 500, grip2.y + grip2.height / 2, { steps: 5 });
-    await page.mouse.up();
-    await expect(sideTabs).not.toHaveClass(/is-compact/);
     const src = tree.getByRole('treeitem', { name: 'src' });
     await src.getByRole('button', { name: 'src', exact: true }).click();
     const math = src.getByRole('treeitem', { name: 'math.js' }).getByRole('button', { name: 'math.js', exact: true });
@@ -631,9 +600,8 @@ test('чат: «Указать элемент» в браузере вставл
     await page.keyboard.press('Enter');
     await expect(page.locator('.chat-msg.is-assistant')).toBeVisible({ timeout: 30_000 });
 
-    await page.getByRole('button', { name: 'Браузер' }).first().click();
-    const side = page.locator('.chat-side');
-    if (await side.getByRole('tab', { name: /Браузер/ }).count()) await side.getByRole('tab', { name: /Браузер/ }).click();
+    await page.getByRole('navigation', { name: 'Вкладки панели' }).getByRole('button', { name: 'Браузер' }).click();
+    const side = page.getByRole('region', { name: 'Код и браузер' });
     await side.getByLabel('Адрес').fill(`127.0.0.1:${port}`);
     await side.getByRole('button', { name: 'Открыть адрес' }).click();
     const view = side.locator('webview');
@@ -698,9 +666,9 @@ test('чат: вкладка «Запуск» — старт, вывод сер�
     await page.keyboard.press('Enter');
     await expect(page.locator('.chat-msg.is-assistant')).toBeVisible({ timeout: 30_000 });
 
-    const side = page.locator('.chat-side');
-    if (await side.getByRole('tab', { name: /Запуск/ }).count()) await side.getByRole('tab', { name: /Запуск/ }).click();
-    else await page.getByRole('navigation', { name: 'Вкладки панели' }).getByRole('button', { name: 'Запуск приложения' }).click();
+    const side = page.getByRole('region', { name: 'Код и браузер' });
+    const toRun = () => page.getByRole('navigation', { name: 'Вкладки панели' }).getByRole('button', { name: 'Запуск приложения' }).click();
+    await toRun();
     await expect(side.getByRole('status')).toHaveText('Не запущено');
     await expect(side.getByText('node server.cjs')).toBeVisible();
 
@@ -715,8 +683,8 @@ test('чат: вкладка «Запуск» — старт, вывод сер�
 
     await side.getByRole('button', { name: 'В браузере' }).click();
     await expect(side.locator('webview')).toBeVisible();
-    await side.getByRole('tab', { name: /Запуск/ }).click();
-    await side.getByRole('button', { name: 'Остановить' }).click();
+    await toRun();
+    await side.getByRole('button', { name: 'Остановить', exact: true }).click();
     await expect(side.getByRole('status')).toHaveText('Не запущено');
     await expect
       .poll(() =>

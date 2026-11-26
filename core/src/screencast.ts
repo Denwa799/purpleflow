@@ -43,7 +43,7 @@ interface Target {
 
 /**
  * Следит за вкладкой, с которой работает агент, и шлёт кадры не чаще раза в minIntervalMs.
- * Только чтение экрана: ввод в браузер агента не передаётся.
+ * command — команда CDP той же вкладке: человек управляет браузером агента из вкладки «Браузер».
  */
 export class Screencast {
   private ws: WebSocket | null = null;
@@ -52,6 +52,7 @@ export class Screencast {
   private lastFrame = 0;
   private msgId = 0;
   private stopped = false;
+  private waiting = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
   constructor(
     private port: number,
@@ -77,6 +78,33 @@ export class Screencast {
   }
 
   private url = '';
+  /** Размер страницы в CSS-пикселях по последнему кадру. */
+  size = { width: 0, height: 0 };
+
+  /** Команда CDP открытой вкладке (ждём, пока подключимся, до 5 с). */
+  async command<T = unknown>(method: string, params: object = {}, timeoutMs = 15_000): Promise<T> {
+    for (let i = 0; i < 20 && (!this.ws || this.ws.readyState !== WebSocket.OPEN); i++) await new Promise((r) => setTimeout(r, 250));
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('Браузер агента не отвечает');
+    const id = ++this.msgId;
+    return new Promise<T>((resolve, reject) => {
+      const t = setTimeout(() => {
+        this.waiting.delete(id);
+        reject(new Error(`${method}: нет ответа`));
+      }, timeoutMs);
+      this.waiting.set(id, {
+        resolve: (v) => {
+          clearTimeout(t);
+          resolve(v as T);
+        },
+        reject: (e) => {
+          clearTimeout(t);
+          reject(e);
+        },
+      });
+      ws.send(JSON.stringify({ id, method, params }));
+    });
+  }
 
   private async pick() {
     if (this.stopped) return;
@@ -104,14 +132,30 @@ export class Screencast {
       send('Page.startScreencast', { format: 'jpeg', quality: 85, maxWidth: 2880, maxHeight: 2000, everyNthFrame: 1 }),
     );
     ws.addEventListener('message', (ev) => {
-      let m: { method?: string; params?: { data: string; sessionId: number; metadata?: { deviceWidth?: number; deviceHeight?: number } } };
+      let m: {
+        id?: number;
+        result?: unknown;
+        error?: { message?: string };
+        method?: string;
+        params?: { data: string; sessionId: number; metadata?: { deviceWidth?: number; deviceHeight?: number } };
+      };
       try {
         m = JSON.parse(String(ev.data));
       } catch {
         return;
       }
+      // Ответ на command.
+      if (m.id && this.waiting.has(m.id)) {
+        const w = this.waiting.get(m.id)!;
+        this.waiting.delete(m.id);
+        if (m.error) w.reject(new Error(m.error.message ?? 'Ошибка CDP'));
+        else w.resolve(m.result);
+        return;
+      }
       if (m.method !== 'Page.screencastFrame' || !m.params) return;
       send('Page.screencastFrameAck', { sessionId: m.params.sessionId });
+      // Размер страницы в CSS-пикселях: по нему ввод человека попадает в нужную точку.
+      this.size = { width: m.params.metadata?.deviceWidth ?? this.size.width, height: m.params.metadata?.deviceHeight ?? this.size.height };
       const now = Date.now();
       if (now - this.lastFrame < this.minIntervalMs) return;
       this.lastFrame = now;

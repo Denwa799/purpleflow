@@ -67,6 +67,7 @@
   padding: 0;
 }
 .browser-stage {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -83,6 +84,13 @@
   min-width: 0;
   display: flex;
   background: #fff;
+}
+/* Неактивная вкладка: webview живёт (история, состояние страницы), но не виден. display: none webview сбрасывает. */
+.browser-view.is-hidden {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 .browser-stage.is-mobile .browser-view {
   flex: none;
@@ -221,4 +229,174 @@
   background: var(--accent-wash);
   color: var(--accent-hi);
   font-size: var(--fs-12);
+}
+
+/* Вкладки браузера над адресной строкой. */
+.browser-tabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--s-2) var(--s-3) 0;
+  background: var(--bg-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.browser-tabs::-webkit-scrollbar {
+  display: none;
+}
+.browser-tab {
+  flex: 0 1 200px;
+  min-width: 90px;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  border-radius: 10px 10px 0 0;
+  color: var(--text-3);
+  transition:
+    background 0.2s var(--ease),
+    color 0.2s var(--ease);
+  animation: rise 0.25s var(--ease) both;
+}
+.browser-tab:hover {
+  background: var(--bg-3);
+  color: var(--text-2);
+}
+.browser-tab.is-on {
+  background: var(--bg-4);
+  color: var(--text-1);
+}
+.browser-tab-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 4px 0 10px;
+  color: inherit;
+  font-size: var(--fs-12);
+  text-align: left;
+}
+.browser-tab-main .spinner {
+  width: 12px;
+  height: 12px;
+}
+.browser-tab-main svg {
+  flex: none;
+}
+.browser-tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browser-tab-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 5px;
+  border-radius: 6px;
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+}
+.browser-tab:hover .browser-tab-close,
+.browser-tab.is-on .browser-tab-close {
+  opacity: 1;
+}
+.browser-tab-close:hover {
+  background: var(--bg-5);
+  color: var(--text-1);
+}
+.browser-tab-new {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--text-3);
+}
+.browser-tab-new:hover {
+  background: var(--bg-4);
+  color: var(--text-1);
+}
+.browser-bar {
+  background: var(--bg-4);
+}
+
+/* Вкладка «Агент»: живой индикатор вместо значка. */
+
+.browser-tab-live {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: breathe 1.4s var(--ease) infinite;
+}
+/* Экран агента внутри браузера с вкладками — без своей рамки. */
+.browser > .browser.is-agent {
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
+  margin: 0;
+}
+/* Панель и вкладки человека под экраном агента: скрыты, но страницы живут (display: none сбросил бы webview). */
+.browser {
+  position: relative;
+}
+.browser > .browser-bar[hidden] {
+  display: none;
+}
+.browser > .browser-stage[hidden] {
+  display: flex;
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Значок «Агент работает» в адресной строке вкладки агента. */
+.browser-agent-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  margin-right: 6px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--accent-wash);
+  color: var(--accent-hi);
+  font-size: var(--fs-12);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.browser-agent-badge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: breathe 1.4s var(--ease) infinite;
+}
+/* Адрес с значком агента: значок внутри той же «таблетки», что и адрес. */
+.browser-address:has(.browser-agent-badge) {
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-pill);
+  background: var(--bg-1);
+}
+.browser-address:has(.browser-agent-badge) input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+}
+/* Кадр браузера агента, которым можно управлять: как страница — без рамки фокуса. */
+.agent-frame.is-live {
+  cursor: default;
+  outline: none;
 }

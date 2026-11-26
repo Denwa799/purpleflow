@@ -30,6 +30,7 @@ import { enabledList } from '../lib/tools';
 import { EFFORT_LEVELS, effortOf, effortOptions } from '../lib/effort';
 import { ACCESS_OPTIONS, accessOf, accessPatch, type ChatAccess } from '../lib/chatAccess';
 import { formatPick, insertPick, type PickedElement } from '../lib/pickElement';
+import { useAgentScreen } from '../components/BrowserPane';
 import { PATH_DRAG, insertMention, mentionSegments } from '../lib/mentions';
 import { ChatSide, ChatSideRail, useChatChanged, useSideExit, useSideWidth, type ChatPane } from './ChatSide';
 import { DictationButton } from '../components/Dictation';
@@ -349,8 +350,13 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
     return paths;
   }, [projects, draft.projectPath]);
   // Без проекта вкладок «Код» и «Запуск» нет — остаётся браузер.
-  const sidePane: ChatPane | null =
-    (pane === 'files' || pane === 'code' || pane === 'git' || pane === 'run') && !chat?.projectPath ? 'browser' : pane;
+  const sidePane: ChatPane | null = (pane === 'code' || pane === 'git' || pane === 'run') && !chat?.projectPath ? 'browser' : pane;
+  // Браузер агента чата: кадры его экрана приходят из ядра; начал работать — открываем «Браузер», если панель закрыта.
+  const agentScreen = useAgentScreen(chat?.id ?? '');
+  useEffect(() => {
+    if (agentScreen.live && !pane) setPane('browser');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentScreen.live]);
   // Закрытая панель ещё доигрывает анимацию, прежде чем уступить место полосе.
   const [shownPane, closingPane] = useSideExit(sidePane);
   const toolOk = (a: AgentKind) => Boolean(state.tools?.[a]?.path && !state.tools[a].error);
@@ -460,7 +466,7 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
               )}
               {messages.map((m, i) =>
                 m.role === 'user' ? (
-                  <UserMessage key={m.id} m={m} chatId={chat!.id} />
+                  <UserMessage key={m.id} m={m} chatId={chat!.id} skills={mention.skillNames} />
                 ) : (
                   <AssistantMessage
                     key={m.id}
@@ -677,6 +683,7 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
             chat={chat}
             busy={busy}
             closing={closingPane}
+            agentScreen={agentScreen}
             pane={shownPane}
             model={shownModel}
             onPick={onPick}
@@ -694,7 +701,7 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
   );
 }
 
-function UserMessage({ m, chatId }: { m: ChatMessage; chatId: string }) {
+function UserMessage({ m, chatId, skills }: { m: ChatMessage; chatId: string; skills: ReadonlySet<string> }) {
   return (
     <div className={`chat-msg is-user ${m.queued ? 'is-queued' : ''}`}>
       {m.attachments?.length ? (
@@ -707,7 +714,20 @@ function UserMessage({ m, chatId }: { m: ChatMessage; chatId: string }) {
           ))}
         </div>
       ) : null}
-      {m.text && <p>{m.text}</p>}
+      {m.text && (
+        <p>
+          {/* «/скилл» и «@путь» — чипами, как в поле ввода. */}
+          {mentionSegments(m.text, skills).map((seg, i) =>
+            seg.kind ? (
+              <span key={i} className={`msg-chip is-${seg.kind}`}>
+                {seg.text}
+              </span>
+            ) : (
+              <span key={i}>{seg.text}</span>
+            ),
+          )}
+        </p>
+      )}
       {m.queued && (
         <div className="chat-queued">
           <Clock size={12} />

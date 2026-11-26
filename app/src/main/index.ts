@@ -27,7 +27,7 @@ import { bugReportUrl } from '../shared/bugReport';
 import * as account from './account';
 import { proxyModels } from './models';
 import { cancelDownload, dictationStatus, downloadModel, fakeMicFromEnv, micAccess, removeModel, transcribe } from './dictation';
-import { isLocalUrl, isSamePage, isWebUrl } from '../shared/urls';
+import { isSamePage, isWebUrl } from '../shared/urls';
 import type { UpdateState } from '../shared/update';
 import { errorReportingActive, initErrorReporting } from './error-reporting';
 import { ignoreClosedOutput } from './stdio';
@@ -550,8 +550,20 @@ handle('dialog:file', async () => {
 // ——— Вкладка «Браузер»: приложение проекта во встроенном webview ———
 
 const PREVIEW_PARTITION = 'purpleflow-preview';
+/** Во вкладке «Браузер» открываются сайты по http(s) и пустая новая вкладка; file:, chrome: и прочее — нет. */
+const browsable = (u: string) => isWebUrl(u) || u === 'about:blank';
+let previewGuarded = false;
+/** Сессия вкладки «Браузер»: сайты не получают камеру, микрофон, геолокацию и уведомления и ничего не скачивают. */
+function guardPreviewSession() {
+  if (previewGuarded) return;
+  previewGuarded = true;
+  const ses = session.fromPartition(PREVIEW_PARTITION);
+  ses.setPermissionRequestHandler((_wc, _permission, done) => done(false));
+  ses.setPermissionCheckHandler(() => false);
+  ses.on('will-download', (ev) => ev.preventDefault());
+}
 app.on('web-contents-created', (_e, contents) => {
-  // webview — только для приложения проекта: без preload и Node, в своей сессии, только локальные адреса.
+  // webview — без preload и Node, в своей сессии, только http(s).
   contents.on('will-attach-webview', (ev, prefs, params) => {
     delete prefs.preload;
     prefs.nodeIntegration = false;
@@ -559,27 +571,23 @@ app.on('web-contents-created', (_e, contents) => {
     prefs.contextIsolation = true;
     prefs.sandbox = true;
     prefs.webSecurity = true;
-    if (params.partition !== PREVIEW_PARTITION || !isLocalUrl(params.src)) ev.preventDefault();
+    if (params.partition !== PREVIEW_PARTITION || !browsable(params.src)) return ev.preventDefault();
+    guardPreviewSession();
   });
   if (contents.getType() === 'webview') {
+    // Ссылка в новое окно — новая вкладка браузера в окне приложения.
     contents.setWindowOpenHandler(({ url }) => {
-      if (isLocalUrl(url)) void contents.loadURL(url);
-      else if (isWebUrl(url)) void shell.openExternal(url);
+      if (isWebUrl(url)) contents.hostWebContents?.send('preview:new-tab', contents.id, url);
       return { action: 'deny' };
     });
-    const keepLocal = (ev: { preventDefault: () => void }, url: string) => {
-      if (isLocalUrl(url)) return;
-      ev.preventDefault();
-      if (isWebUrl(url)) void shell.openExternal(url);
+    const keepWeb = (ev: { preventDefault: () => void }, url: string) => {
+      if (!browsable(url)) ev.preventDefault();
     };
-    contents.on('will-navigate', keepLocal);
-    // Редирект с локального адреса наружу will-navigate не ловит.
-    contents.on('will-redirect', keepLocal);
+    contents.on('will-navigate', keepWeb);
+    contents.on('will-redirect', keepWeb);
     // loadURL из адресной строки вкладки — ни will-navigate, ни will-redirect не срабатывают.
     contents.on('did-start-navigation', (d) => {
-      if (!d.isMainFrame || isLocalUrl(d.url)) return;
-      contents.stop();
-      if (isWebUrl(d.url)) void shell.openExternal(d.url);
+      if (d.isMainFrame && !browsable(d.url)) contents.stop();
     });
   }
 });

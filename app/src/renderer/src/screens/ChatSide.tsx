@@ -7,7 +7,7 @@ import { chatSession } from '../lib/chatSession';
 import type { PickedElement } from '../lib/pickElement';
 import { ChatSessionPane, ContextRing } from './ChatSessionPane';
 import type { ChatFile, DiffFile, ProjectConfig } from '@purpleflow/core';
-import { BrowserPane, usePreview } from '../components/BrowserPane';
+import { BrowserPane, usePreview, type useAgentScreen } from '../components/BrowserPane';
 import { DiffReview } from '../components/diff/DiffReview';
 import { Button, Empty } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
@@ -99,10 +99,13 @@ export function ChatSide({
   onPick,
   onMention,
   closing = false,
+  agentScreen,
 }: {
   chat: ChatFile;
   /** Панель закрывается: доигрывает анимацию, потом её место займёт полоса. */
   closing?: boolean;
+  /** Экран браузера агента чата (трансляция из ядра). */
+  agentScreen?: ReturnType<typeof useAgentScreen>;
   /** Файл или папка из вкладки «Файлы» — «@путь» в поле ввода. */
   onMention: (path: string) => void;
   /** Выбранная модель: своя у чата или по умолчанию. */
@@ -116,6 +119,19 @@ export function ChatSide({
   onResize: (e: ReactPointerEvent<HTMLDivElement>) => void;
   onResetWidth: () => void;
 }) {
+  // Чат без проекта: агент работает во временной папке чата — её и показывает «Файлы».
+  const [workDir, setWorkDir] = useState<string | null>(null);
+  useEffect(() => {
+    if (chat.projectPath) return;
+    let alive = true;
+    void bridge.core
+      .chatWorkDir(chat.id)
+      .then((d) => alive && setWorkDir(d))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [chat.id, chat.projectPath]);
   const [cfg, setCfg] = useState<ProjectConfig | null>(null);
   const preview = usePreview(chat.id);
   useEffect(() => {
@@ -136,16 +152,20 @@ export function ChatSide({
         title="Потяните, чтобы изменить ширину; двойной клик — по умолчанию"
       />
       {/* Название открытого инструмента: вкладок над ним нет, выбирается он в полосе справа. */}
-      <header className="chat-side-head">
-        {PANE_TITLE[pane].icon}
-        <h2>{PANE_TITLE[pane].label}</h2>
-      </header>
+      {/* У браузера заголовок — его собственные вкладки. */}
+      {pane !== 'browser' && (
+        <header className="chat-side-head">
+          {PANE_TITLE[pane].icon}
+          <h2>{pane === 'files' && !chat.projectPath ? 'Файлы чата' : PANE_TITLE[pane].label}</h2>
+        </header>
+      )}
       <div className="chat-side-body" hidden={pane !== 'session'}>
         {pane === 'session' && <ChatSessionPane chat={chat} model={model} busy={busy} />}
       </div>
       <div className="chat-side-body" hidden={pane !== 'files'}>
-        {chat.projectPath && pane === 'files' && (
-          <ChatFiles projectPath={chat.projectPath} refresh={busy ? 'busy' : chat.updatedAt} onMention={onMention} />
+        {/* Без проекта — рабочая папка чата: видно, какие файлы агент создал или поменял. */}
+        {pane === 'files' && (chat.projectPath ?? workDir) && (
+          <ChatFiles projectPath={(chat.projectPath ?? workDir)!} refresh={busy ? 'busy' : chat.updatedAt} onMention={onMention} />
         )}
       </div>
       <div className="chat-side-body" hidden={pane !== 'code'}>
@@ -164,7 +184,10 @@ export function ChatSide({
         )}
       </div>
       <div className="chat-side-body" hidden={pane !== 'browser'}>
+        {/* Браузер с вкладками человека; пока агент работает в своём браузере (pw) — рядом его вкладка «Агент». */}
         <BrowserPane
+          agent={agentScreen}
+          agentControl={(action) => bridge.core.controlChatBrowser(chat.id, action)}
           preview={preview}
           canRun={canRun}
           manual
@@ -227,9 +250,10 @@ export function ChatSideRail({
       <span className="tab-dot is-error" />
     ) : null;
   const items: { id: ChatPane; label: string; icon: ReactNode; extra?: ReactNode }[] = [
+    // «Файлы» есть и без проекта — рабочая папка чата.
+    { id: 'files', label: chat.projectPath ? 'Файлы проекта' : 'Файлы чата', icon: <FolderTree size={16} /> },
     ...(chat.projectPath
       ? [
-          { id: 'files' as const, label: 'Файлы проекта', icon: <FolderTree size={16} /> },
           {
             id: 'code' as const,
             label: changed?.length ? `Изменения: ${changed.length}` : 'Изменения',

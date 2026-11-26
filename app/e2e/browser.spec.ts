@@ -46,16 +46,31 @@ test('browser: phone mode settles after one reload and returns to desktop', asyn
     expect(hits).toHaveLength(3);
     expect(hits[2]).not.toContain('iPhone');
 
+    // Вкладки: «+» — новая пустая вкладка, адрес загружается в ней; закрыть — остаётся первая.
+    await side.getByRole('button', { name: 'Новая вкладка' }).click();
+    await expect(side.locator('webview')).toHaveCount(2);
+    await expect(side.getByLabel('Адрес')).toHaveValue('');
+    await side.getByLabel('Адрес').fill(`127.0.0.1:${port}/second`);
+    await side.getByLabel('Адрес').press('Enter');
+    await expect.poll(() => hits.length).toBe(4);
+    await expect(side.getByRole('tab')).toHaveCount(2);
+    await side
+      .getByRole('button', { name: /^Закрыть вкладку/ })
+      .last()
+      .click();
+    await expect(side.locator('webview')).toHaveCount(1);
+
     // Closing the manual page removes its webview. Phone mode stays selected when a new one mounts.
     await side.getByRole('radio', { name: 'Телефон' }).click();
-    await expect.poll(() => hits.length).toBe(4);
-    await side.getByRole('button', { name: 'Закрыть страницу' }).click();
+    await expect.poll(() => hits.length).toBe(5);
+    // Закрыли последнюю вкладку — снова начальная карточка.
+    await side.getByRole('button', { name: /^Закрыть вкладку/ }).click();
     await expect(view).toHaveCount(0);
     await side.getByRole('button', { name: 'Открыть адрес' }).click();
-    await expect.poll(() => hits.length).toBe(6);
+    await expect.poll(() => hits.length).toBe(7);
     await page.waitForTimeout(400);
-    expect(hits).toHaveLength(6);
-    expect(hits[5]).toContain('iPhone');
+    expect(hits).toHaveLength(7);
+    expect(hits[6]).toContain('iPhone');
     expect(l.errors).toEqual([]);
   } finally {
     await quit(l);

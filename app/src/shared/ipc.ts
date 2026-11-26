@@ -234,6 +234,8 @@ export const CORE_METHODS: Record<CoreMethod, true> = {
   getChatDiff: true,
   getChatChangedFiles: true,
   listChatFiles: true,
+  chatWorkDir: true,
+  controlChatBrowser: true,
   readChatFile: true,
   getGitGraph: true,
   getGitCommitDiff: true,
@@ -309,6 +311,8 @@ export interface PurpleFlowBridge {
   openPath(p: string): Promise<void>;
   /** Вкладка «Браузер»: эмуляция телефона для webview по его webContentsId. */
   previewEmulate(webContentsId: number, mobile: boolean): Promise<void>;
+  /** Вкладка «Браузер»: страница открыла ссылку в новом окне — fromId (webContentsId страницы) и адрес новой вкладки. */
+  onPreviewNewTab(fn: (fromId: number, url: string) => void): () => void;
   /** Кэш Chromium самого приложения (HTTP, код, GPU): размер и очистка. */
   appCache: { size(): Promise<number>; clear(): Promise<void> };
   /** Звук внимания и переход к прогону по клику на уведомление. */

@@ -34,7 +34,8 @@
   padding-right: var(--s-2);
 }
 .agent-stage {
-  align-items: center;
+  /* Кадр — сверху, как страница в браузере, а не посередине с пустотой над ним. */
+  align-items: flex-start;
   background: var(--bg-1);
   overflow: hidden;
 }

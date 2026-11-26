@@ -1,5 +1,6 @@
 // Фасад ядра: публичный API (CoreApi) поверх движка, стадий и сервисов.
 // Логики здесь нет — только сборка ядра и разводка команд по модулям.
+import { controlChatBrowser, type ChatBrowserAction } from './services/chatbrowser.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { checkCommand, detectProjectCommands, findEnvFiles } from './detect.js';
@@ -358,6 +359,12 @@ export class Orchestrator implements CoreApi {
   }
   deleteChat(id: string) {
     return chat.deleteChat(this.kernel, id);
+  }
+  async controlChatBrowser(id: string, action: ChatBrowserAction) {
+    return controlChatBrowser(id, action);
+  }
+  async chatWorkDir(id: string) {
+    return chat.chatWorkDir(this.kernel, id);
   }
   listChatFiles(projectPath: string) {
     return chat.listChatFiles(this.kernel, projectPath);

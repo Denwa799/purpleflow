@@ -17,7 +17,7 @@ import type { ChatFile, CoreEvent } from './types.js';
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'prompts');
 
 /** Ядро с «установленными» claude и codex (скрипты отвечают версией) и подменёнными запусками. */
-function makeCore(runners: { claude?: unknown; codex?: unknown; agy?: unknown }, o: { chatTitles?: boolean } = {}) {
+function makeCore(runners: { claude?: unknown; codex?: unknown; agy?: unknown }, o: { chatTitles?: boolean; browser?: boolean } = {}) {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-bin-'));
   for (const n of ['codex', 'claude', 'agy']) fs.writeFileSync(path.join(bin, n), `#!/bin/sh\necho "${n} 1.0.0"\n`, { mode: 0o755 });
   const settings = {
@@ -33,7 +33,8 @@ function makeCore(runners: { claude?: unknown; codex?: unknown; agy?: unknown },
   const core = new Orchestrator({
     dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-data-')),
     promptsDir: PROMPTS,
-    env: process.env,
+    // Браузер чата (Playwright) в тестах не запускаем — кроме проверки самого браузера.
+    env: { ...process.env, PURPLEFLOW_CHAT_BROWSER: o.browser ? 'on' : 'off' },
     getSettings: () => settings,
     runners: runners as never,
     chatTitles: o.chatTitles ?? false,
@@ -863,3 +864,34 @@ test('cleanTitle: первая строка без кавычек, размет�
   assert.equal(cleanTitle('## Название: **Ревью PR**'), 'Ревью PR');
   assert.equal(cleanTitle('   '), '');
 });
+
+test(
+  'чат: браузер для агента — правила pw в системном промпте, пометка в сообщении, в «Вопросах» нет',
+  { skip: process.platform === 'win32' },
+  async () => {
+    const calls: AgentRunOptions[] = [];
+    const claude = async (o: AgentRunOptions) => {
+      calls.push(o);
+      return { ok: true, text: 'ок', usage: emptyUsage() };
+    };
+    const core = makeCore({ claude }, { browser: true });
+    // Сообщение не про веб — ядро браузер не открывает (в тесте не запускаем Chrome), но правила и пометка есть.
+    for (const fullAccess of [true, false]) {
+      const c = await core.createChat({ agent: 'claude', fullAccess });
+      await core.sendChat(c.id, 'поправь опечатку в README');
+      await untilIdle(core, c.id);
+      const call = calls.at(-1)!;
+      assert.match(call.systemPrompt ?? '', /## Браузер/);
+      assert.match(call.systemPrompt ?? '', /не вызывай `pw open`/);
+      assert.match(call.prompt, /\[PurpleFlow: браузер сейчас не запущен/);
+      const pwDir = (call.env?.PATH ?? '').split(path.delimiter)[0];
+      assert.match(pwDir, /browser$/);
+      assert.ok(call.addDirs?.includes(pwDir), 'папка скриншотов открыта агенту на чтение');
+    }
+    // «Вопросы»: команд нет — и браузера нет.
+    const read = await core.createChat({ agent: 'claude', edits: false });
+    await core.sendChat(read.id, 'открой гугл');
+    await untilIdle(core, read.id);
+    assert.doesNotMatch(calls.at(-1)!.systemPrompt ?? '', /## Браузер/);
+  },
+);

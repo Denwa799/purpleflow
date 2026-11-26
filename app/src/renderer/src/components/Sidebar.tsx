@@ -146,8 +146,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         )}
         <span className="side-rail-sep" />
         {rail('Главная', <House size={18} />, () => go({ name: 'home' }), v.name === 'home')}
-        {rail('Новая задача', <Workflow size={18} />, () => go({ name: 'new' }), v.name === 'new')}
         {rail('Новый чат', <MessageSquare size={18} />, () => go({ name: 'chat' }), v.name === 'chat' && !v.chatId)}
+        {rail('Новая задача', <Workflow size={18} />, () => go({ name: 'new' }), v.name === 'new')}
         {rail('Проекты', <FolderGit2 size={18} />, () => go({ name: 'projects' }), v.name === 'projects' || v.name === 'project')}
         <span className="grow" />
         {noProjects && rail('Как начать?', <Rocket size={18} />, () => go({ name: 'start' }))}
@@ -190,7 +190,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         </button>
         <div className="side-create side-create-new">
           <button
-            title="Создать задачу или чат"
+            title="Создать чат или задачу"
             aria-label="Создать"
             className={`side-new ${v.name === 'new' || (v.name === 'chat' && !v.chatId) ? 'is-on' : ''}`}
             aria-haspopup="menu"
@@ -204,15 +204,6 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             <>
               <div className="side-create-scrim" onClick={() => setMenu(false)} />
               <div className="side-create-menu" role="menu">
-                <button role="menuitem" onClick={() => create('task')}>
-                  <span className="side-kind is-run">
-                    <Workflow size={15} />
-                  </span>
-                  <span>
-                    <strong>Задача</strong>
-                    <small>План, реализация, тесты, ревью и приёмка</small>
-                  </span>
-                </button>
                 <button role="menuitem" onClick={() => create('chat')}>
                   <span className="side-kind is-chat">
                     <MessageSquare size={15} />
@@ -220,6 +211,15 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                   <span>
                     <strong>Чат</strong>
                     <small>Вопросы и небольшие правки без конвейера</small>
+                  </span>
+                </button>
+                <button role="menuitem" onClick={() => create('task')}>
+                  <span className="side-kind is-run">
+                    <Workflow size={15} />
+                  </span>
+                  <span>
+                    <strong>Задача</strong>
+                    <small>План, реализация, тесты, ревью и приёмка</small>
                   </span>
                 </button>
               </div>

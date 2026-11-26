@@ -904,6 +904,8 @@ input.chat-title:focus {
 .compose-field textarea {
   position: relative;
   z-index: 1;
+  /* Тот же отступ слева, что у подложки: чип в начале строки не обрезается. */
+  padding-left: 4px;
   color: transparent;
   caret-color: var(--text-1);
 }
@@ -915,7 +917,7 @@ input.chat-title:focus {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  padding: 7px 0;
+  padding: 7px 0 7px 4px;
   color: var(--text-1);
   font: inherit;
   font-size: var(--fs-14);
@@ -927,10 +929,20 @@ input.chat-title:focus {
 }
 /* Чип не меняет ширину букв: фон и скругление рисуются тенью за пределами текста — курсор не съезжает. */
 .compose-chip {
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+  /* Отступы внутри чипа компенсируются такими же отрицательными полями: ширина текста та же, курсор на месте. */
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.11);
   color: var(--text-1);
+}
+/* Чип в отправленном сообщении — обычный текст, тут отступы настоящие. */
+.msg-chip {
+  display: inline-block;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  line-height: 1.55;
 }
 .chat-compose textarea::placeholder {
   color: var(--text-4);
@@ -1355,7 +1367,8 @@ button.dd:hover:not(:disabled),
 }
 .chat-side-body > .browser,
 .chat-side-body > .browser-empty {
-  margin: 0 var(--s-5) var(--s-5);
+  /* Заголовка над браузером нет — его роль у вкладок; сверху тот же отступ, что по бокам. */
+  margin: var(--s-5) var(--s-5) var(--s-5);
 }
 .chat-head-actions {
   flex: 1 1 auto;
