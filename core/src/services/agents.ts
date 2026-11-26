@@ -184,6 +184,8 @@ export async function runRole(
     onSession?: (id: string) => void;
     /** Свой приёмник вывода (параллельное ревью копит вывод, чтобы не перемешать лог с проверками). */
     onOutput?: (text: string) => void;
+    /** Своё окружение агента (например, pw в PATH для самопроверки исполнителя). */
+    env?: NodeJS.ProcessEnv;
   },
 ): Promise<AgentResult> {
   const agent = run.agents[role];
@@ -191,6 +193,7 @@ export async function runRole(
   const base = {
     ...agentBase(k, run, tools[agent], o.openspec ? tools.openspec : undefined),
     ...(o.onOutput ? { onOutput: o.onOutput } : {}),
+    ...(o.env ? { env: o.env } : {}),
   };
   const model = run.models[role] || undefined;
   const effort = effortFor(agent, run.efforts?.[role]);
