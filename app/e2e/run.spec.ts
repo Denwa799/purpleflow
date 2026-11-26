@@ -117,15 +117,28 @@ test('приёмка: дифф показывает изменение, возв
   await expect(l.page.locator('.monaco-diff-editor').getByText('mul', { exact: false }).first()).toBeVisible();
   // Узкое окно: вкладки прогона сжимаются до иконок, все остаются в строке.
   const size = await l.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize());
+  const runTabs = l.page.locator('.run-main .tab-groups > .tabs');
+  const before = (await runTabs.getAttribute('class'))!;
   await l.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 800));
-  const runTabs = l.page.locator('.pilltabs:has(> .tab[aria-selected="true"])', { hasText: 'Таймлайн' }).first();
   await expect(runTabs).toHaveClass(/is-compact/);
+  // Кнопка «Обновить» рядом с вкладками остаётся целиком внутри карточки.
+  const refresh = l.page.locator('.tab-tools').getByRole('button', { name: 'Обновить' });
+  await expect
+    .poll(async () => {
+      const card = (await l.page.locator('.run-main').boundingBox())!;
+      const b = (await refresh.boundingBox())!;
+      return b.x + b.width <= card.x + card.width;
+    })
+    .toBe(true);
   if (process.env.PURPLEFLOW_SHOTS) {
     await l.page.waitForTimeout(600);
     await l.page.screenshot({ path: path.join(os.tmpdir(), 'pf-run-narrow.png') });
   }
   await l.app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows()[0].setSize(w, h), size);
-  await expect(runTabs).not.toHaveClass(/is-compact/);
+  // Прежняя ширина — прежний вид вкладок.
+  await expect(runTabs).toHaveAttribute('class', before);
+  await expect(refresh).toContainText('Обновить');
+  await expect(l.page.locator('.code-at')).toBeVisible();
 });
 
 test('приёмка: клавиши ревью не срабатывают при поиске в диффе', async () => {

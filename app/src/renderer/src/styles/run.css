@@ -1326,7 +1326,9 @@ body.is-col-resizing .monaco-editor {
 }
 .tab-tools {
   flex: 1;
-  min-width: 0;
+  /* Место хотя бы под кнопку-иконку: вкладкам рядом сжиматься раньше, чем ей пропасть. */
+  min-width: 44px;
+  container-type: inline-size;
   display: flex;
   align-items: center;
   gap: var(--s-3);
@@ -1346,6 +1348,32 @@ body.is-col-resizing .monaco-editor {
 }
 .code-stale {
   color: var(--wait);
+}
+.code-live,
+.code-stale {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab-tools .code-refresh {
+  flex: none;
+}
+/* Тесно — сначала уходит время обновления, затем подпись кнопки (время и подпись — в подсказке). */
+@container (max-width: 320px) {
+  .code-at {
+    display: none;
+  }
+}
+@container (max-width: 160px) {
+  .tab-tools .code-refresh > span:not(.spinner) {
+    display: none;
+  }
+  .tab-tools .code-refresh {
+    width: 30px;
+    padding: 0;
+    justify-content: center;
+  }
 }
 .code-at {
   font-variant-numeric: tabular-nums;

@@ -70,12 +70,15 @@ export function PillTabs<T extends string>({
     if (!collapsible || !el || !parent) return;
     const fit = () => {
       // Сколько места у вкладок: ширина родителя без соседей (кнопки рядом) и зазоров.
-      // Растягивающиеся соседи (.grow) занимают остаток — их не считаем.
-      const others = ([...parent.children] as HTMLElement[]).filter(
-        (c) => c !== el && getComputedStyle(c).flexGrow === '0' && getComputedStyle(c).position !== 'absolute',
-      );
+      // Соседи в строке: обычные — своей шириной; растягивающиеся (.grow, панель инструментов) занимают
+      // остаток, им оставляем только их min-width.
+      const others = ([...parent.children] as HTMLElement[]).filter((c) => c !== el && getComputedStyle(c).position !== 'absolute');
+      const taken = others.reduce((w, c) => {
+        const cs = getComputedStyle(c);
+        return w + (cs.flexGrow === '0' ? c.offsetWidth : parseFloat(cs.minWidth) || 0);
+      }, 0);
       const gap = parseFloat(getComputedStyle(parent).columnGap) || 0;
-      const avail = parent.clientWidth - others.reduce((w, c) => w + c.offsetWidth, 0) - gap * others.length;
+      const avail = parent.clientWidth - taken - gap * others.length;
       const widths = [...(measure.current?.children ?? [])].map((c) => (c as HTMLElement).offsetWidth);
       const next = widths.findIndex((w) => w <= avail + 1);
       setLevel((next < 0 ? 2 : next) as 0 | 1 | 2);

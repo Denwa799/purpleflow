@@ -114,7 +114,15 @@ export function CodePane({
       {stale && <span className="code-stale">Есть новые изменения</span>}
       <span className="grow" />
       {at && <span className="code-at">обновлено в {time(at)}</span>}
-      <Button tone={stale ? 'primary' : 'quiet'} icon={<RefreshCw size={14} />} busy={busy} onClick={() => void load()}>
+      <Button
+        tone={stale ? 'primary' : 'quiet'}
+        className="code-refresh"
+        icon={<RefreshCw size={14} />}
+        busy={busy}
+        aria-label="Обновить"
+        title={at ? `Обновить · обновлено в ${time(at)}` : 'Обновить'}
+        onClick={() => void load()}
+      >
         Обновить
       </Button>
     </>
