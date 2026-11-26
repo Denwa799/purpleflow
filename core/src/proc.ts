@@ -9,6 +9,8 @@ export interface RunOptions {
   env: NodeJS.ProcessEnv;
   /** Текст в stdin; без него stdin закрывается сразу. */
   input?: string;
+  /** Диалог по stdin (JSON-RPC): stdin остаётся открытым, закрывает его сам вызывающий. Сильнее input. */
+  onStdin?: (stdin: Writable) => void;
   /** Запуск строки через системный шелл (команда тестов). */
   shell?: boolean;
   timeoutMs?: number;
@@ -273,7 +275,8 @@ export function run(cmd: string, args: string[], opts: RunOptions): Promise<RunR
     child.stdin?.on('error', () => {
       /* процесс мог закрыть stdin раньше */
     });
-    if (opts.input != null) child.stdin?.end(opts.input);
+    if (opts.onStdin && child.stdin) opts.onStdin(child.stdin);
+    else if (opts.input != null) child.stdin?.end(opts.input);
     else child.stdin?.end();
 
     const timer = opts.timeoutMs

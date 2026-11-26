@@ -40,7 +40,7 @@ test('быстрая настройка на agy: пресет расставл�
   const d = l.page.getByRole('dialog', { name: 'Быстрая настройка' });
   await d.getByRole('radio', { name: 'agy' }).click();
   await d.getByRole('heading', { name: 'Быстрая настройка' }).click();
-  await expect(d.locator('.qs-row').filter({ hasText: 'Планировщик' })).toContainText('gemini-4-hydrogen-medium');
+  await expect(d.locator('.qs-row').filter({ hasText: 'Планировщик' })).toContainText('gemini-4-argon-medium');
   await expect(d.locator('.qs-row').filter({ hasText: 'Исполнитель' })).toContainText('gemini-3.8-flash-high');
   await d.getByRole('button', { name: 'Применить' }).click();
   await expect(d).toBeHidden();
@@ -48,7 +48,7 @@ test('быстрая настройка на agy: пресет расставл�
   const saved = JSON.parse(fs.readFileSync(settings, 'utf8'));
   expect(saved.agents.planner).toBe('agy');
   expect(saved.agents.reviewer).toBe('agy');
-  expect(saved.models.planner).toBe('gemini-4-hydrogen-medium');
+  expect(saved.models.planner).toBe('gemini-4-argon-medium');
   expect(saved.models.executor).toBe('gemini-3.8-flash-high');
 
   // Слаги моделей аккаунта подмешиваются в подсказки поля модели.

@@ -90,7 +90,7 @@ async function serviceOn(k: Kernel, agent: AgentKind, model: string | undefined,
     });
   }
   if (agent === 'agy') {
-    // Служебное на agy — без правки файлов: запись и команды запрещает сам CLI (--settings), на старых версиях — отказ.
+    // Служебное на agy — без правки файлов: запросы разрешений на запись и меняющие команды PurpleFlow отклоняет.
     return k.agy({
       ...common,
       model: model || agentModel(k, 'agy', s.agents, s.models) || undefined,
@@ -213,12 +213,12 @@ export async function runRole(
   }
   if (agent === 'agy') {
     // Схему ответа agy не принимает: формат JSON задаёт промпт, ответ разбирает parse.ts.
-    // Беседу продолжает --conversation по ID, который CLI выдал сам (init/result).
-    // Картинки флагом он не принимает — даём пути, агент откроет их своим read_file.
-    const images = o.images?.filter((f) => fs.existsSync(f)) ?? [];
+    // Беседу продолжает session/resume по ID, который agy выдал на session/new.
+    // Картинки уходят блоками image в промпте ACP.
     return k.agy({
       ...base,
-      prompt: images.length ? `${o.prompt}\n\nИзображения (открой и прочитай):\n${images.map((f) => `- ${f}`).join('\n')}` : o.prompt,
+      prompt: o.prompt,
+      images: o.images?.filter((f) => fs.existsSync(f)),
       systemPrompt: o.resume ? undefined : systemPrompt,
       model,
       effort,

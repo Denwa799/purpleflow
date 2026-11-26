@@ -22,8 +22,11 @@ export const MODEL_OPTIONS: Record<AgentKind, DropOption<string>[]> = {
   ],
   // Свои модели opencode — из его провайдеров (`opencode models`), подмешиваются в useModelOptions.
   opencode: [],
-  // Модели agy — из его аккаунта (`agy models`): подмешиваются так же, встроенного списка нет.
-  agy: [],
+  // Модели Gemini, которые есть в AI-прокси; модели аккаунта Google (`agy models`) подмешиваются в useModelOptions.
+  agy: [
+    { value: 'gemini-4-argon', label: 'gemini-4-argon', hint: 'Сильная — планирование и сложный код' },
+    { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash', hint: 'Быстрая — простые задачи' },
+  ],
 };
 
 /**
@@ -35,8 +38,8 @@ const OWN_FAMILY: Record<AgentKind, RegExp> = {
   codex: /^(gpt-|o\d|codex-)/,
   // «провайдер/модель» — провайдер пользователя; имя без провайдера opencode отправит в AI-прокси.
   opencode: /\//,
-  // agy работает только со своим аккаунтом Google: моделей прокси у него нет вовсе.
-  agy: /./,
+  // Gemini — модели Google: работают и через прокси, и через аккаунт Google.
+  agy: /^gemini-/,
 };
 /** Модель из списка, которая работает только через AI-прокси PurpleSchool. */
 export function proxyOnly(options: DropOption<string>[], model: string): boolean {
@@ -101,7 +104,10 @@ function mergeRemote(remote: ProxyModels): Record<AgentKind, DropOption<string>[
     claude: add('claude', remote.anthropic),
     codex: add('codex', remote.openai),
     opencode: add('opencode', remote.openai),
-    // Моделей agy в прокси PurpleSchool нет: он ходит только в свой аккаунт Google.
-    agy: MODEL_OPTIONS.agy,
+    // agy через прокси ходит в Gemini API: из списка OpenAI-совместимых моделей ему подходят только Gemini.
+    agy: add(
+      'agy',
+      remote.openai.filter((m) => /^gemini-/.test(m.id)),
+    ),
   };
 }

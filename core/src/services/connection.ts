@@ -129,12 +129,13 @@ export async function listOpencodeModels(k: Kernel, dir?: string): Promise<strin
 }
 
 /**
- * Модели agy: `agy models` печатает «слаг<TAB>название» — слаги зависят от тарифа Google-аккаунта,
+ * Модели agy без прокси: `agy models` печатает «слаг<TAB>название» — слаги зависят от тарифа Google-аккаунта,
  * поэтому встроенный список быстро устаревает. Список идёт через сеть, поэтому кэш на минуту
  * и никакой блокировки окна: подсказки приходят, когда придут.
  */
 export async function listAgyModels(k: Kernel): Promise<string[]> {
-  if (!(await k.hasTool('agy'))) return [];
+  // С AI-прокси agy ходит в модели прокси (их список приходит из прокси), а `agy models` требует входа в Google.
+  if (k.opts.getSettings().proxy.baseUrl || !(await k.hasTool('agy'))) return [];
   const bin = (await k.tools(['agy'])).agy;
   const key = `${bin}\0agy`;
   const hit = modelsCache.get(key);

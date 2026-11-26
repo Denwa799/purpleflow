@@ -54,7 +54,7 @@ export function useTrialLock(): TrialModel[] | null {
 
 /**
  * Пробная модель агента: claude — Anthropic, codex и opencode — OpenAI.
- * У agy пробной модели нет: он работает только со своим аккаунтом Google, а не с балансом PurpleSchool.
+ * У agy пробной модели нет: пробный баланс даёт модели Anthropic и OpenAI, а agy работает с Gemini.
  */
 export const trialModelOf = (agent: AgentKind, models: TrialModel[]) =>
   agent === 'agy' ? undefined : models.find((m) => m.provider === (agent === 'claude' ? 'ANTHROPIC' : 'OPENAI'));

@@ -26,7 +26,7 @@
 
 <img src="docs/screenshots/comparison.png" alt="Сравнение: одна модель в терминале и команда моделей с проверками в PurpleFlow" width="900">
 
-Своего агента в PurpleFlow нет: стадии выполняют установленные у вас `claude`, `codex`, `opencode` или `agy` (Antigravity CLI) — любой из них можно выключить в настройках. Через `opencode` подключаются любые провайдеры: OpenRouter, DeepSeek, локальные модели; `agy` работает по подписке Google Antigravity и своим входом. Приложение отвечает за порядок, проверки и ваши решения.
+Своего агента в PurpleFlow нет: стадии выполняют установленные у вас `claude`, `codex`, `opencode` или `agy` (Antigravity CLI) — любой из них можно выключить в настройках. Через `opencode` подключаются любые провайдеры: OpenRouter, DeepSeek, локальные модели; `agy` (Antigravity CLI) работает через AI-прокси PurpleSchool или через ваш аккаунт Google. Приложение отвечает за порядок, проверки и ваши решения.
 
 ## Как идёт задача
 
@@ -85,7 +85,7 @@ npm i -g @anthropic-ai/claude-code @openai/codex @fission-ai/openspec
 # по желанию — opencode и его провайдеры:
 npm i -g opencode-ai && opencode auth login
 # по желанию — Antigravity CLI 1.5+: пакета в npm нет, ставится установщиком Google
-# (https://antigravity.google/docs/cli/install), вход — при первом запуске `agy`.
+# (https://antigravity.google/docs/cli/install). С AI-прокси PurpleSchool вход в Google не нужен.
 # Работает не во всех странах: из неподдерживаемого региона аккаунт не пройдёт проверку доступности.
 ```
 

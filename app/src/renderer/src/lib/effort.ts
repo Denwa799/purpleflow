@@ -6,7 +6,7 @@ export const EFFORT_LEVELS: Record<AgentKind, readonly string[]> = {
   claude: ['low', 'medium', 'high', 'xhigh', 'max'],
   codex: ['low', 'medium', 'high', 'xhigh'],
   opencode: [],
-  agy: ['low', 'medium', 'high', 'xhigh', 'max'],
+  agy: ['low', 'medium', 'high', 'xhigh'],
 };
 
 const HINTS: Record<string, string> = {

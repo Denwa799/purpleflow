@@ -40,7 +40,8 @@ export const EFFORTS: Record<AgentKind, readonly string[]> = {
   claude: ['low', 'medium', 'high', 'xhigh', 'max'],
   codex: ['low', 'medium', 'high', 'xhigh'],
   opencode: [],
-  agy: ['low', 'medium', 'high', 'xhigh', 'max'],
+  // agy: суффикс модели (gemini-3.8-flash-high); xhigh есть не у всех моделей — тогда имя без суффикса.
+  agy: ['low', 'medium', 'high', 'xhigh'],
 };
 
 /** Уровень, если агент его понимает; иначе undefined — флаг не передаётся, решает CLI. */

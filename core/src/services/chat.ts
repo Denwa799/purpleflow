@@ -23,6 +23,7 @@ import type {
   PreviewState,
 } from '../types.js';
 import { effortFor, enabledAgent } from '../types.js';
+import { AGY_PROXY_DEFAULT_MODEL } from '../agents/agy.js';
 import { PROXY_DEFAULT_MODEL } from '../agents/opencode.js';
 import { agentModel, service, serviceAgent } from './agents.js';
 import { findMentions, listSkills, mentionsBlock, walkFiles } from './mentions.js';
@@ -433,10 +434,12 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
       let conv = session;
       res = await k.agy({
         ...common,
-        // Картинки agy флагом не принимает — даём пути: он откроет их своим read_file.
-        prompt: images.length ? `${prompt}\n\nИзображения (открой и прочитай):\n${images.map((f) => `- ${f}`).join('\n')}` : prompt,
+        prompt,
         systemPrompt: session ? undefined : sys,
+        images,
+        // Режимы чата: решения по каждому запросу разрешения agy (ACP), как песочницы codex и claude.
         readOnly: !chat.edits,
+        limited: chat.edits && !chat.fullAccess,
         resumeConversation: session,
         onSession: (sid) => {
           conv = sid;
@@ -629,7 +632,8 @@ export function chatDefaultModel(k: Kernel, agent: AgentKind): string {
   const s = k.opts.getSettings();
   const model = agentModel(k, agent, s.agents, s.models);
   // opencode с AI-прокси без своей модели идёт в модель прокси по умолчанию — её и показываем.
-  return model || (agent === 'opencode' && s.proxy.baseUrl ? PROXY_DEFAULT_MODEL : '');
+  if (model || !s.proxy.baseUrl) return model;
+  return agent === 'opencode' ? PROXY_DEFAULT_MODEL : agent === 'agy' ? AGY_PROXY_DEFAULT_MODEL : '';
 }
 
 /**
