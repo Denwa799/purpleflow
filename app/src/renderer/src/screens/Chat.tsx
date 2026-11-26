@@ -32,6 +32,8 @@ import { ACCESS_OPTIONS, accessOf, accessPatch, type ChatAccess } from '../lib/c
 import { formatPick, insertPick, type PickedElement } from '../lib/pickElement';
 import { PATH_DRAG, insertMention } from '../lib/mentions';
 import { ChatSide, ChatSideRail, useChatChanged, useSideWidth, type ChatPane } from './ChatSide';
+import { DictationButton } from '../components/Dictation';
+import { insertDictation } from '../lib/wav';
 import { bridge, cleanErr } from '../lib/api';
 
 const SUGGEST_PROJECT = ['Как устроен этот проект?', 'Где обрабатываются ошибки API?', 'Найди и поправь опечатки в README'];
@@ -561,6 +563,13 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
                 >
                   <FolderPlus size={16} />
                 </button>
+                <DictationButton
+                  onText={(t) => {
+                    const el = input.current;
+                    setText((prev) => insertDictation(prev, t, el?.selectionStart ?? prev.length).value);
+                    el?.focus();
+                  }}
+                />
                 <input
                   ref={fileInput}
                   type="file"

@@ -70,6 +70,8 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          # Диктовка: whisper-cli из исходников whisper.cpp (cmake и компилятор есть на раннерах GitHub).
+          node ../scripts/build-whisper.mjs
           npx electron-vite build
           args=()
           if [ "$RUNNER_OS" = macOS ] && [ -z "$CSC_LINK" ]; then

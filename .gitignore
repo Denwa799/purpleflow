@@ -7,3 +7,4 @@ release/
 *.tsbuildinfo
 e2e-results/
 e2e-report/
+app/whisper-bin/
