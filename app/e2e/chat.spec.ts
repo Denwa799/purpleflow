@@ -818,3 +818,38 @@ test('чат: папка в контексте — значок над поле�
     box.cleanup();
   }
 });
+
+test('боковая панель: «Все · Чаты · Задачи» фильтруют историю, выбор запоминается', async () => {
+  const box = makeSandbox();
+  const l = await launch(box);
+  const { page } = l;
+  try {
+    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('menuitem', { name: /Чат/ }).click();
+    const input = page.locator('.chat-compose textarea');
+    await input.fill('фильтр истории');
+    await input.press('Enter');
+    await expect(page.locator('.chat-msg.is-assistant')).toBeVisible({ timeout: 30_000 });
+
+    const history = page.getByRole('navigation', { name: 'История' });
+    const filter = page.locator('.side-filter');
+    await expect(filter.getByRole('tab', { name: 'Все' })).toHaveAttribute('aria-selected', 'true');
+    await expect(history).toContainText('фильтр истории');
+    await filter.getByRole('tab', { name: 'Задачи' }).click();
+    await expect(history).toContainText('Задач пока нет.');
+    await expect(history).not.toContainText('фильтр истории');
+    await filter.getByRole('tab', { name: 'Чаты' }).click();
+    await expect(history).toContainText('фильтр истории');
+    if (process.env.PURPLEFLOW_SHOTS) {
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: path.join(box.root, '..', 'pf-side-filter.png') });
+    }
+    // После перезапуска окна — та же вкладка.
+    await page.reload();
+    await expect(page.locator('.side-filter').getByRole('tab', { name: 'Чаты' })).toHaveAttribute('aria-selected', 'true');
+    expect(l.errors).toEqual([]);
+  } finally {
+    await quit(l);
+    box.cleanup();
+  }
+});

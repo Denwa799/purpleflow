@@ -4,6 +4,7 @@ import {
   ChevronDown,
   FolderGit2,
   Gift,
+  LayoutList,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -21,6 +22,7 @@ import { bridge } from '../lib/api';
 import { openWhatsNew, useUpdateState } from '../lib/update';
 import { recentProjects } from '../lib/recentProjects';
 import { UpdateButton, updatePending } from './WhatsNew';
+import { PillTabs } from './PillTabs';
 
 const STATUS_WORD: Record<RunSummary['status'], string> = {
   queued: 'в очереди',
@@ -29,6 +31,14 @@ const STATUS_WORD: Record<RunSummary['status'], string> = {
   stopped: 'остановлен',
   cancelled: 'отменён',
   finished: 'готово',
+};
+
+type Filter = 'all' | 'chats' | 'tasks';
+const FILTER_KEY = 'purpleflow.sideFilter';
+const EMPTY: Record<Filter, string> = {
+  all: 'Пока пусто. Создайте задачу или чат — они появятся здесь.',
+  chats: 'Чатов пока нет.',
+  tasks: 'Задач пока нет.',
 };
 
 type Item = { kind: 'run'; at: string; run: RunSummary } | { kind: 'chat'; at: string; chat: ChatSummary };
@@ -71,7 +81,27 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const { state, go } = useStore();
   const v = state.view;
   const update = useUpdateState();
-  const groups = useMemo(() => groupItems(state.runs, state.chats), [state.runs, state.chats]);
+  // История целиком, только чаты или только задачи — выбор запоминается.
+  const [filter, setFilterState] = useState<Filter>(() => {
+    try {
+      const f = localStorage.getItem(FILTER_KEY);
+      return f === 'chats' || f === 'tasks' ? f : 'all';
+    } catch {
+      return 'all';
+    }
+  });
+  const setFilter = (f: Filter) => {
+    setFilterState(f);
+    try {
+      localStorage.setItem(FILTER_KEY, f);
+    } catch {
+      /* без запоминания */
+    }
+  };
+  const groups = useMemo(
+    () => groupItems(filter === 'chats' ? [] : state.runs, filter === 'tasks' ? [] : state.chats),
+    [state.runs, state.chats, filter],
+  );
   // Пока не подключён ни один проект — кнопка «Как начать?» открывает онбординг первого проекта.
   const [projects, setProjects] = useState<ProjectListItem[] | null>(null);
   useEffect(() => {
@@ -213,7 +243,29 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         )}
       </div>
 
-      <nav className="side-list" aria-label="История">
+      <div className="side-filter">
+        <PillTabs<Filter>
+          className="tabs"
+          value={filter}
+          onChange={setFilter}
+          items={[
+            { id: 'all', label: 'Все', icon: <LayoutList size={14} /> },
+            { id: 'chats', label: 'Чаты', icon: <MessageSquare size={14} /> },
+            {
+              id: 'tasks',
+              label: 'Задачи',
+              icon: <Workflow size={14} />,
+              extra: waiting ? (
+                <span className="tab-badge is-wait" title="Ждут вашего решения">
+                  {waiting}
+                </span>
+              ) : undefined,
+            },
+          ]}
+        />
+      </div>
+
+      <nav className="side-list tab-enter" key={filter} aria-label="История">
         {!state.runsLoaded && (
           <div className="side-loading" aria-busy="true">
             <span className="spinner" />
@@ -221,7 +273,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           </div>
         )}
         {!state.runsLoaded && [0, 1, 2].map((i) => <div key={i} className="side-skel" style={{ animationDelay: `${i * 0.15}s` }} />)}
-        {state.runsLoaded && groups.length === 0 && <p className="side-empty">Пока пусто. Создайте задачу или чат — они появятся здесь.</p>}
+        {state.runsLoaded && groups.length === 0 && <p className="side-empty">{EMPTY[filter]}</p>}
         {groups.map((g) => (
           <section key={g.title} className={`side-group ${g.title === 'Ждут вас' ? 'is-attention' : ''}`}>
             <h4>{g.title}</h4>

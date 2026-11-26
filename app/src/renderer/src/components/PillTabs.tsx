@@ -77,8 +77,10 @@ export function PillTabs<T extends string>({
         const cs = getComputedStyle(c);
         return w + (cs.flexGrow === '0' ? c.offsetWidth : parseFloat(cs.minWidth) || 0);
       }, 0);
-      const gap = parseFloat(getComputedStyle(parent).columnGap) || 0;
-      const avail = parent.clientWidth - taken - gap * others.length;
+      const ps = getComputedStyle(parent);
+      const gap = parseFloat(ps.columnGap) || 0;
+      const pad = (parseFloat(ps.paddingLeft) || 0) + (parseFloat(ps.paddingRight) || 0);
+      const avail = parent.clientWidth - pad - taken - gap * others.length;
       const widths = [...(measure.current?.children ?? [])].map((c) => (c as HTMLElement).offsetWidth);
       const next = widths.findIndex((w) => w <= avail + 1);
       setLevel((next < 0 ? 2 : next) as 0 | 1 | 2);

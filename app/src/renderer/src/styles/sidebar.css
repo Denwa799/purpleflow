@@ -101,6 +101,33 @@
   background: var(--bg-4);
   color: var(--text-1);
 }
+/* «Все · Чаты · Задачи» над историей. */
+.side-filter {
+  flex: none;
+  display: flex;
+  padding: 0 var(--s-3) var(--s-3);
+}
+.side-filter .tabs {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+.side-filter .tabs {
+  gap: 0;
+  padding: 3px;
+}
+.side-filter .tab {
+  flex: 1;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--s-2);
+  font-size: var(--fs-12);
+}
+.side-filter .tab-badge.is-wait {
+  background: var(--wait);
+  color: var(--bg-0);
+}
 .side-list {
   flex: 1;
   min-height: 0;
