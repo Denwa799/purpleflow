@@ -233,6 +233,15 @@ test('чат: «@» подставляет файл проекта, «/» — с
     await claudeTab.click();
     const review = panel.locator('.skill-list li').filter({ has: page.locator('.skill-name', { hasText: /^review$/ }) });
     await expect(review).toContainText('Ревью по чек-листу');
+    // «Проект» раскрыт; заголовок сворачивает и снова разворачивает список. Ваши (если есть) — свёрнуты.
+    const projectHead = panel.getByRole('button', { name: /^Проект\s*\d+$/ });
+    await expect(projectHead).toHaveAttribute('aria-expanded', 'true');
+    await projectHead.click();
+    await expect(review).toHaveCount(0);
+    await projectHead.click();
+    await expect(review).toBeVisible();
+    const userHead = panel.getByRole('button', { name: /^Ваши — для всех проектов/ });
+    if (await userHead.count()) await expect(userHead).toHaveAttribute('aria-expanded', 'false');
     if (process.env.PF_SHOT) {
       await panel.scrollIntoViewIfNeeded();
       await page.screenshot({ path: process.env.PF_SHOT });

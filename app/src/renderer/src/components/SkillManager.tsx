@@ -1,5 +1,5 @@
 // Управление скиллами проекта: список по агентам с удалением и окно поиска по каталогу skills.sh с установкой.
-import { Check, Download, LoaderCircle, Search, Trash2, TriangleAlert, X } from 'lucide-react';
+import { Check, ChevronRight, Download, LoaderCircle, Search, Trash2, TriangleAlert, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentKind, ChatSkill, SkillHit } from '@purpleflow/core';
@@ -46,6 +46,9 @@ export function SkillGroups({
   const key = (a: AgentKind | null) => a ?? 'other';
   const [tab, setTab] = useState<string>(() => key(groups[0]?.agent ?? null));
   const current = groups.find((g) => key(g.agent) === tab) ?? groups[0];
+  // Свои скиллы проекта — раскрыты; ваши (из ~/.claude, ~/.agents…) обычно длинный список — свёрнуты, если есть проектные.
+  const hasProject = skills.some((s) => s.source === 'project');
+  const [open, setOpen] = useState<Record<ChatSkill['source'], boolean>>({ project: true, user: !hasProject });
 
   return (
     <div className="skill-groups">
@@ -67,28 +70,34 @@ export function SkillGroups({
           {(['project', 'user'] as const).map((src) => {
             const items = current.items.filter((s) => s.source === src).sort((a, b) => a.name.localeCompare(b.name));
             if (!items.length) return null;
+            const isOpen = open[src];
             return (
-              <section key={src} className="skill-source">
+              <section key={src} className={`skill-source ${isOpen ? 'is-open' : ''}`}>
                 <h4 className="skill-source-head">
-                  {SOURCE_TITLE[src]} <span className="muted">{items.length}</span>
+                  <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [src]: !o[src] }))}>
+                    <ChevronRight size={14} className="skill-source-chevron" />
+                    {SOURCE_TITLE[src]} <span className="muted">{items.length}</span>
+                  </button>
                 </h4>
-                <ul className="skill-list">
-                  {items.map((s) => (
-                    <SkillRow
-                      key={`${s.source}:${s.name}`}
-                      s={s}
-                      others={(s.agents ?? []).filter((a) => a !== current.agent && enabled.includes(a))}
-                      onRemove={async () => {
-                        setError(null);
-                        try {
-                          onChange(await removeSkill(projectPath, s));
-                        } catch (e) {
-                          setError(cleanErr(e));
-                        }
-                      }}
-                    />
-                  ))}
-                </ul>
+                {isOpen && (
+                  <ul className="skill-list">
+                    {items.map((s) => (
+                      <SkillRow
+                        key={`${s.source}:${s.name}`}
+                        s={s}
+                        others={(s.agents ?? []).filter((a) => a !== current.agent && enabled.includes(a))}
+                        onRemove={async () => {
+                          setError(null);
+                          try {
+                            onChange(await removeSkill(projectPath, s));
+                          } catch (e) {
+                            setError(cleanErr(e));
+                          }
+                        }}
+                      />
+                    ))}
+                  </ul>
+                )}
               </section>
             );
           })}

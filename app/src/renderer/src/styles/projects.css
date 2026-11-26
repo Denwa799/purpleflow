@@ -1137,10 +1137,33 @@
   gap: var(--s-5);
 }
 .skill-source-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
   margin: 0;
+}
+.skill-source-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-left: -4px;
+  padding: 4px;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.skill-source-head button:hover {
+  color: var(--text-1);
+}
+.skill-source-chevron {
+  transition: transform 0.18s var(--ease);
+}
+.skill-source.is-open .skill-source-chevron {
+  transform: rotate(90deg);
+}
+.skill-source .skill-list {
+  animation: expandIn 0.22s var(--ease) both;
+}
+.skill-source-head {
   color: var(--text-2);
   font-size: var(--fs-12);
   font-weight: 500;
