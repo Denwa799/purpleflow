@@ -1,11 +1,18 @@
 // Диктовка: кнопка микрофона у поля ввода и окно выбора модели whisper.cpp (скачивание по требованию).
-import { Check, LoaderCircle, Mic, Square, Trash2, X } from 'lucide-react';
+import { Check, Languages, LoaderCircle, Mic, Square, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DictationStatus } from '../../../shared/ipc';
 import { bridge, cleanErr } from '../lib/api';
 import { dictationPref, useDictation } from '../lib/useDictation';
+import { Select, type DropOption } from './Dropdown';
 import { Button } from './ui';
+
+const LANG_OPTIONS: DropOption<string>[] = [
+  { value: 'ru', label: 'Русский' },
+  { value: 'en', label: 'English' },
+  { value: 'auto', label: 'Определять сам', hint: 'По первым секундам речи; короткие фразы иногда путает' },
+];
 
 const mb = (n: number) => `${Math.round(n / 1_000_000)} МБ`;
 
@@ -198,20 +205,20 @@ export function DictationSetup({ onClose }: { onClose: (status?: DictationStatus
           })}
         </div>
         <footer className="qs-foot">
-          <label className="dictation-lang">
-            Язык речи
-            <select
+          <span className="dictation-lang">
+            <span id="dictation-lang">Язык речи</span>
+            <Select<string>
+              ariaLabel="Язык речи"
+              icon={<Languages size={14} />}
               value={lang}
-              onChange={(e) => {
-                setLang(e.target.value);
-                dictationPref.set('lang', e.target.value);
+              minWidth={240}
+              onChange={(v) => {
+                setLang(v);
+                dictationPref.set('lang', v);
               }}
-            >
-              <option value="ru">Русский</option>
-              <option value="en">English</option>
-              <option value="auto">Определять сам</option>
-            </select>
-          </label>
+              options={LANG_OPTIONS}
+            />
+          </span>
           <Button tone="primary" onClick={close} disabled={!status?.models.some((m) => m.ready)}>
             Готово
           </Button>
