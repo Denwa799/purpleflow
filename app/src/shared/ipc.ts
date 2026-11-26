@@ -1,4 +1,5 @@
 // Контракт IPC: мост окна (preload), сообщения main ↔ utilityProcess ядра. Сам API ядра — CoreApi в @purpleflow/core.
+import type { WindowTheme } from './themes';
 import type { CoreApi, AgentKind, Efforts, Models, CoreEvent, Role, ToolName } from '@purpleflow/core';
 import type { UpdateState } from './update';
 import type { ProxyModels } from './models';
@@ -22,6 +23,7 @@ export interface PublicSettings {
   maxParallel: number;
   onboarded: boolean;
   windowGlass: boolean;
+  windowTheme: WindowTheme;
   notify: boolean;
   sound: boolean;
   claudeAuth: 'login' | 'env';
@@ -49,6 +51,7 @@ export interface SettingsPatch {
   maxParallel?: number;
   onboarded?: boolean;
   windowGlass?: boolean;
+  windowTheme?: WindowTheme;
   notify?: boolean;
   sound?: boolean;
   claudeAuth?: 'login' | 'env';
@@ -336,6 +339,8 @@ export interface PurpleFlowBridge {
   platform: string;
   /** Материал окна при запуске: нативное стекло ОС или непрозрачный фон. */
   material: 'vibrancy' | 'acrylic' | 'none';
+  /** Тема фона на момент открытия окна — чтобы первая отрисовка была уже в её цвете. */
+  theme: WindowTheme;
   onMaterial(fn: (m: 'vibrancy' | 'acrylic' | 'none') => void): () => void;
 }
 

@@ -1,3 +1,4 @@
+import { applyTheme } from './lib/theme';
 import { init as initErrorReporting } from '@sentry/electron/renderer';
 import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/geist';
@@ -26,6 +27,8 @@ try {
 
 // Нативное стекло окна: CSS убирает непрозрачный фон и кладёт тонировку поверх обоев.
 document.documentElement.dataset.material = bridge.material;
+// Тема фона — до первой отрисовки; дальше её меняют настройки.
+applyTheme(bridge.theme);
 bridge.onMaterial((m) => (document.documentElement.dataset.material = m));
 
 createRoot(document.getElementById('root')!).render(

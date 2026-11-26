@@ -1,8 +1,10 @@
-// Вкладка «Приложение»: прозрачность окна, уведомления, обновления и место на диске.
+// Вкладка «Приложение»: прозрачность и цвет фона окна, уведомления, обновления и место на диске.
 import { Button } from '../../components/ui';
 import { bridge } from '../../lib/api';
 import { useStore } from '../../lib/store';
 import { StoragePanel } from './StoragePanel';
+import { THEMES } from '../../../../shared/themes';
+import { Check } from 'lucide-react';
 
 export function AppTab() {
   const { state, saveSettings } = useStore();
@@ -28,6 +30,24 @@ export function AppTab() {
             <span>{s.windowGlass ? 'Прозрачное' : 'Непрозрачное'}</span>
           </button>
         </header>
+        <div className="theme-pick" role="radiogroup" aria-label="Цвет фона">
+          <span className="theme-pick-label">Цвет фона</span>
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="radio"
+              aria-checked={s.windowTheme === t.id}
+              className={`theme-swatch ${s.windowTheme === t.id ? 'is-on' : ''}`}
+              onClick={() => void saveSettings({ windowTheme: t.id })}
+            >
+              <span className="theme-swatch-dot" style={{ background: t.swatch }}>
+                {s.windowTheme === t.id && <Check size={13} />}
+              </span>
+              {t.label}
+            </button>
+          ))}
+        </div>
       </section>
       <section className="panel">
         <header className="panel-head">

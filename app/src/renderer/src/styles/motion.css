@@ -196,14 +196,18 @@ html[data-material='vibrancy'] body,
 html[data-material='acrylic'] body {
   background: transparent;
 }
-/* Без прозрачности — тот же вид на ровном сером, близком к тому, что ОС кладёт под стекло. */
+/* Без прозрачности — тот же вид на ровном цвете темы (по умолчанию «Графит» — серый, как ОС под стеклом). */
 html[data-material='none'] body {
-  background: #2a2a2d;
+  background: var(--theme-bg, #252527);
 }
+/* В прозрачном окне тема — тонировка поверх размытого рабочего стола. */
 html[data-material='vibrancy'] .app,
-html[data-material='acrylic'] .app,
-html[data-material='none'] .app {
-  background: rgba(8, 9, 11, 0.16);
+html[data-material='acrylic'] .app {
+  background: var(--theme-tint, rgba(8, 9, 11, 0.16));
+  transition: background 0.4s var(--ease);
+}
+html[data-material='none'] body {
+  transition: background 0.4s var(--ease);
 }
 html[data-material='vibrancy'],
 html[data-material='acrylic'],
@@ -525,4 +529,51 @@ html[data-material] .tab.is-on {
 /* Поле ввода чата растёт плавно (высоту ставит Chat.tsx). */
 .chat-compose textarea {
   transition: height 0.12s var(--ease);
+}
+
+/* Выбор цвета фона в настройках */
+.theme-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-5);
+}
+.theme-pick-label {
+  margin-right: var(--s-3);
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+.theme-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 var(--s-4) 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: 500;
+  transition:
+    background 0.2s var(--ease),
+    color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+.theme-swatch:hover {
+  color: var(--text-1);
+  background: var(--bg-5);
+}
+.theme-swatch.is-on {
+  color: var(--text-1);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.theme-swatch-dot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  color: #fff;
 }

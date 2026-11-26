@@ -20,6 +20,7 @@ import {
 } from 'electron';
 import type { CoreCommand, CoreEvent, RunFile } from '@purpleflow/core';
 import type { CoreMethod, HostMessage, HostRequest, SettingsPatch } from '../shared/ipc';
+import { themeOf } from '../shared/themes';
 import { coreSettings, publicSettings, seenVersion, setSeenVersion, settingsReadable, updateSettings } from './settings';
 import { releases } from './releases';
 import { bugReportUrl } from '../shared/bugReport';
@@ -292,14 +293,14 @@ function materialFor(enabled: boolean): Material {
 }
 
 let material: Material = 'none';
-/** Фон окна без прозрачности до первой отрисовки — как серый фон страницы под тонировкой. */
-const OPAQUE_BG = '#252527';
+/** Фон окна без прозрачности до первой отрисовки — цвет выбранной темы. */
+const opaqueBg = () => themeOf(publicSettings().windowTheme).bg;
 
 function applyMaterial(w: BrowserWindow, m: Material) {
   material = m;
   if (process.platform === 'darwin') w.setVibrancy(m === 'vibrancy' ? 'under-window' : null);
   if (process.platform === 'win32' && materialFor(true) === 'acrylic') w.setBackgroundMaterial(m === 'acrylic' ? 'acrylic' : 'none');
-  w.setBackgroundColor(m === 'none' ? OPAQUE_BG : '#00000000');
+  w.setBackgroundColor(m === 'none' ? opaqueBg() : '#00000000');
   w.webContents.send('app:material', m);
 }
 
@@ -350,7 +351,7 @@ function createWindow() {
     minWidth: process.env.PURPLEFLOW_WIN ? 600 : 900,
     minHeight: 680,
     show: false,
-    backgroundColor: material === 'none' ? OPAQUE_BG : '#00000000',
+    backgroundColor: material === 'none' ? opaqueBg() : '#00000000',
     vibrancy: material === 'vibrancy' ? 'under-window' : undefined,
     visualEffectState: 'active',
     backgroundMaterial: material === 'acrylic' ? 'acrylic' : undefined,
@@ -433,12 +434,15 @@ ipcMain.on('app:error-reports:get', (e) => {
 ipcMain.on('app:material:get', (e) => {
   e.returnValue = material;
 });
+ipcMain.on('app:theme:get', (e) => {
+  e.returnValue = publicSettings().windowTheme;
+});
 handle('settings:set', (_e, patch: SettingsPatch) => {
   const firstSetup = patch.onboarded === true && !publicSettings().onboarded;
   const s = updateSettings(patch);
   syncUsageEvents();
   if (firstSetup) recordUsage('setup_completed');
-  if (patch.windowGlass !== undefined && win) applyMaterial(win, materialFor(s.windowGlass));
+  if ((patch.windowGlass !== undefined || patch.windowTheme !== undefined) && win) applyMaterial(win, materialFor(s.windowGlass));
   host?.process.postMessage({ kind: 'settings', settings: coreSettings() } satisfies HostRequest);
   return s;
 });

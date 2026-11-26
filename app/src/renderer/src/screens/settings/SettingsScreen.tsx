@@ -132,8 +132,8 @@ export function SettingsScreen() {
         </div>
       </div>
 
-      {/* На «Аккаунте» и «Статистике» всё применяется сразу — сохранять нечего. */}
-      {(first || (tab !== 'account' && tab !== 'stats')) && (
+      {/* На «Аккаунте», «Статистике» и «Приложении» всё применяется сразу — сохранять нечего. */}
+      {(first || (tab !== 'account' && tab !== 'stats' && tab !== 'window')) && (
         <footer className="actionbar">
           {error && <span className="actionbar-error">{error}</span>}
           {saved && <span className="actionbar-ok">Сохранено</span>}

@@ -102,6 +102,7 @@ const bridge: PurpleFlowBridge = {
   },
   platform: process.platform,
   material: ipcRenderer.sendSync('app:material:get'),
+  theme: ipcRenderer.sendSync('app:theme:get'),
   onMaterial(fn) {
     const h = (_: unknown, m: 'vibrancy' | 'acrylic' | 'none') => fn(m);
     ipcRenderer.on('app:material', h);

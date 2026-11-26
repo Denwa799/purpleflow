@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { applyTheme } from './lib/theme';
 import { Sidebar } from './components/Sidebar';
 import { WhatsNewHost } from './components/WhatsNew';
 import { useActions, useStore } from './lib/store';
@@ -45,6 +46,11 @@ export function App() {
       return !c;
     });
   const { go } = useActions();
+  // Тема фона меняется в настройках — окно перекрашивается сразу.
+  const theme = state.settings?.windowTheme;
+  useEffect(() => {
+    if (theme) applyTheme(theme);
+  }, [theme]);
   // Звук внимания (прогон ждёт решения, готов или упал) и переход к прогону по клику на уведомление.
   useEffect(() => {
     const offChime = bridge.onChime(chime);

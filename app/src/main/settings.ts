@@ -4,6 +4,7 @@ import path from 'node:path';
 import { app, safeStorage } from 'electron';
 import { enabledAgents, type AgentKind, type CoreSettings, type Efforts, type Role } from '@purpleflow/core';
 import type { PublicSettings, SettingsPatch } from '../shared/ipc';
+import { DEFAULT_THEME, themeOf, type WindowTheme } from '../shared/themes';
 import { diagnosticsFrom } from './diagnostics';
 import { ACCOUNT_ENABLED, DEFAULT_PROXY } from './provider';
 
@@ -23,6 +24,8 @@ interface StoredSettings {
   maxParallel: number;
   onboarded: boolean;
   windowGlass: boolean;
+  /** Цветовая тема фона окна. */
+  windowTheme: WindowTheme;
   /** Системные уведомления, когда прогон ждёт решения, готов или упал. */
   notify: boolean;
   /** Короткий звук в тех же случаях. */
@@ -57,6 +60,7 @@ const DEFAULTS: StoredSettings = {
   testTimeoutMin: 10,
   onboarded: false,
   windowGlass: true,
+  windowTheme: DEFAULT_THEME,
   notify: true,
   sound: true,
   claudeAuth: 'login',
@@ -116,6 +120,7 @@ function load(): StoredSettings {
     agents: { ...DEFAULTS.agents, ...raw.agents },
     toolPaths: { ...raw.toolPaths },
     enabledAgents: enabledAgents({ enabledAgents: raw.enabledAgents }),
+    windowTheme: themeOf(raw.windowTheme).id,
     diagnostics: diagnosticsFrom({ ...raw, errorReports, usageEvents }),
   };
   return cache;
@@ -246,6 +251,7 @@ export function publicSettings(): PublicSettings {
     maxParallel: s.maxParallel,
     onboarded: s.onboarded,
     windowGlass: s.windowGlass,
+    windowTheme: s.windowTheme,
     notify: s.notify,
     sound: s.sound,
     claudeAuth: s.claudeAuth,
@@ -311,6 +317,7 @@ export function updateSettings(patch: SettingsPatch): PublicSettings {
   if (patch.maxParallel !== undefined) s.maxParallel = patch.maxParallel;
   if (patch.onboarded !== undefined) s.onboarded = patch.onboarded;
   if (patch.windowGlass !== undefined) s.windowGlass = patch.windowGlass;
+  if (patch.windowTheme !== undefined) s.windowTheme = themeOf(patch.windowTheme).id;
   if (patch.notify !== undefined) s.notify = patch.notify;
   if (patch.sound !== undefined) s.sound = patch.sound;
   if (patch.claudeAuth !== undefined) s.claudeAuth = patch.claudeAuth;
