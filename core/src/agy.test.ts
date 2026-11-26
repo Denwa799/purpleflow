@@ -202,8 +202,17 @@ test('agyToolInput: аргументы agy переводятся в имена 
 });
 
 test('agyError: прокси, вход, регион и лимиты — понятными фразами', () => {
-  assert.match(agyError('Error 404, Message: Gemini model is unavailable', true), /модели нет в AI-прокси/);
+  assert.match(agyError('Error 404, Message: Gemini model is unavailable', true), /нет в AI-прокси/);
   assert.match(agyError('Error 401 API key not valid', true), /отклонил ключ/);
+  // Прокси не получил ответа у провайдера модели — понятная фраза с именем модели, а не сырой текст.
+  const upstream = agyError(
+    'generating and executing: Error 400, Message: API Route Gemini request failed, Status: INVALID_ARGUMENT, Details: []',
+    true,
+    'gemini-4-argon-low',
+  );
+  assert.match(upstream, /провайдер модели «gemini-4-argon» сейчас отвечает ошибкой/);
+  assert.match(upstream, /gemini-3\.8-flash/);
+  assert.match(agyError('Error 404 Gemini model is unavailable', true, 'gemini-4-neon'), /модели «gemini-4-neon» нет/);
   assert.match(agyError('Authentication required (-32000)', false), /Подключите AI-прокси/);
   const region = agyError('eligibility check failed', false);
   assert.match(region, /AI-прокси PurpleSchool/);
@@ -346,7 +355,7 @@ test('runAgy: ошибка модели из потока и ошибка вхо
   });
   const r1 = await runAgy(opts(a.bin, cwd, { proxy }));
   assert.equal(r1.ok, false);
-  assert.match(r1.error ?? '', /модели нет в AI-прокси/);
+  assert.match(r1.error ?? '', /нет в AI-прокси/);
   const b = fakeAgy(t, { failOn: 'session/new' });
   const r2 = await runAgy(opts(b.bin, cwd));
   assert.equal(r2.ok, false);
@@ -401,10 +410,10 @@ test('runAgy: в «Правках» спрашивает человека — о
   const o = opts(f.bin, cwd, {
     limited: true,
     // Молчание agy, пока человек думает, — не зависание.
-    idleTimeoutMs: 300,
+    idleTimeoutMs: 1500,
     askPermission: async (q) => {
       asked.push(q.id);
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 2000));
       return q.id === 'c1' ? 'always' : 'deny';
     },
     onAllow: (key) => kept.push(key),

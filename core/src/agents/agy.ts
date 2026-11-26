@@ -344,11 +344,15 @@ function rawToolOutput(u: Part): string {
 const EXECUTOR_ERROR = /⚠\s*agent executor error:\s*([\s\S]*)/;
 
 /** Сбой agy понятной фразой. */
-export function agyError(raw: string, proxy: boolean): string {
+export function agyError(raw: string, proxy: boolean, model?: string): string {
   const t = raw.toLowerCase();
+  const name = model ? `«${model.replace(EFFORT_SUFFIX, '')}»` : '';
   if (proxy) {
     if (/gemini model is unavailable|not_found|\b404\b/.test(t))
-      return 'agy: модели нет в AI-прокси PurpleSchool. Выберите модель Gemini из списка (например, gemini-3.8-flash или gemini-4-argon).';
+      return `agy: модели${name ? ` ${name}` : ''} нет в AI-прокси PurpleSchool. Выберите другую модель Gemini из списка, например ${AGY_PROXY_DEFAULT_MODEL}.`;
+    // Прокси не смог получить ответ у провайдера модели и прячет подробности: дело не в запросе, а в самой модели сейчас.
+    if (/api route gemini request failed|provider request failed|upstream_error|\b50[0-4]\b/.test(t))
+      return `agy: провайдер модели ${name || 'Gemini'} сейчас отвечает ошибкой на стороне AI-прокси PurpleSchool. Выберите другую модель, например ${AGY_PROXY_DEFAULT_MODEL}, или повторите позже.`;
     if (/\b401\b|\b403\b|api key not valid|invalid api key|unauthenticated|permission_denied/.test(t))
       return 'agy: прокси PurpleSchool отклонил ключ. Выберите действующий ключ в настройках, во вкладке «Аккаунт».';
   }
@@ -437,6 +441,7 @@ export async function runAgy(o: AgyOptions): Promise<AgentResult> {
   const denied = new Map<string, string>();
   const reported = new Set<string>();
   let rpc: Rpc | null = null;
+  let usedModel: string | undefined;
   let ctl: { pauseIdle: (paused: boolean) => void } | null = null;
   const allowed = new Set(o.allowed ?? []);
   let ready: () => void = () => {};
@@ -609,7 +614,7 @@ export async function runAgy(o: AgyOptions): Promise<AgentResult> {
         models = list(res);
         if (sessionId) o.onSession?.(sessionId);
       }
-      const model = agyModelId(o.model || (proxy ? AGY_PROXY_DEFAULT_MODEL : undefined), o.effort, models);
+      const model = (usedModel = agyModelId(o.model || (proxy ? AGY_PROXY_DEFAULT_MODEL : undefined), o.effort, models));
       if (model) await r.request('session/set_model', { sessionId, modelId: model });
       out(
         c.dim(
@@ -658,7 +663,12 @@ export async function runAgy(o: AgyOptions): Promise<AgentResult> {
   const raw = [agentError, protocolError, protocolError || !stopReason ? res.stderr.trim().slice(-1500) : ''].filter(Boolean).join('\n');
   if (agentError || protocolError || !stopReason) {
     if (res.stderr.trim()) out(c.coral(clip(res.stderr, 2000)) + '\n');
-    return { ok: false, text, usage, error: raw ? agyError(raw, proxy) : `agy: завершился без ответа (код выхода ${res.code ?? '—'})` };
+    return {
+      ok: false,
+      text,
+      usage,
+      error: raw ? agyError(raw, proxy, usedModel) : `agy: завершился без ответа (код выхода ${res.code ?? '—'})`,
+    };
   }
   if (stopReason === 'cancelled') return { ok: false, text, usage, stopped: true, error: 'Остановлено' };
   if (STOP_ERRORS[stopReason]) return { ok: false, text, usage, error: `agy: ${STOP_ERRORS[stopReason]}` };
