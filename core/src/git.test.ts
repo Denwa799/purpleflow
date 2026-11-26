@@ -252,3 +252,39 @@ test('stash: параллельные прогоны в двух worktree не �
   }
   assert.equal(g('stash', 'list').trim(), '', 'все записи убраны');
 });
+
+test('дифф: картинки и видео — обе версии байтами вместо «бинарный файл»; прочие бинарные — без них', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-git-'));
+  const g = (...a: string[]) => execFileSync('git', a, { cwd: dir });
+  const png = (n: number) => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, n]);
+  g('init', '-q');
+  fs.writeFileSync(path.join(dir, 'logo.png'), png(1));
+  fs.writeFileSync(path.join(dir, 'blob.bin'), Buffer.from([0, 1, 2]));
+  g('add', '-A');
+  g('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init');
+  const base = g('rev-parse', 'HEAD').toString().trim();
+  fs.writeFileSync(path.join(dir, 'logo.png'), png(2));
+  fs.writeFileSync(path.join(dir, 'clip.mp4'), Buffer.from([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70]));
+  fs.writeFileSync(path.join(dir, 'blob.bin'), Buffer.from([0, 9, 9]));
+  const git = new Git('git', process.env);
+
+  const check = (files: Awaited<ReturnType<Git['diff']>>) => {
+    const logo = files.find((f) => f.path === 'logo.png')!;
+    assert.equal(logo.binary, true);
+    assert.equal(logo.media?.mime, 'image/png');
+    assert.deepEqual([...logo.media!.original!], [...png(1)]);
+    assert.deepEqual([...logo.media!.modified!], [...png(2)]);
+    const clip = files.find((f) => f.path === 'clip.mp4')!;
+    assert.equal(clip.media?.mime, 'video/mp4');
+    assert.equal(clip.media?.original, undefined, 'новый файл — только «стало»');
+    assert.ok(clip.media?.modified?.length);
+    assert.equal(files.find((f) => f.path === 'blob.bin')!.media, undefined);
+  };
+  // Незакоммиченные изменения (чат, рабочая копия прогона).
+  check(await git.diff(dir, base));
+  // Между коммитами (завершённый прогон, вкладка «Git»).
+  g('add', '-A');
+  g('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'media');
+  check(await git.diffCommits(dir, base, 'HEAD'));
+  fs.rmSync(dir, { recursive: true, force: true });
+});

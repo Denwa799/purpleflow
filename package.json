@@ -8,6 +8,7 @@
     "installer"
   ],
   "scripts": {
+    "postinstall": "node scripts/fix-node-pty.mjs",
     "build:core": "npm run build -w @purpleflow/core",
     "dev": "npm run dev -w @purpleflow/app",
     "dev:installer": "npm run dev -w @purpleflow/installer",
@@ -36,5 +37,8 @@
   "engines": {
     "node": ">=22.18"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "allowScripts": {
+    "node-pty@1.1.0": true
+  }
 }

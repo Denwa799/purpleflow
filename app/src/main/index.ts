@@ -31,6 +31,7 @@ import { isSamePage, isWebUrl } from '../shared/urls';
 import type { UpdateState } from '../shared/update';
 import { errorReportingActive, initErrorReporting } from './error-reporting';
 import { chatWebBridge, registerChatTab, startChatWeb } from './chatweb';
+import { killAllTerminals, killTerminal, openTerminal, resizeTerminal, writeTerminal } from './terminal';
 import { ignoreClosedOutput } from './stdio';
 import {
   flushUsageEvents,
@@ -601,6 +602,12 @@ app.on('web-contents-created', (_e, contents) => {
 });
 
 // Браузер чата: окно сообщает о новой вкладке (webview) — мост отдаёт её агенту чата.
+// Терминал панели чата: оболочка в PTY — у каждого окна свои.
+handle('term:open', (e, o: { cwd: string; cols: number; rows: number }) => openTerminal(e.sender, o));
+handle('term:resize', (e, id: number, cols: number, rows: number) => resizeTerminal(e.sender, id, cols, rows));
+handle('term:kill', (e, id: number) => killTerminal(e.sender, id));
+ipcMain.on('term:write', (e, id: number, data: string) => writeTerminal(e.sender, id, data));
+
 handle('chatweb:tab', (e, chatId: string, wcId: number, reqId?: string) => registerChatTab(e.sender, chatId, wcId, reqId));
 
 handle('preview:emulate', (e, id: number, mobile: boolean) => {
@@ -698,7 +705,10 @@ function resumeAfterInstallFailure() {
   if (!host && !restartWait) startHost();
 }
 
-app.on('will-quit', () => clearTimeout(installAttempt?.timer));
+app.on('will-quit', () => {
+  clearTimeout(installAttempt?.timer);
+  killAllTerminals();
+});
 
 const onUpdateState = (u: UpdateState) => {
   if (installAttempt?.timer && u.kind === 'failed') resumeAfterInstallFailure();

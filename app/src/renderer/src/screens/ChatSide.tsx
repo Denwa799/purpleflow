@@ -1,5 +1,6 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { Activity, CircleAlert, FileCode2, FolderTree, GitBranch, Globe, Play, RefreshCw } from 'lucide-react';
+import { Activity, CircleAlert, FileCode2, FolderTree, GitBranch, Globe, Play, RefreshCw, SquareTerminal } from 'lucide-react';
+import { TerminalPane } from '../components/TerminalPane';
 import { GitView } from '../components/GitView';
 import { ChatFiles } from './ChatFiles';
 import { ChatRunPane } from './ChatRunPane';
@@ -13,7 +14,7 @@ import { DiffReview } from '../components/diff/DiffReview';
 import { Button, Empty } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
 
-export type ChatPane = 'session' | 'files' | 'code' | 'git' | 'run' | 'browser';
+export type ChatPane = 'session' | 'files' | 'code' | 'git' | 'run' | 'browser' | 'terminal';
 
 /** Изменённые файлы проекта чата — счётчик на кнопке «Код»; обновляется после каждого хода агента. */
 export function useChatChanged(chat: ChatFile | null, busy: boolean): string[] | null {
@@ -152,7 +153,7 @@ export function ChatSide({
       />
       {/* Название открытого инструмента: вкладок над ним нет, выбирается он в полосе справа. */}
       {/* У браузера заголовок — его собственные вкладки. */}
-      {pane !== 'browser' && (
+      {pane !== 'browser' && pane !== 'terminal' && (
         <header className="chat-side-head">
           {PANE_TITLE[pane].icon}
           <h2>{pane === 'files' && !chat.projectPath ? 'Файлы чата' : PANE_TITLE[pane].label}</h2>
@@ -181,6 +182,10 @@ export function ChatSide({
         {chat.projectPath && pane === 'run' && (
           <ChatRunPane projectPath={chat.projectPath} cfg={cfg} preview={preview} onOpenBrowser={() => onPane('browser')} />
         )}
+      </div>
+      <div className="chat-side-body" hidden={pane !== 'terminal'}>
+        {/* Терминал — в папке проекта, без проекта — в рабочей папке чата. Оболочки живут и при закрытой панели. */}
+        {pane === 'terminal' && <TerminalPane chatId={chat.id} cwd={chat.projectPath ?? workDir} />}
       </div>
       <div className="chat-side-body" hidden={pane !== 'browser'}>
         {/* Браузер общий с агентом (его вкладки и вкладки человека); без него (Windows) — встроенный браузер окна. */}
@@ -216,6 +221,7 @@ const PANE_TITLE: Record<ChatPane, { label: string; icon: ReactNode }> = {
   git: { label: 'Git', icon: <GitBranch size={16} /> },
   run: { label: 'Запуск приложения', icon: <Play size={16} /> },
   browser: { label: 'Браузер', icon: <Globe size={16} /> },
+  terminal: { label: 'Терминал', icon: <SquareTerminal size={16} /> },
 };
 
 /**
@@ -271,6 +277,7 @@ export function ChatSideRail({
       icon: <Globe size={16} />,
       extra: preview.state.status === 'ready' ? <span className="tab-dot is-ok" /> : null,
     },
+    { id: 'terminal', label: 'Терминал', icon: <SquareTerminal size={16} /> },
   ];
   const sessionTip = ctx
     ? `Сессия · контекст ${ctx.pct != null ? `${ctx.pct}% окна` : `${Math.round(ctx.used / 1000)} тыс. токенов`}`

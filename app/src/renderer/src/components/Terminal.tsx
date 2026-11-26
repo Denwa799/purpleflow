@@ -5,7 +5,7 @@ import { onCoreEvent } from '../lib/store';
 import { bridge } from '../lib/api';
 import { cut, type LogSlice } from '../lib/logSlice';
 
-const THEME = {
+export const THEME = {
   background: 'rgba(0,0,0,0)',
   foreground: '#c9cad0',
   cursor: '#8a74ee',

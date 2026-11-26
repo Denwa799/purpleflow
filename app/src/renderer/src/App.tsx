@@ -15,6 +15,7 @@ import { FirstProjectScreen } from './screens/FirstProject';
 import { bridge } from './lib/api';
 import { ChatWebHost } from './components/ChatWebHost';
 import { dropChat, getAllChatWebIds, isRunOwner } from './lib/chatWeb';
+import { dropChatTerminals, getAllTermChatIds } from './lib/terminals';
 
 const SIDEBAR_KEY = 'purpleflow.sidebarCollapsed';
 
@@ -25,6 +26,7 @@ export function App() {
   useEffect(() => {
     const ids = new Set(state.chats.map((c) => c.id));
     for (const id of getAllChatWebIds()) if (!isRunOwner(id) && !ids.has(id)) dropChat(id);
+    for (const id of getAllTermChatIds()) if (!ids.has(id)) dropChatTerminals(id);
   }, [state.chats]);
   const viewKey =
     v.name === 'chat'

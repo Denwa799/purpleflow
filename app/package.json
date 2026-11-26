@@ -51,5 +51,8 @@
     "typescript": "^5.7.0",
     "vite": "^7.1.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "node-pty": "1.1.0"
+  }
 }

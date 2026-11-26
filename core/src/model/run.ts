@@ -390,6 +390,17 @@ export interface DiffFile {
   original: string;
   modified: string;
   binary?: boolean;
+  /** Картинка или видео: обе версии байтами — окно показывает их вместо «бинарный файл». */
+  media?: DiffMedia;
+}
+
+export interface DiffMedia {
+  /** MIME-тип: image/… или video/…. */
+  mime: string;
+  /** Было и стало — байтами (окно показывает через blob-URL); нет — файла в этой версии нет или он больше предела. */
+  original?: Uint8Array;
+  modified?: Uint8Array;
+  tooLarge?: boolean;
 }
 
 export interface ClarifyQuestion {

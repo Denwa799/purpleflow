@@ -70,6 +70,23 @@ const bridge: PurpleFlowBridge = {
     ipcRenderer.on('preview:new-tab', h);
     return () => ipcRenderer.removeListener('preview:new-tab', h);
   },
+  terminal: {
+    open: (o) => ipcRenderer.invoke('term:open', o),
+    // Ввод — без ответа: печать не должна ждать main.
+    write: (id, data) => ipcRenderer.send('term:write', id, data),
+    resize: (id, cols, rows) => ipcRenderer.invoke('term:resize', id, cols, rows),
+    kill: (id) => ipcRenderer.invoke('term:kill', id),
+    onData(fn) {
+      const h = (_: unknown, id: number, data: string) => fn(id, data);
+      ipcRenderer.on('term:data', h);
+      return () => ipcRenderer.removeListener('term:data', h);
+    },
+    onExit(fn) {
+      const h = (_: unknown, id: number, code: number) => fn(id, code);
+      ipcRenderer.on('term:exit', h);
+      return () => ipcRenderer.removeListener('term:exit', h);
+    },
+  },
   chatWebTab: (chatId, id, reqId) => ipcRenderer.invoke('chatweb:tab', chatId, id, reqId),
   onChatWeb(fn) {
     const open = (_: unknown, chatId: string, url: string, reqId: string) => fn({ type: 'open', chatId, url, reqId });

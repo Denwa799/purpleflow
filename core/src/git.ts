@@ -1,8 +1,51 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { exec, run } from './proc.js';
-import type { DiffFile } from './types.js';
+import type { DiffFile, DiffMedia } from './types.js';
+
+/** Картинки и видео, которые окно умеет показать в диффе, — по расширению. */
+const MEDIA: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  bmp: 'image/bmp',
+  ico: 'image/x-icon',
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  ogv: 'video/ogg',
+};
+/** Больше — не тащим в окно: дифф ходит по IPC целиком. */
+const MEDIA_LIMIT = { image: 8 * 1024 * 1024, video: 30 * 1024 * 1024 };
+
+export function mediaType(file: string): string | null {
+  return MEDIA[path.extname(file).slice(1).toLowerCase()] ?? null;
+}
+
+/** Обе версии медиафайла для диффа; null — это не картинка и не видео. */
+function diffMedia(file: string, original: Buffer | null, modified: Buffer | null): DiffMedia | null {
+  const type = mediaType(file);
+  if (!type) return null;
+  const limit = MEDIA_LIMIT[type.startsWith('video/') ? 'video' : 'image'];
+  let tooLarge = false;
+  const bytes = (b: Buffer | null) => {
+    if (!b?.length) return undefined;
+    if (b.length > limit) {
+      tooLarge = true;
+      return undefined;
+    }
+    return new Uint8Array(b.buffer, b.byteOffset, b.length);
+  };
+  const m: DiffMedia = { mime: type, original: bytes(original), modified: bytes(modified) };
+  if (tooLarge) m.tooLarge = true;
+  return m;
+}
 
 /** Очередь операций по worktree: дифф для окна и коммит стадии не должны одновременно брать index.lock. */
 /** Вывод git status --porcelain -z: пути как есть, без кавычек; у переименования следом идёт старый путь. */
@@ -305,12 +348,21 @@ export class Git {
       const original = st === 'A' ? '' : await this.show(repo, base, oldPath);
       const modified = st === 'D' ? '' : await this.show(repo, head, newPath);
       const binary = original.includes('\0') || modified.includes('\0');
+      const media =
+        binary && mediaType(newPath)
+          ? diffMedia(
+              newPath,
+              st === 'A' ? null : await this.showBuffer(repo, base, oldPath),
+              st === 'D' ? null : await this.showBuffer(repo, head, newPath),
+            )
+          : null;
       files.push({
         path: newPath,
         status: st === 'A' || st === 'M' || st === 'D' || st === 'R' ? st : 'M',
         original: binary ? '' : original,
         modified: binary ? '' : modified,
         binary,
+        ...(media ? { media } : {}),
       });
     }
     return files;
@@ -383,12 +435,21 @@ export class Git {
       const notFile = Boolean(kind && !kind.isFile());
       const modified = kind?.isFile() ? fs.readFileSync(full, 'utf8') : '';
       const binary = notFile || original.includes('\0') || modified.includes('\0');
+      const media =
+        binary && !notFile && mediaType(newPath)
+          ? diffMedia(
+              newPath,
+              st === 'A' ? null : await this.showBuffer(worktree, base, oldPath),
+              kind?.isFile() ? fs.readFileSync(full) : null,
+            )
+          : null;
       files.push({
         path: newPath,
         status: st === 'A' || st === 'M' || st === 'D' || st === 'R' ? st : 'M',
         original: binary ? '' : original,
         modified: binary ? '' : modified,
         binary,
+        ...(media ? { media } : {}),
       });
     }
     return files;
@@ -480,6 +541,18 @@ export class Git {
   async show(cwd: string, rev: string, file: string): Promise<string> {
     const r = await run(this.bin, ['show', `${rev}:${file}`], { cwd, env: this.env, timeoutMs: 20_000 });
     return r.code === 0 ? r.stdout : '';
+  }
+
+  /** Файл в коммите как есть, байтами (картинки и видео для диффа); null — нет такого файла. */
+  showBuffer(cwd: string, rev: string, file: string): Promise<Buffer | null> {
+    return new Promise((resolve) =>
+      execFile(
+        this.bin,
+        ['show', `${rev}:${file}`],
+        { cwd, env: this.env, encoding: 'buffer', maxBuffer: 64 * 1024 * 1024, timeout: 30_000 },
+        (err, stdout) => resolve(err ? null : stdout),
+      ),
+    );
   }
 
   commitAll(worktree: string, message: string, exclude: string[] = []): Promise<string> {

@@ -10,6 +10,7 @@ import { PillTabs } from '../PillTabs';
 import { Button, TextArea } from '../ui';
 import { FileList, type FilesView } from './FileList';
 import { NoteList, PassedList, PlanCoverageList, planScore } from './ReviewNotes';
+import { DiffMediaView } from './DiffMediaView';
 import { langOf } from './monaco';
 import { buildTree, treeOrder } from './tree';
 import { fingerprint, useViewed } from './viewed';
@@ -387,7 +388,9 @@ export function DiffReview({
             </div>
           )}
           {file ? (
-            file.binary ? (
+            file.media ? (
+              <DiffMediaView key={file.path} file={file} media={file.media} />
+            ) : file.binary ? (
               <div className="diff-binary">Бинарный файл — дифф не показывается.</div>
             ) : (
               <DiffEditor

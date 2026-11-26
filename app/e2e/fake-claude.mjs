@@ -124,7 +124,15 @@ if (/QA-инженер в конвейере PurpleFlow/.test(sys)) {
   pw('resize', '390', '844');
   pw('screenshot', '--filename', 'mobile.png');
   if (/ДЕРЖИ_БРАУЗЕР/.test(prompt)) await new Promise((r) => setTimeout(r, 8000));
-  reply(JSON.stringify({ blocking: [], passed: ['Страница открылась, на 390px не ломается'], notes: [], shots: [{ file: 'mobile.png', caption: 'Телефон' }], unverified: null }));
+  reply(
+    JSON.stringify({
+      blocking: [],
+      passed: ['Страница открылась, на 390px не ломается'],
+      notes: [],
+      shots: [{ file: 'mobile.png', caption: 'Телефон' }],
+      unverified: null,
+    }),
+  );
 }
 
 if (/планировщик/.test(sys)) {

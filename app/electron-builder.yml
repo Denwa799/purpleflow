@@ -13,7 +13,9 @@ extraResources:
   # Диктовка: whisper-cli из scripts/build-whisper.mjs (macOS — универсальный, Windows и Linux — x64).
   - from: whisper-bin/${os}
     to: whisper
-asarUnpack: []
+# Терминал: нативный модуль node-pty и его spawn-helper запускаются только вне asar.
+asarUnpack:
+  - '**/node_modules/node-pty/**'
 npmRebuild: false
 # Канал обновлений: окно читает latest*.yml из опубликованного релиза. Черновики electron-updater не видит.
 publish:

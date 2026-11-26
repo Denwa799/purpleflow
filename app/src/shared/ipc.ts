@@ -316,6 +316,15 @@ export interface PurpleFlowBridge {
   onPreviewNewTab(fn: (fromId: number, url: string) => void): () => void;
   /** Браузер чата: вкладка (webview) готова — мост отдаёт её агенту; возвращает её id в CDP. */
   chatWebTab(chatId: string, webContentsId: number, reqId?: string): Promise<string | null>;
+  /** Терминал панели чата: оболочка пользователя в PTY (main-процесс). */
+  terminal: {
+    open(o: { cwd: string; cols: number; rows: number }): Promise<number>;
+    write(id: number, data: string): void;
+    resize(id: number, cols: number, rows: number): Promise<void>;
+    kill(id: number): Promise<void>;
+    onData(fn: (id: number, data: string) => void): () => void;
+    onExit(fn: (id: number, code: number) => void): () => void;
+  };
   /** Браузер чата: агент открыл, закрыл или выбрал вкладку. */
   onChatWeb(
     fn: (

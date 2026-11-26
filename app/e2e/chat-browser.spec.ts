@@ -255,7 +255,9 @@ test('визуальная проверка: браузер агента — ж�
     await page.getByRole('tab', { name: /Браузер/ }).click();
     // Страница приложения — в webview слоя окна, а не трансляцией.
     const view = page.locator('.chatweb-layer.is-shown webview:not(.is-hidden)');
-    await expect.poll(() => view.evaluate((w: Electron.WebviewTag) => w.getTitle()).catch(() => ''), { timeout: 180_000 }).toBe('Калькулятор');
+    await expect
+      .poll(() => view.evaluate((w: Electron.WebviewTag) => w.getTitle()).catch(() => ''), { timeout: 180_000 })
+      .toBe('Калькулятор');
     expect(await view.getAttribute('partition')).toMatch(/^purpleflow-run-/);
     // Агент задал телефонную ширину — она в кнопке размера и у самой страницы.
     await expect(page.getByRole('button', { name: 'Размер страницы' })).toContainText('390×844', { timeout: 30_000 });
