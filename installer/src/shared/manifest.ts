@@ -94,3 +94,36 @@ export function parseRegValue(output: string, name: string): string | undefined 
   }
   return undefined;
 }
+
+/** Как запущен установщик на Linux: от этого зависит, какой файл обновления ему подходит. */
+export type LinuxPackage = 'appimage' | 'deb' | 'rpm';
+
+/** Имя файла установщика в релизе — то же, что в ссылках README. null — для этой системы сборки нет. */
+export function installerAssetName(platform: string, arch: string, linux: LinuxPackage = 'appimage'): string | null {
+  if (platform === 'darwin') return 'PurpleFlow-Installer.dmg';
+  if (platform === 'win32') return arch === 'x64' || arch === 'arm64' ? `PurpleFlow-Installer-${arch}.exe` : null;
+  if (platform === 'linux' && arch === 'x64') {
+    return linux === 'deb'
+      ? 'PurpleFlow-Installer-amd64.deb'
+      : linux === 'rpm'
+        ? 'PurpleFlow-Installer-x86_64.rpm'
+        : 'PurpleFlow-Installer-x86_64.AppImage';
+  }
+  return null;
+}
+
+/** a новее b: сравнение X.Y.Z по числам; суффикс вроде -beta.1 считается старше релиза той же версии. */
+export function isNewerVersion(a: string, b: string): boolean {
+  const parse = (v: string) => {
+    const [core = '', pre] = v.trim().replace(/^v/, '').split('-', 2);
+    return { nums: core.split('.').map((n) => Number(n) || 0), pre: pre ?? '' };
+  };
+  const x = parse(a);
+  const y = parse(b);
+  for (let i = 0; i < 3; i++) {
+    const d = (x.nums[i] ?? 0) - (y.nums[i] ?? 0);
+    if (d) return d > 0;
+  }
+  if (!x.pre !== !y.pre) return !x.pre;
+  return x.pre > y.pre;
+}

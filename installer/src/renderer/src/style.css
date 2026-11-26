@@ -928,3 +928,44 @@ footer {
     transform: scale(1.08);
   }
 }
+
+/* ——— Новая версия установщика ——— */
+.upd {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  margin-bottom: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-m);
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  animation: rise 0.35s var(--ease);
+}
+.upd-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.upd-body b {
+  font-weight: 500;
+  font-size: var(--fs-13);
+}
+.upd-body span {
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+}
+.upd-body span.err {
+  color: var(--err);
+}
+.upd-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex: none;
+}
+.upd .spinner {
+  color: var(--accent-hi);
+}

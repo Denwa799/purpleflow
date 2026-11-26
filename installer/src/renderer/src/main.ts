@@ -15,7 +15,7 @@ import nodeIcon from './icons/node.svg';
 import gitIcon from './icons/git.svg';
 import crushIcon from './icons/crush.svg';
 import jetbrainsIcon from './icons/jetbrains.svg';
-import type { StepId, StepState } from '../../shared/types';
+import type { InstallerUpdate, StepId, StepState } from '../../shared/types';
 import type { ClientInfo, ClientResult, ConnectProgress } from '../../shared/connect';
 
 type Phase = 'loading' | 'ready' | 'busy';
@@ -92,6 +92,11 @@ const s = {
   authError: '',
   authInfo: '',
   authBusy: false,
+  /** Новая версия самого установщика: плашка «Обновить» над списком. */
+  update: null as InstallerUpdate | null,
+  updateState: 'idle' as 'idle' | 'downloading' | 'opened' | 'relaunching' | 'error',
+  updateProgress: 0,
+  updateText: '',
   /** Окно хода настройки: что делаем в этом запуске; null — окна нет. */
   job: null as null | { env: StepId[]; pf: boolean; enable: string[]; disable: string[]; done: boolean },
   stage: {} as Record<string, NonNullable<ConnectProgress['stage']>>,
@@ -489,6 +494,39 @@ function update() {
   else render();
 }
 
+function updateBanner(): string {
+  const u = s.update;
+  if (!u) return '';
+  const st = s.updateState;
+  const text =
+    st === 'downloading'
+      ? `Скачиваем${s.updateProgress ? ` · ${Math.round(s.updateProgress * 100)}%` : '…'}`
+      : st === 'relaunching'
+        ? 'Запускаем новую версию…'
+        : st === 'opened'
+          ? 'Открыли её из «Загрузок» — установите и запустите новую версию.'
+          : st === 'error'
+            ? s.updateText
+            : 'В ней свежие настройки подключений. Обновление займёт минуту.';
+  const action =
+    st === 'idle'
+      ? '<button class="btn btn-primary" data-act="self-update">Обновить</button>'
+      : st === 'error'
+        ? '<button class="btn btn-ghost" data-act="self-update">Ещё раз</button><button class="link small" data-act="update-page">Скачать вручную</button>'
+        : st === 'downloading'
+          ? '<span class="spinner"></span>'
+          : '';
+  return `
+    <div class="upd ${st}">
+      <div class="upd-body">
+        <b>Новая версия установщика · ${esc(u.version)}</b>
+        <span class="${st === 'error' ? 'err' : ''}">${esc(text)}</span>
+        ${st === 'downloading' ? `<div class="bar"><div style="width:${Math.round(s.updateProgress * 100)}%"></div></div>` : ''}
+      </div>
+      <div class="upd-actions">${action}</div>
+    </div>`;
+}
+
 function render() {
   const form = root.querySelector<HTMLFormElement>('form[data-form="auth"]');
   const saved = form ? Object.fromEntries(new FormData(form)) : {};
@@ -501,6 +539,7 @@ function render() {
         <h1>Установщик PurpleFlow</h1>
         <p class="lead">Включите, что поставить и подключить к моделям PurpleSchool, и нажмите «Настроить». Выключите — подключение уберётся. Терминал не понадобится.</p>
       </header>
+      ${updateBanner()}
       <div class="scroll">
         <div class="reqs"><span class="reqs-title">Обязательно</span>${envRow('node', 'Node.js')}${envRow('git', 'Git')}</div>
         <div class="section">Приложение</div>
@@ -629,7 +668,20 @@ document.addEventListener('click', async (e) => {
   const t = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
   const act = t?.dataset.act;
   if (!act) return;
-  if (act === 'close-job') {
+  if (act === 'self-update') {
+    s.updateState = 'downloading';
+    s.updateProgress = 0;
+    render();
+    const r = await api.selfUpdate.apply();
+    if (r.ok) s.updateState = r.relaunched ? 'relaunching' : 'opened';
+    else {
+      s.updateState = 'error';
+      s.updateText = r.error;
+    }
+    render();
+  } else if (act === 'update-page') {
+    await api.selfUpdate.openPage();
+  } else if (act === 'close-job') {
     s.job = null;
     render();
   } else if (act === 'toggle') {
@@ -683,6 +735,16 @@ api.connect.onProgress((p) => {
     s.running.delete(p.id);
     s.finished[p.id] = p.status;
   }
+  update();
+});
+
+api.selfUpdate.onProgress((p) => {
+  s.updateProgress = p;
+  update();
+});
+// Проверка обновления не задерживает экран: плашка появится, когда ответит GitHub.
+void api.selfUpdate.check().then((u) => {
+  s.update = u;
   update();
 });
 

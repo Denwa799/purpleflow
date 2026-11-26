@@ -119,7 +119,7 @@ async function describeFailure(res: Response): Promise<string> {
 }
 
 /** Ответ с телом от первого стека, который смог; иначе — ошибка с причиной каждой попытки. */
-async function fetchOk(url: string, timeoutMs: number, what: string): Promise<Response> {
+export async function fetchOk(url: string, timeoutMs: number, what: string): Promise<Response> {
   const failures: string[] = [];
   for (const a of ATTEMPTS) {
     if (a.delayMs) await new Promise((r) => setTimeout(r, a.delayMs));

@@ -102,3 +102,26 @@ test('путь установки читается из вывода reg query',
   assert.equal(parseRegValue(out, 'InstallLocation'), 'D:\\Apps\\Purple Flow');
   assert.equal(parseRegValue(out, 'ShortcutName'), undefined);
 });
+
+test('файл обновления установщика — под систему, архитектуру и способ установки', async () => {
+  const { installerAssetName } = await import('./manifest');
+  assert.equal(installerAssetName('darwin', 'arm64'), 'PurpleFlow-Installer.dmg');
+  assert.equal(installerAssetName('win32', 'x64'), 'PurpleFlow-Installer-x64.exe');
+  assert.equal(installerAssetName('win32', 'arm64'), 'PurpleFlow-Installer-arm64.exe');
+  assert.equal(installerAssetName('win32', 'ia32'), null);
+  assert.equal(installerAssetName('linux', 'x64', 'deb'), 'PurpleFlow-Installer-amd64.deb');
+  assert.equal(installerAssetName('linux', 'x64', 'rpm'), 'PurpleFlow-Installer-x86_64.rpm');
+  assert.equal(installerAssetName('linux', 'x64', 'appimage'), 'PurpleFlow-Installer-x86_64.AppImage');
+  assert.equal(installerAssetName('linux', 'arm64', 'deb'), null);
+});
+
+test('сравнение версий установщика', async () => {
+  const { isNewerVersion } = await import('./manifest');
+  assert.equal(isNewerVersion('0.9.0', '0.8.0'), true);
+  assert.equal(isNewerVersion('0.10.0', '0.9.9'), true);
+  assert.equal(isNewerVersion('0.8.0', '0.8.0'), false);
+  assert.equal(isNewerVersion('0.7.9', '0.8.0'), false);
+  assert.equal(isNewerVersion('0.8.0', '0.8.0-beta.1'), true);
+  assert.equal(isNewerVersion('0.8.0-beta.1', '0.8.0'), false);
+  assert.equal(isNewerVersion('v1.0.0', '0.9.0'), true);
+});

@@ -6,6 +6,7 @@ import type { ApplyRequest, ApplyResult, StepId, StepState } from '../shared/typ
 import type { WorkerResponse } from '../shared/connect';
 import * as account from './account';
 import { runWorker } from './connect';
+import { applyInstallerUpdate, checkInstallerUpdate, updatePage } from './selfupdate';
 import { checkGit, checkNode, ensureGit, ensureNode } from './environment';
 import { checkPurpleFlow, ensurePurpleFlow, launchPurpleFlow } from './purpleflow';
 
@@ -108,6 +109,9 @@ ipcMain.handle('installer:launch', async () => {
   return r;
 });
 ipcMain.handle('installer:report', () => clipboard.writeText(report()));
+ipcMain.handle('selfupdate:check', () => checkInstallerUpdate());
+ipcMain.handle('selfupdate:apply', () => applyInstallerUpdate((p) => win?.webContents.send('selfupdate:progress', p)));
+ipcMain.handle('selfupdate:page', () => shell.openExternal(updatePage()));
 ipcMain.handle('installer:downloads', () => shell.openExternal(RELEASES_PAGE));
 ipcMain.on('installer:quit', () => app.quit());
 

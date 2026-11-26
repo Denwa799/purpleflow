@@ -8,6 +8,16 @@ const bridge: InstallerBridge = {
   apply: (req) => ipcRenderer.invoke('installer:apply', req),
   launch: () => ipcRenderer.invoke('installer:launch'),
   copyReport: () => ipcRenderer.invoke('installer:report'),
+  selfUpdate: {
+    check: () => ipcRenderer.invoke('selfupdate:check'),
+    apply: () => ipcRenderer.invoke('selfupdate:apply'),
+    openPage: () => ipcRenderer.invoke('selfupdate:page'),
+    onProgress(fn) {
+      const h = (_: unknown, p: number) => fn(p);
+      ipcRenderer.on('selfupdate:progress', h);
+      return () => ipcRenderer.removeListener('selfupdate:progress', h);
+    },
+  },
   openDownloads: () => ipcRenderer.invoke('installer:downloads'),
   quit: () => ipcRenderer.send('installer:quit'),
   onStep(fn) {

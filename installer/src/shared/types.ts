@@ -45,6 +45,18 @@ export interface ApplyResult {
   connect?: WorkerResponse;
 }
 
+/** Новая версия самого установщика в последнем релизе. */
+export interface InstallerUpdate {
+  version: string;
+  file: string;
+  url: string;
+  sha256: string;
+  size: number;
+  page: string;
+}
+
+export type UpdateResult = { ok: true; relaunched: boolean; path: string } | { ok: false; error: string };
+
 export interface InstallerBridge {
   platform: string;
   check(): Promise<StepState[]>;
@@ -52,6 +64,12 @@ export interface InstallerBridge {
   apply(req: ApplyRequest): Promise<ApplyResult>;
   launch(): Promise<LaunchResult>;
   copyReport(): Promise<void>;
+  selfUpdate: {
+    check(): Promise<InstallerUpdate | null>;
+    apply(): Promise<UpdateResult>;
+    openPage(): Promise<void>;
+    onProgress(fn: (p: number) => void): () => void;
+  };
   openDownloads(): Promise<void>;
   quit(): void;
   onStep(fn: (s: StepState) => void): () => void;
