@@ -228,9 +228,10 @@ test('чат: «@» подставляет файл проекта, «/» — с
     await page.getByRole('button', { name: 'Открыть папку…' }).click();
     await page.getByRole('tab', { name: 'Обзор' }).click();
     const panel = page.locator('.overview-skills');
-    // Скиллы — группами по агентам: review из .claude/skills — у claude.
-    const claude = panel.locator('.skill-group').filter({ has: page.locator('.skill-group-head', { hasText: 'claude' }) });
-    const review = claude.locator('li').filter({ has: page.locator('.skill-name', { hasText: /^review$/ }) });
+    // Скиллы — вкладками по агентам с числом скиллов: review из .claude/skills — у claude.
+    const claudeTab = panel.getByRole('tab', { name: /^claude\s*\d+$/ });
+    await claudeTab.click();
+    const review = panel.locator('.skill-list li').filter({ has: page.locator('.skill-name', { hasText: /^review$/ }) });
     await expect(review).toContainText('Ревью по чек-листу');
     if (process.env.PF_SHOT) {
       await panel.scrollIntoViewIfNeeded();
@@ -244,7 +245,8 @@ test('чат: «@» подставляет файл проекта, «/» — с
         fs.rmSync(p, { recursive: true, force: true });
       }) as typeof shell.trashItem;
     });
-    await review.hover();
+    // Кнопка удаления видна сразу, без наведения.
+    await expect(review.getByRole('button', { name: 'Удалить review' })).toBeVisible();
     await review.getByRole('button', { name: 'Удалить review' }).click();
     await review.getByRole('button', { name: 'Удалить из проекта?' }).click();
     await expect(panel.locator('.skill-name', { hasText: /^review$/ })).toHaveCount(0);

@@ -7,9 +7,11 @@ import { bridge, cleanErr } from '../lib/api';
 import { useStore } from '../lib/store';
 import { useDialogClose } from '../lib/useDialogClose';
 import { Select } from './Dropdown';
+import { PillTabs } from './PillTabs';
 import { Button } from './ui';
 
-const SOURCE: Record<ChatSkill['source'], string> = { project: 'проект', user: 'ваш' };
+/** Подзаголовки вкладки: скиллы проекта и ваши — из ~/.claude, ~/.agents… */
+const SOURCE_TITLE: Record<ChatSkill['source'], string> = { project: 'Проект', user: 'Ваши — для всех проектов' };
 
 /** Удалить скилл: что не убрал `skills` CLI (положен руками), окно отправляет в корзину системы. */
 async function removeSkill(projectPath: string | undefined, s: ChatSkill): Promise<ChatSkill[]> {
@@ -41,36 +43,57 @@ export function SkillGroups({
   const orphan = skills.filter((s) => !s.agents?.some((a) => enabled.includes(a)));
   if (orphan.length) groups.push({ agent: null, items: orphan });
 
+  const key = (a: AgentKind | null) => a ?? 'other';
+  const [tab, setTab] = useState<string>(() => key(groups[0]?.agent ?? null));
+  const current = groups.find((g) => key(g.agent) === tab) ?? groups[0];
+
   return (
     <div className="skill-groups">
+      {groups.length > 1 && (
+        <PillTabs<string>
+          className="tabs skill-tabs"
+          value={current ? key(current.agent) : null}
+          onChange={setTab}
+          items={groups.map((g) => ({
+            id: key(g.agent),
+            label: g.agent ?? 'Только через «/»',
+            extra: <span className="tab-badge">{g.items.length}</span>,
+          }))}
+        />
+      )}
       {error && <p className="inline-error">{error}</p>}
-      {groups.map((g) => (
-        <section key={g.agent ?? 'other'} className="skill-group">
-          <h4 className="skill-group-head">
-            {g.agent ? <span className={`qs-agent qs-agent-${g.agent}`}>{g.agent}</span> : <span className="muted">Только через «/»</span>}
-            <span className="muted">{g.items.length}</span>
-          </h4>
-          <ul className="skill-list">
-            {[...g.items]
-              .sort((a, b) => Number(a.source !== 'project') - Number(b.source !== 'project') || a.name.localeCompare(b.name))
-              .map((s) => (
-                <SkillRow
-                  key={`${s.source}:${s.name}`}
-                  s={s}
-                  others={(s.agents ?? []).filter((a) => a !== g.agent && enabled.includes(a))}
-                  onRemove={async () => {
-                    setError(null);
-                    try {
-                      onChange(await removeSkill(projectPath, s));
-                    } catch (e) {
-                      setError(cleanErr(e));
-                    }
-                  }}
-                />
-              ))}
-          </ul>
-        </section>
-      ))}
+      {current && (
+        <div className="skill-sources tab-enter" key={key(current.agent)}>
+          {(['project', 'user'] as const).map((src) => {
+            const items = current.items.filter((s) => s.source === src).sort((a, b) => a.name.localeCompare(b.name));
+            if (!items.length) return null;
+            return (
+              <section key={src} className="skill-source">
+                <h4 className="skill-source-head">
+                  {SOURCE_TITLE[src]} <span className="muted">{items.length}</span>
+                </h4>
+                <ul className="skill-list">
+                  {items.map((s) => (
+                    <SkillRow
+                      key={`${s.source}:${s.name}`}
+                      s={s}
+                      others={(s.agents ?? []).filter((a) => a !== current.agent && enabled.includes(a))}
+                      onRemove={async () => {
+                        setError(null);
+                        try {
+                          onChange(await removeSkill(projectPath, s));
+                        } catch (e) {
+                          setError(cleanErr(e));
+                        }
+                      }}
+                    />
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -98,7 +121,7 @@ function SkillRow({ s, others, onRemove }: { s: ChatSkill; others: AgentKind[]; 
           {s.kind === 'command' ? '/' : ''}
           {s.name}
         </code>
-        <span className="tag">{s.plugin ? `плагин ${s.plugin}` : SOURCE[s.source]}</span>
+        {s.plugin && <span className="tag">плагин {s.plugin}</span>}
         {s.kind === 'command' && <span className="tag">команда</span>}
         {s.untracked && (
           <span className="tag is-wait" title="Скилл не в git: прогон в отдельной рабочей копии его не увидит. Закоммитьте его.">

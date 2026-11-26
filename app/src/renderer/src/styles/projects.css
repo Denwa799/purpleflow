@@ -1125,6 +1125,28 @@
   flex-direction: column;
   gap: var(--s-5);
 }
+.skill-tabs {
+  margin: 0;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.skill-sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+.skill-source-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
 .skill-group-head {
   display: flex;
   align-items: center;
@@ -1143,16 +1165,9 @@
   border-radius: 8px;
   color: var(--text-3);
   font-size: var(--fs-12);
-  opacity: 0;
   transition:
-    opacity 0.15s var(--ease),
     background 0.15s var(--ease),
     color 0.15s var(--ease);
-}
-.skill-list > li:hover .skill-del,
-.skill-del:focus-visible,
-.skill-del.is-confirm {
-  opacity: 1;
 }
 .skill-del:hover {
   background: var(--bg-5);
