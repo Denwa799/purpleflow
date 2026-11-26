@@ -1,6 +1,6 @@
 // Ядро оркестратора в отдельном utilityProcess: окно не подвисает ни от агентов, ни от git.
 import { init as initErrorReporting } from '@sentry/electron/utility';
-import { Orchestrator, killAll, loadLoginShellEnv, type CoreSettings } from '@purpleflow/core';
+import { Orchestrator, killAll, setChatWebBridge, loadLoginShellEnv, type CoreSettings } from '@purpleflow/core';
 import { coreMethodNames, type CoreApi, type HostMessage, type HostRequest } from '../shared/ipc';
 import { ignoreClosedOutput } from './stdio';
 
@@ -26,6 +26,7 @@ port.on('message', async (e: { data: HostRequest }) => {
   if (msg.kind === 'init') {
     try {
       settings = msg.settings as CoreSettings;
+      if (msg.chatWeb) setChatWebBridge(msg.chatWeb);
       const env = loadLoginShellEnv(process.env);
       core = new Orchestrator({ dataDir: msg.dataDir, promptsDir: msg.promptsDir, env, getSettings: () => settings });
       // Подписка до восстановления: события recover не должны теряться.

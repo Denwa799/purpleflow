@@ -20,7 +20,7 @@ test('browser: phone mode settles after one reload and returns to desktop', asyn
     await page.locator('.chat-compose textarea').fill('Привет');
     await page.keyboard.press('Enter');
     await page.locator('.chat-msg.is-assistant').waitFor();
-    await page.getByRole('button', { name: 'Браузер' }).first().click();
+    await page.getByRole('button', { name: 'Браузер', exact: true }).first().click();
     const side = page.locator('.chat-side');
     if (await side.getByRole('tab', { name: /Браузер/ }).count()) await side.getByRole('tab', { name: /Браузер/ }).click();
     await side.getByLabel('Адрес').fill(`127.0.0.1:${port}`);

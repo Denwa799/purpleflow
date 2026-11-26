@@ -13,12 +13,19 @@ import { WelcomeScreen } from './screens/Welcome';
 import { ChatScreen } from './screens/Chat';
 import { FirstProjectScreen } from './screens/FirstProject';
 import { bridge } from './lib/api';
+import { ChatWebHost } from './components/ChatWebHost';
+import { dropChat, getAllChatWebIds } from './lib/chatWeb';
 
 const SIDEBAR_KEY = 'purpleflow.sidebarCollapsed';
 
 export function App() {
   const { state } = useStore();
   const v = state.view;
+  // Чат удалили — закрываем вкладки его браузера.
+  useEffect(() => {
+    const ids = new Set(state.chats.map((c) => c.id));
+    for (const id of getAllChatWebIds()) if (!ids.has(id)) dropChat(id);
+  }, [state.chats]);
   const viewKey =
     v.name === 'chat'
       ? // Новый чат из разных проектов — разные экраны: иначе проект первого так и останется выбранным.
@@ -84,6 +91,8 @@ export function App() {
   return (
     <div className={`app os-${bridge.platform} ${collapsed ? 'is-collapsed' : ''}`}>
       <Sidebar collapsed={collapsed} onToggle={toggle} />
+      {/* Вкладки браузера чатов: живут здесь, панель «Браузер» только показывает их на своём месте. */}
+      <ChatWebHost />
       <main className="main">
         {/* Полоса сверху вместо заголовка окна: за неё окно перетаскивается. */}
         <div className="main-drag drag" aria-hidden />

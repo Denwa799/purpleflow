@@ -8,6 +8,8 @@ import type { PickedElement } from '../lib/pickElement';
 import { ChatSessionPane, ContextRing } from './ChatSessionPane';
 import type { ChatFile, DiffFile, ProjectConfig } from '@purpleflow/core';
 import { BrowserPane, usePreview, type useAgentScreen } from '../components/BrowserPane';
+import { ChatBrowser, useChatBrowserAvailable } from '../components/ChatBrowser';
+import { ChatWebPane } from '../components/ChatWebPane';
 import { DiffReview } from '../components/diff/DiffReview';
 import { Button, Empty } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
@@ -119,6 +121,7 @@ export function ChatSide({
   onResize: (e: ReactPointerEvent<HTMLDivElement>) => void;
   onResetWidth: () => void;
 }) {
+  const sharedBrowser = useChatBrowserAvailable();
   // Чат без проекта: агент работает во временной папке чата — её и показывает «Файлы».
   const [workDir, setWorkDir] = useState<string | null>(null);
   useEffect(() => {
@@ -184,20 +187,24 @@ export function ChatSide({
         )}
       </div>
       <div className="chat-side-body" hidden={pane !== 'browser'}>
-        {/* Браузер с вкладками человека; пока агент работает в своём браузере (pw) — рядом его вкладка «Агент». */}
-        <BrowserPane
-          agent={agentScreen}
-          agentControl={(action) => bridge.core.controlChatBrowser(chat.id, action)}
-          preview={preview}
-          canRun={canRun}
-          manual
-          onPick={onPick}
-          intro={
-            canRun
-              ? 'Приложение поднимется из папки проекта на свободном порту и откроется прямо здесь.'
-              : 'Откройте страницу своего локального сервера — проверьте, что поменял агент.'
-          }
-        />
+        {/* Есть Chrome — браузер общий с агентом (его вкладки и вкладки человека); нет — встроенный браузер окна. */}
+        {sharedBrowser === null ? null : sharedBrowser === 'webview' ? (
+          <ChatWebPane chatId={chat.id} preview={preview} canRun={canRun} busy={busy} onPick={onPick} />
+        ) : sharedBrowser && agentScreen ? (
+          <ChatBrowser chatId={chat.id} screen={agentScreen} preview={preview} canRun={canRun} busy={busy} onPick={onPick} />
+        ) : (
+          <BrowserPane
+            preview={preview}
+            canRun={canRun}
+            manual
+            onPick={onPick}
+            intro={
+              canRun
+                ? 'Приложение поднимется из папки проекта на свободном порту и откроется прямо здесь.'
+                : 'Откройте страницу своего локального сервера — проверьте, что поменял агент.'
+            }
+          />
+        )}
       </div>
     </section>
   );

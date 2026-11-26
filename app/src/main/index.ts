@@ -30,6 +30,7 @@ import { cancelDownload, dictationStatus, downloadModel, fakeMicFromEnv, micAcce
 import { isSamePage, isWebUrl } from '../shared/urls';
 import type { UpdateState } from '../shared/update';
 import { errorReportingActive, initErrorReporting } from './error-reporting';
+import { chatWebBridge, registerChatTab, startChatWeb } from './chatweb';
 import { ignoreClosedOutput } from './stdio';
 import {
   flushUsageEvents,
@@ -242,6 +243,7 @@ function startHost(): CoreHost {
     dataDir: path.join(app.getPath('userData'), 'data'),
     promptsDir: promptsDir(),
     settings: coreSettings(),
+    chatWeb: chatWebBridge() ?? undefined,
   };
   ready.catch(() => {});
   try {
@@ -583,6 +585,9 @@ app.on('web-contents-created', (_e, contents) => {
     const keepWeb = (ev: { preventDefault: () => void }, url: string) => {
       if (!browsable(url)) ev.preventDefault();
     };
+    // Окно прозрачное (vibrancy), и webview его наследует: страница без своего фона просвечивала бы серым.
+    // Белый — на уровне стилей пользователя: свой фон сайта всегда важнее.
+    contents.on('dom-ready', () => void contents.insertCSS('html { background-color: #fff; }', { cssOrigin: 'user' }).catch(() => {}));
     contents.on('will-navigate', keepWeb);
     contents.on('will-redirect', keepWeb);
     // loadURL из адресной строки вкладки — ни will-navigate, ни will-redirect не срабатывают.
@@ -591,6 +596,9 @@ app.on('web-contents-created', (_e, contents) => {
     });
   }
 });
+
+// Браузер чата: окно сообщает о новой вкладке (webview) — мост отдаёт её агенту чата.
+handle('chatweb:tab', (e, chatId: string, wcId: number, reqId?: string) => registerChatTab(e.sender, chatId, wcId, reqId));
 
 handle('preview:emulate', (e, id: number, mobile: boolean) => {
   const wc = webContents.fromId(id);
@@ -759,8 +767,10 @@ handle('notify:test', () => {
     }).show();
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (!primary) return;
+  // Мост браузера чата — до ядра: ядру при старте нужен его адрес.
+  await startChatWeb(() => (win && !win.isDestroyed() ? win.webContents : null)).catch((e) => console.error('[chatweb]', e));
   // Сквозные тесты на Linux-раннере: системного хранилища ключей нет, а без шифрования ключ и токен не сохранить.
   // Встроенный ключ — только для тестов; обычный запуск по-прежнему требует libsecret или KWallet.
   if (process.platform === 'linux' && process.env.PURPLEFLOW_E2E_PLAIN_STORAGE) safeStorage.setUsePlainTextEncryption(true);

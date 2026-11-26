@@ -236,6 +236,7 @@ export const CORE_METHODS: Record<CoreMethod, true> = {
   listChatFiles: true,
   chatWorkDir: true,
   controlChatBrowser: true,
+  chatBrowserAvailable: true,
   readChatFile: true,
   getGitGraph: true,
   getGitCommitDiff: true,
@@ -313,6 +314,17 @@ export interface PurpleFlowBridge {
   previewEmulate(webContentsId: number, mobile: boolean): Promise<void>;
   /** Вкладка «Браузер»: страница открыла ссылку в новом окне — fromId (webContentsId страницы) и адрес новой вкладки. */
   onPreviewNewTab(fn: (fromId: number, url: string) => void): () => void;
+  /** Браузер чата: вкладка (webview) готова — мост отдаёт её агенту; возвращает её id в CDP. */
+  chatWebTab(chatId: string, webContentsId: number, reqId?: string): Promise<string | null>;
+  /** Браузер чата: агент открыл, закрыл или выбрал вкладку. */
+  onChatWeb(
+    fn: (
+      e:
+        | { type: 'open'; chatId: string; url: string; reqId: string }
+        | { type: 'close' | 'select'; chatId: string; targetId: string }
+        | { type: 'size'; chatId: string; targetId: string; width: number; height: number },
+    ) => void,
+  ): () => void;
   /** Кэш Chromium самого приложения (HTTP, код, GPU): размер и очистка. */
   appCache: { size(): Promise<number>; clear(): Promise<void> };
   /** Звук внимания и переход к прогону по клику на уведомление. */
@@ -350,7 +362,7 @@ export interface PurpleFlowBridge {
 
 // Сообщения main ↔ utilityProcess.
 export type HostRequest =
-  | { kind: 'init'; dataDir: string; promptsDir: string; settings: unknown }
+  | { kind: 'init'; dataDir: string; promptsDir: string; settings: unknown; chatWeb?: { port: number; key: string } }
   | { kind: 'settings'; settings: unknown }
   | { kind: 'call'; id: number; method: CoreMethod; args: unknown[] }
   | { kind: 'shutdown'; id: number };

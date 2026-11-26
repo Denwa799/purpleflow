@@ -6,6 +6,7 @@ export { parseReview, parseQuestions, errorCount } from './parse.js';
 export { loadLoginShellEnv, detectTools, which } from './env.js';
 export { checkCommand, detectProjectCommands, findEnvFiles } from './detect.js';
 export { killAll, liveCount } from './proc.js';
+export { setChatWebBridge } from './services/chatbrowser.js';
 export { claudeArgs } from './agents/claude.js';
 export { codexArgs } from './agents/codex.js';
 export { Git } from './git.js';

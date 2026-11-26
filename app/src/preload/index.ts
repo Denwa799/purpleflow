@@ -70,6 +70,24 @@ const bridge: PurpleFlowBridge = {
     ipcRenderer.on('preview:new-tab', h);
     return () => ipcRenderer.removeListener('preview:new-tab', h);
   },
+  chatWebTab: (chatId, id, reqId) => ipcRenderer.invoke('chatweb:tab', chatId, id, reqId),
+  onChatWeb(fn) {
+    const open = (_: unknown, chatId: string, url: string, reqId: string) => fn({ type: 'open', chatId, url, reqId });
+    const close = (_: unknown, chatId: string, targetId: string) => fn({ type: 'close', chatId, targetId });
+    const select = (_: unknown, chatId: string, targetId: string) => fn({ type: 'select', chatId, targetId });
+    const size = (_: unknown, chatId: string, targetId: string, width: number, height: number) =>
+      fn({ type: 'size', chatId, targetId, width, height });
+    ipcRenderer.on('chatweb:size', size);
+    ipcRenderer.on('chatweb:open', open);
+    ipcRenderer.on('chatweb:close', close);
+    ipcRenderer.on('chatweb:select', select);
+    return () => {
+      ipcRenderer.removeListener('chatweb:size', size);
+      ipcRenderer.removeListener('chatweb:open', open);
+      ipcRenderer.removeListener('chatweb:close', close);
+      ipcRenderer.removeListener('chatweb:select', select);
+    };
+  },
   appCache: { size: () => ipcRenderer.invoke('cache:size'), clear: () => ipcRenderer.invoke('cache:clear') },
   onChime(fn) {
     const h = () => fn();

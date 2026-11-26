@@ -149,6 +149,9 @@ export interface CoreApi {
   chatWorkDir(id: string): Promise<string>;
   /** Человек управляет браузером агента чата из вкладки «Браузер»: навигация, телефон, мышь, клавиши, скрипт выбора. */
   controlChatBrowser(id: string, action: ChatBrowserAction): Promise<unknown>;
+  /** Есть ли браузер чата на этой машине (Chrome); нет — окно показывает свой встроенный браузер. */
+  /** webview — настоящие вкладки окна (мост main), stream — Chrome без окна с трансляцией, false — нет. */
+  chatBrowserAvailable(): Promise<'webview' | 'stream' | false>;
   /** Файл проекта для просмотра в чате: до 512 КБ, двоичный — без содержимого. */
   readChatFile(projectPath: string, rel: string): Promise<ChatFileContent>;
   /** Вкладка «Git»: ветки и история с графом (только просмотр). */

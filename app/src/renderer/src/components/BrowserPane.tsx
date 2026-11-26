@@ -270,7 +270,7 @@ const BrowserTab = forwardRef<
 });
 
 /** Мышь и клавиши на кадре браузера агента — в его страницу (координаты — доли кадра). */
-function frameInput(ctl: (a: Parameters<typeof bridge.core.controlChatBrowser>[1]) => Promise<unknown>) {
+export function frameInput(ctl: (a: Parameters<typeof bridge.core.controlChatBrowser>[1]) => Promise<unknown>) {
   const at = (e: { clientX: number; clientY: number; currentTarget: Element }) => {
     const r = e.currentTarget.getBoundingClientRect();
     return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
@@ -280,21 +280,21 @@ function frameInput(ctl: (a: Parameters<typeof bridge.core.controlChatBrowser>[1
   const mods = (e: { altKey: boolean; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) =>
     (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
   return {
-    onMouseMove: (e: React.MouseEvent<HTMLImageElement>) => {
+    onMouseMove: (e: React.MouseEvent<HTMLElement>) => {
       const now = Date.now();
       if (now - lastMove < 50) return;
       lastMove = now;
       void ctl({ type: 'mouse', event: 'move', ...at(e) });
     },
-    onMouseDown: (e: React.MouseEvent<HTMLImageElement>) => {
+    onMouseDown: (e: React.MouseEvent<HTMLElement>) => {
       e.currentTarget.focus();
       void ctl({ type: 'mouse', event: 'down', ...at(e), button: button(e.button), clicks: e.detail || 1 });
     },
-    onMouseUp: (e: React.MouseEvent<HTMLImageElement>) =>
+    onMouseUp: (e: React.MouseEvent<HTMLElement>) =>
       void ctl({ type: 'mouse', event: 'up', ...at(e), button: button(e.button), clicks: e.detail || 1 }),
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
-    onWheel: (e: React.WheelEvent<HTMLImageElement>) => void ctl({ type: 'wheel', ...at(e), dx: e.deltaX, dy: e.deltaY }),
-    onKeyDown: (e: React.KeyboardEvent<HTMLImageElement>) => {
+    onWheel: (e: React.WheelEvent<HTMLElement>) => void ctl({ type: 'wheel', ...at(e), dx: e.deltaX, dy: e.deltaY }),
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
       e.preventDefault();
       void ctl({
         type: 'key',
@@ -309,10 +309,12 @@ function frameInput(ctl: (a: Parameters<typeof bridge.core.controlChatBrowser>[1
 }
 
 const noSubscribe = () => () => {};
-const noView = (): AgentView => ({ frame: null, action: null });
+/** Один и тот же объект: useSyncExternalStore иначе перерисовывал бы без конца. */
+const NO_VIEW: AgentView = { frame: null, action: null };
+const noView = (): AgentView => NO_VIEW;
 
 /** Подпись вкладки: заголовок страницы, иначе хост, иначе «Новая вкладка». */
-const tabLabel = (t: { title: string; address: string }) => {
+export const tabLabel = (t: { title: string; address: string }) => {
   if (t.title.trim()) return t.title.trim();
   try {
     return t.address ? new URL(t.address).host || t.address : 'Новая вкладка';

@@ -30,6 +30,7 @@ import { enabledList } from '../lib/tools';
 import { EFFORT_LEVELS, effortOf, effortOptions } from '../lib/effort';
 import { ACCESS_OPTIONS, accessOf, accessPatch, type ChatAccess } from '../lib/chatAccess';
 import { formatPick, insertPick, type PickedElement } from '../lib/pickElement';
+import { useChatWeb } from '../lib/chatWeb';
 import { useAgentScreen } from '../components/BrowserPane';
 import { PATH_DRAG, insertMention, mentionSegments } from '../lib/mentions';
 import { ChatSide, ChatSideRail, useChatChanged, useSideExit, useSideWidth, type ChatPane } from './ChatSide';
@@ -357,6 +358,14 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
     if (agentScreen.live && !pane) setPane('browser');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentScreen.live]);
+  // Агент открыл вкладку в браузере чата (webview) — показываем её.
+  const agentOpened = useChatWeb(chat?.id ?? '').agentOpened;
+  const seenOpened = useRef(agentOpened);
+  useEffect(() => {
+    if (agentOpened > seenOpened.current && pane !== 'browser') setPane('browser');
+    seenOpened.current = agentOpened;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentOpened]);
   // Закрытая панель ещё доигрывает анимацию, прежде чем уступить место полосе.
   const [shownPane, closingPane] = useSideExit(sidePane);
   const toolOk = (a: AgentKind) => Boolean(state.tools?.[a]?.path && !state.tools[a].error);
