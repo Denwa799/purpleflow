@@ -563,13 +563,6 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
                 >
                   <FolderPlus size={16} />
                 </button>
-                <DictationButton
-                  onText={(t) => {
-                    const el = input.current;
-                    setText((prev) => insertDictation(prev, t, el?.selectionStart ?? prev.length).value);
-                    el?.focus();
-                  }}
-                />
                 <input
                   ref={fileInput}
                   type="file"
@@ -616,6 +609,13 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
                   />
                 )}
                 <span className="chat-compose-end">
+                  <DictationButton
+                    onText={(t) => {
+                      const el = input.current;
+                      setText((prev) => insertDictation(prev, t, el?.selectionStart ?? prev.length).value);
+                      el?.focus();
+                    }}
+                  />
                   {busy && (
                     <button
                       type="button"
