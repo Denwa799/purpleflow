@@ -151,8 +151,13 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
   useLayoutEffect(() => {
     const el = input.current;
     if (!el) return;
+    // Высоту меряем через auto, но анимируем от прежней к новой: из auto переход не идёт.
+    const prev = el.style.height;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+    const next = `${Math.min(el.scrollHeight, 240)}px`;
+    el.style.height = prev;
+    void el.offsetHeight;
+    el.style.height = next;
   }, [text]);
 
   useEffect(() => input.current?.focus(), [chatId]);

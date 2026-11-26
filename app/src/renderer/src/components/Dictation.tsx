@@ -7,6 +7,7 @@ import { bridge, cleanErr } from '../lib/api';
 import { dictationPref, useDictation } from '../lib/useDictation';
 import { Select, type DropOption } from './Dropdown';
 import { Button } from './ui';
+import { useDialogClose } from '../lib/useDialogClose';
 
 const LANG_OPTIONS: DropOption<string>[] = [
   { value: 'ru', label: 'Русский' },
@@ -98,7 +99,8 @@ export function DictationButton({ onText, className = '' }: { onText: (text: str
 }
 
 /** Окно моделей: скачать, выбрать, удалить; язык распознавания. */
-export function DictationSetup({ onClose }: { onClose: (status?: DictationStatus) => void }) {
+export function DictationSetup({ onClose: closeNow }: { onClose: (status?: DictationStatus) => void }) {
+  const { closing, close: onClose } = useDialogClose(closeNow);
   const [status, setStatus] = useState<DictationStatus | null>(cached);
   const [progress, setProgress] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
@@ -147,7 +149,7 @@ export function DictationSetup({ onClose }: { onClose: (status?: DictationStatus
   const close = () => onClose(cached ?? undefined);
 
   return createPortal(
-    <div className="qs-scrim" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+    <div className={`qs-scrim ${closing ? 'is-closing' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <div className="qs dictation-setup" role="dialog" aria-modal aria-labelledby="dictation-title">
         <header className="qs-head">
           <div>
