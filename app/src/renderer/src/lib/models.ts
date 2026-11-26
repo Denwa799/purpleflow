@@ -58,9 +58,21 @@ export function mergeModelOptions(
   remote: ProxyModels | null,
   opencode: string[] = [],
   agy: string[] = [],
+  /** Агенты идут через AI-прокси (ключ есть и включён). */
+  viaProxy = false,
 ): Record<AgentKind, DropOption<string>[]> {
   const base = remote ? mergeRemote(remote) : MODEL_OPTIONS;
-  return withLocal(withLocal(base, 'opencode', opencode), 'agy', agy);
+  const out = withLocal(base, 'opencode', opencode);
+  // agy ходит либо в прокси, либо в аккаунт Google — смешивать списки нельзя: модель аккаунта через прокси даёт 404.
+  // С прокси — только Gemini из прокси. Без него — все модели аккаунта (`agy models`); пока их нет (не вошёл,
+  // список не пришёл) — модели прокси: их имена agy принимает и со своим входом.
+  if (!viaProxy && agy.length) out.agy = agyAccountOptions(agy);
+  return out;
+}
+
+/** Модели аккаунта Google: слаг с уровнем рассуждений, название — из `agy models` нет, подсказка — уровень. */
+function agyAccountOptions(list: string[]): DropOption<string>[] {
+  return [...new Set(list)].map((m) => ({ value: m, label: m }));
 }
 
 /** Модели, которые агент перечисляет сам (свои провайдеры, аккаунт) — первыми: они работают без AI-прокси. */

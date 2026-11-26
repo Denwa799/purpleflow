@@ -4,6 +4,7 @@ import type { DropOption } from '../components/Dropdown';
 import type { ProxyModels } from '../../../shared/models';
 import { bridge } from './api';
 import { mergeModelOptions } from './models';
+import { useStore } from './store';
 
 /** Один запрос на всё окно: main кэширует ответ, здесь — только чтобы не дёргать IPC на каждый экран. */
 let loaded: Promise<ProxyModels | null> | null = null;
@@ -21,6 +22,8 @@ export function useModelOptions(dir?: string): Record<AgentKind, DropOption<stri
   const [remote, setRemote] = useState(last);
   const [opencode, setOpencode] = useState(opencodeLast);
   const [agy, setAgy] = useState(agyLast);
+  const { state } = useStore();
+  const viaProxy = Boolean(state.settings?.proxy.enabled && state.settings.proxy.hasKey);
   useEffect(() => {
     let alive = true;
     loaded ??= bridge.proxyModels().catch(() => null);
@@ -43,6 +46,7 @@ export function useModelOptions(dir?: string): Record<AgentKind, DropOption<stri
     return () => {
       alive = false;
     };
-  }, [dir]);
-  return useMemo(() => mergeModelOptions(remote, opencode, agy), [remote, opencode, agy]);
+    // Прокси включили или выключили — список agy другой (с прокси ядро моделей аккаунта не спрашивает).
+  }, [dir, viaProxy]);
+  return useMemo(() => mergeModelOptions(remote, opencode, agy, viaProxy), [remote, opencode, agy, viaProxy]);
 }

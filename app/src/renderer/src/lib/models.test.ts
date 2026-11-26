@@ -49,11 +49,23 @@ test('proxyOnly: только помеченные модели из списк�
   assert.equal(proxyOnly(m.codex, ''), false);
 });
 
-test('mergeModelOptions: agy получает из прокси только Gemini, без пометки подписки; модели аккаунта — первыми', () => {
-  const m = mergeModelOptions(remote, [], ['gemini-4-neon-high']);
+test('mergeModelOptions: agy с прокси — только Gemini из прокси, без него — все модели аккаунта Google', () => {
+  const account = ['gemini-4-neon-high', 'gemini-3.8-flash-low'];
+  // С прокси модели аккаунта скрыты, даже если список пришёл: через прокси они дают 404.
+  const proxied = mergeModelOptions(remote, [], account, true);
   assert.deepEqual(
-    m.agy.map((o) => o.value),
-    ['gemini-4-neon-high', 'gemini-3.8-flash', 'gemini-4-argon'],
+    proxied.agy.map((o) => o.value),
+    ['gemini-3.8-flash', 'gemini-4-argon'],
   );
-  assert.ok(m.agy.every((o) => o.badge === undefined));
+  assert.ok(proxied.agy.every((o) => o.badge === undefined));
+  // Своя подписка — только модели аккаунта, моделей прокси в списке нет.
+  assert.deepEqual(
+    mergeModelOptions(remote, [], account, false).agy.map((o) => o.value),
+    account,
+  );
+  // Аккаунт ещё не ответил — модели прокси: их имена agy принимает и со своим входом.
+  assert.deepEqual(
+    mergeModelOptions(remote, [], [], false).agy.map((o) => o.value),
+    ['gemini-3.8-flash', 'gemini-4-argon'],
+  );
 });
