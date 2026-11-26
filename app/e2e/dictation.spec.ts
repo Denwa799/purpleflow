@@ -22,7 +22,10 @@ test('диктовка: без модели — окно выбора; с мод
     await l.page.getByRole('button', { name: 'Диктовка', exact: true }).click();
     const dialog = l.page.getByRole('dialog', { name: 'Диктовка' });
     await expect(dialog.getByRole('radio')).toHaveCount(3);
-    if (process.env.PURPLEFLOW_SHOTS) await l.page.screenshot({ path: path.join(box.root, '..', 'pf-dictation-setup.png') });
+    if (process.env.PURPLEFLOW_SHOTS) {
+      await l.page.waitForTimeout(600);
+      await l.page.screenshot({ path: path.join(box.root, '..', 'pf-dictation-setup.png') });
+    }
     await dialog.getByRole('button', { name: 'Закрыть' }).click();
     await quit(l);
 
