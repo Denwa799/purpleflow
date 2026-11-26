@@ -12,7 +12,7 @@
 [![Релиз](https://img.shields.io/github/v/release/PurpleSchool/purpleflow?include_prereleases&label=релиз&color=7c5cff)](https://github.com/PurpleSchool/purpleflow/releases/latest)
 [![Лицензия: MIT](https://img.shields.io/badge/лицензия-MIT-7c5cff)](LICENSE)
 ![Статус: beta](https://img.shields.io/badge/статус-beta-e0a458)
-![macOS · Linux · Windows](https://img.shields.io/badge/macOS_·_Linux_·_Windows_(эксп.)-3b3d45)
+![macOS · Linux · Windows](https://img.shields.io/badge/macOS_·_Linux_·_Windows-3b3d45)
 
 [**Скачать**](https://github.com/PurpleSchool/purpleflow/releases/latest) · [Быстрый старт](#быстрый-старт) · [Руководство](docs/guide.md) · [Архитектура](ARCHITECTURE.md) · [Как участвовать](CONTRIBUTING.md) · [English](README.en.md)
 
@@ -181,7 +181,7 @@ purpleflow
 | --- | --- |
 | macOS | ✅ проверки и сквозные тесты окна в CI при выпуске версии, живая проверка |
 | Linux | ✅ проверки и сквозные тесты окна в CI |
-| Windows | 🧪 экспериментально: проверки ядра и окна в CI, без сквозных тестов и живой проверки |
+| Windows | ✅ проверки ядра и окна в CI, живая проверка |
 
 ## Участие в проекте
 

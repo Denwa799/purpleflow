@@ -24,6 +24,8 @@ publish:
   vPrefixedTagName: false
 mac:
   category: public.app-category.developer-tools
+  # Фон во всё поле: так macOS 26+ не сажает значок в светлую подложку.
+  icon: build/icon-mac.png
   target:
     - target: dmg
       arch: [arm64, x64]

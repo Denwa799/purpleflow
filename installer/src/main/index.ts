@@ -136,7 +136,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => win?.focus());
 app.whenReady().then(() => {
   // В разработке Dock показывает значок Electron: подставляем свой. В сборке значок берётся из пакета.
-  if (!app.isPackaged && process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, '../../build/icon.png'));
+  if (!app.isPackaged && process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, '../../build/icon-mac.png'));
   createWindow();
 });
 app.on('window-all-closed', () => app.quit());
