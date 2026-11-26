@@ -23,10 +23,7 @@ export const MODEL_OPTIONS: Record<AgentKind, DropOption<string>[]> = {
   // Свои модели opencode — из его провайдеров (`opencode models`), подмешиваются в useModelOptions.
   opencode: [],
   // Модели Gemini, которые есть в AI-прокси; модели аккаунта Google (`agy models`) подмешиваются в useModelOptions.
-  agy: [
-    { value: 'gemini-4-argon', label: 'gemini-4-argon', hint: 'Сильная — планирование и сложный код' },
-    { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash', hint: 'Быстрая — простые задачи' },
-  ],
+  agy: [{ value: 'gemini-3.8-flash', label: 'gemini-3.8-flash', hint: 'Рабочая — уровень рассуждений суффиксом: -low, -medium, -high' }],
 };
 
 /**

@@ -53,7 +53,7 @@ test('mergeModelOptions: agy получает из прокси только Gem
   const m = mergeModelOptions(remote, [], ['gemini-4-neon-high']);
   assert.deepEqual(
     m.agy.map((o) => o.value),
-    ['gemini-4-neon-high', 'gemini-4-argon', 'gemini-3.8-flash'],
+    ['gemini-4-neon-high', 'gemini-3.8-flash', 'gemini-4-argon'],
   );
   assert.ok(m.agy.every((o) => o.badge === undefined));
 });

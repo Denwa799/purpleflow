@@ -31,7 +31,7 @@ export const MODEL_PLACEHOLDER: Record<AgentKind, string> = {
   claude: 'opus, sonnet, haiku или полное имя',
   codex: 'по умолчанию codex',
   opencode: 'провайдер/модель, по умолчанию — из настроек opencode',
-  agy: 'gemini-3.8-flash, gemini-4-argon; суффикс -low/-medium/-high — уровень рассуждений',
+  agy: 'gemini-3.8-flash; суффикс -low/-medium/-high — уровень рассуждений',
 };
 /** Выбор CLI-агента для роли. */
 export function AgentSwitch({
