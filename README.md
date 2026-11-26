@@ -86,7 +86,6 @@ npm i -g @anthropic-ai/claude-code @openai/codex @fission-ai/openspec
 npm i -g opencode-ai && opencode auth login
 # по желанию — Antigravity CLI 1.5+: пакета в npm нет, ставится установщиком Google
 # (https://antigravity.google/docs/cli/install). С AI-прокси PurpleSchool вход в Google не нужен.
-# Работает не во всех странах: из неподдерживаемого региона аккаунт не пройдёт проверку доступности.
 ```
 
 **2. Опишите задачу:** выберите папку проекта и режим. PurpleFlow позовёт вас только на утверждение плана и приёмку.
@@ -109,6 +108,51 @@ npm run dev
 ```
 
 Сборка установщиков и подпись — в [руководстве](docs/guide.md#сборка).
+
+</details>
+
+<details>
+<summary>Windows: проекты внутри WSL</summary>
+
+Если проекты и агенты живут в WSL, запустите внутри WSL Linux-версию PurpleFlow — окно откроется на рабочем столе Windows через WSLg. Тогда git, агенты, тесты и dev-серверы работают в Linux, рядом с кодом.
+
+Нужна WSL 2 с WSLg: Windows 11 или Windows 10 22H2 с WSL из Microsoft Store. В PowerShell:
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+Если WSL уже стоит — обновите её, чтобы появился WSLg:
+
+```powershell
+wsl --update
+```
+
+Дальше всё — в терминале Ubuntu. Поставьте git и последнюю версию PurpleFlow из релизов:
+
+```bash
+sudo apt update && sudo apt install -y git curl
+```
+
+```bash
+url=$(curl -s https://api.github.com/repos/PurpleSchool/purpleflow/releases/latest | grep -o 'https://[^"]*/PurpleFlow-[0-9.]*-amd64\.deb')
+```
+
+```bash
+curl -LO "$url" && sudo apt install -y "./$(basename "$url")"
+```
+
+Запуск:
+
+```bash
+purpleflow
+```
+
+При первом запуске кнопка «Настроить» поставит Node.js, агентов и OpenSpec — внутри WSL, отдельно от Windows. Вход в `claude`, `codex` и других агентов тоже свой, в домашней папке WSL.
+
+- Держите проекты в файловой системе Linux (`~/projects`), а не в `/mnt/c`: через `/mnt/c` git и агенты работают в разы медленнее.
+- Встроенный браузер открывает dev-серверы по `localhost`, как обычно.
+- Окно не появилось — выполните в PowerShell `wsl --shutdown` и запустите `purpleflow` снова.
 
 </details>
 
