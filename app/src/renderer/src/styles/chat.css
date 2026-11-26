@@ -1416,6 +1416,7 @@ button.dd:hover:not(:disabled),
 }
 /* Вкладки не переносятся: при узкой панели прокручиваются, «Скрыть» остаётся справа отдельным кружком. */
 .chat-side .tab-groups .tabs {
+  flex: 0 1 auto;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;

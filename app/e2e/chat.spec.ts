@@ -173,6 +173,10 @@ test('чат: панель под полем ввода, таблица и бл�
     const [tb, hb] = [await side.locator('.tabs').boundingBox(), await hide.boundingBox()];
     expect(Math.abs(tb!.y + tb!.height / 2 - (hb!.y + hb!.height / 2))).toBeLessThan(2);
     expect(hb!.x).toBeGreaterThan(tb!.x + tb!.width);
+    // На узкой панели вкладки прокручиваются, а кнопка остаётся внутри панели.
+    const panel = page.locator('.chat-side');
+    const pb = (await panel.boundingBox())!;
+    expect(hb!.x + hb!.width).toBeLessThanOrEqual(pb.x + pb.width);
     if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-side-tabs.png') });
     await expect(ses).toContainText('занято 25% окна модели');
     const gh = ses.locator('.ses-mcp li', { hasText: 'github' });
@@ -327,6 +331,17 @@ test('чат: вкладка «Файлы» — дерево проекта, с�
     // Свёрнутая панель: иконка вкладки открывает сразу её.
     await page.getByRole('navigation', { name: 'Вкладки панели' }).getByRole('button', { name: 'Файлы проекта' }).click();
     const tree = page.getByRole('tree', { name: 'Файлы проекта' });
+    // Самая узкая панель со всеми вкладками проекта: вкладки прокручиваются, «Скрыть панель» остаётся внутри панели.
+    const grip = (await page.locator('.side-resize').boundingBox())!;
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x + 2000, grip.y + grip.height / 2, { steps: 5 });
+    await page.mouse.up();
+    const sideBox = (await page.locator('.chat-side').boundingBox())!;
+    expect(sideBox.width).toBeLessThan(420);
+    const hideBox = (await page.locator('.chat-side .tab-groups').getByRole('button', { name: 'Скрыть панель' }).boundingBox())!;
+    expect(hideBox.x + hideBox.width).toBeLessThanOrEqual(sideBox.x + sideBox.width);
+    if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-side-narrow.png') });
     const src = tree.getByRole('treeitem', { name: 'src' });
     await src.getByRole('button', { name: 'src', exact: true }).click();
     const math = src.getByRole('treeitem', { name: 'math.js' }).getByRole('button', { name: 'math.js', exact: true });
