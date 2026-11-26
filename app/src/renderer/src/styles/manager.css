@@ -83,12 +83,14 @@
   position: absolute;
   top: 8px;
   bottom: 8px;
-  right: calc(var(--gap) / -2 - 8px);
+  /* Ручка — капсула прямо на краю панели, без линии во всю высоту; тянуть можно за весь край. */
+  right: -8px;
   width: 16px;
   cursor: col-resize;
   z-index: 3;
 }
 .manager-resize::before {
+  display: none;
   content: '';
   position: absolute;
   top: 0;

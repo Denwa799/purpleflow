@@ -175,6 +175,8 @@ export function updateChat(
     chat.title = patch.title.trim().slice(0, 120) || chat.title;
     // Переименовал человек — модель название больше не трогает.
     chat.autoTitle = undefined;
+    delete chat.titling;
+    titlingNow.delete(id);
   }
   if (patch.agent && patch.agent !== chat.agent) chat.agent = patch.agent;
   if (patch.model !== undefined) chat.model = patch.model.trim();
@@ -306,6 +308,11 @@ export async function sendChat(k: Kernel, id: string, text: string, files: { nam
   if (chat.title === 'Новый чат' && text.trim()) {
     chat.title = text.trim().replace(/\s+/g, ' ').slice(0, 60);
     chat.autoTitle = true;
+    // Название от модели придёт после ответа — заглушка на его месте сразу, без мелькания текста.
+    if (k.opts.chatTitles !== false) {
+      chat.titling = true;
+      titlingNow.add(id);
+    }
   }
   save(k, chat);
   if (k.chatBusy.has(id)) return;
@@ -619,6 +626,11 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
   if (chat.autoTitle && res.ok && answer.text.trim() && k.opts.chatTitles !== false) {
     chat.autoTitle = undefined;
     void nameChat(k, chat.id, chat.title).catch(() => undefined);
+  } else if (chat.autoTitle && chat.titling) {
+    // Ответ не удался — заглушка уходит, остаётся название из сообщения; попробуем после следующего ответа.
+    delete chat.titling;
+    titlingNow.delete(chat.id);
+    save(k, chat);
   }
 }
 
@@ -658,7 +670,12 @@ async function nameChat(k: Kernel, id: string, was: string): Promise<void> {
       .find((m) => m.role === 'assistant' && !m.pending)
       ?.text.trim()
       .slice(0, 2000) ?? '';
-  if (!user) return;
+  if (!user) {
+    titlingNow.delete(id);
+    delete first.titling;
+    save(k, first);
+    return;
+  }
   // Окно показывает заглушку, пока модель думает. must() отдаёт живой экземпляр, если идёт ход.
   titlingNow.add(id);
   first.titling = true;

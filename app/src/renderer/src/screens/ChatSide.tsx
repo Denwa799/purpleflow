@@ -1,5 +1,5 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { Activity, CircleAlert, FileCode2, FolderTree, GitBranch, Globe, PanelRightClose, Play, RefreshCw } from 'lucide-react';
+import { Activity, CircleAlert, FileCode2, FolderTree, GitBranch, Globe, Play, RefreshCw } from 'lucide-react';
 import { GitView } from '../components/GitView';
 import { ChatFiles } from './ChatFiles';
 import { ChatRunPane } from './ChatRunPane';
@@ -9,7 +9,6 @@ import { ChatSessionPane, ContextRing } from './ChatSessionPane';
 import type { ChatFile, DiffFile, ProjectConfig } from '@purpleflow/core';
 import { BrowserPane, usePreview } from '../components/BrowserPane';
 import { DiffReview } from '../components/diff/DiffReview';
-import { PillTabs } from '../components/PillTabs';
 import { Button, Empty } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
 
@@ -93,15 +92,17 @@ export function ChatSide({
   busy,
   pane,
   onPane,
-  changed,
   width,
   onResize,
   onResetWidth,
   model,
   onPick,
   onMention,
+  closing = false,
 }: {
   chat: ChatFile;
+  /** Панель закрывается: доигрывает анимацию, потом её место займёт полоса. */
+  closing?: boolean;
   /** Файл или папка из вкладки «Файлы» — «@путь» в поле ввода. */
   onMention: (path: string) => void;
   /** Выбранная модель: своя у чата или по умолчанию. */
@@ -111,7 +112,6 @@ export function ChatSide({
   busy: boolean;
   pane: ChatPane;
   onPane: (p: ChatPane | null) => void;
-  changed: string[] | null;
   width: number;
   onResize: (e: ReactPointerEvent<HTMLDivElement>) => void;
   onResetWidth: () => void;
@@ -128,62 +128,18 @@ export function ChatSide({
   const canRun = Boolean(cfg?.runCommand && cfg.appUrl);
 
   return (
-    <section className="run-main chat-side" style={{ width }} aria-label="Код и браузер">
+    <section className={`run-main chat-side ${closing ? 'is-closing' : ''}`} style={{ width }} aria-label="Код и браузер">
       <div
         className="side-resize"
         onPointerDown={onResize}
         onDoubleClick={onResetWidth}
         title="Потяните, чтобы изменить ширину; двойной клик — по умолчанию"
       />
-      <div className="tab-groups">
-        <PillTabs<ChatPane>
-          className="tabs"
-          value={pane}
-          onChange={onPane}
-          items={[
-            { id: 'session', label: 'Сессия', icon: <Activity size={15} /> },
-            ...(chat.projectPath
-              ? [
-                  { id: 'files' as const, label: 'Файлы', icon: <FolderTree size={15} /> },
-                  {
-                    id: 'code' as const,
-                    label: 'Код',
-                    icon: <FileCode2 size={15} />,
-                    extra: changed?.length ? <span className="tab-badge">{changed.length}</span> : undefined,
-                  },
-                  { id: 'git' as const, label: 'Git', icon: <GitBranch size={15} /> },
-                  {
-                    id: 'run' as const,
-                    label: 'Запуск',
-                    icon: <Play size={15} />,
-                    extra:
-                      preview.state.status === 'ready' ? (
-                        <span className="tab-dot is-ok" />
-                      ) : preview.state.status === 'starting' ? (
-                        <span className="tab-live" />
-                      ) : preview.state.status === 'failed' ? (
-                        <span className="tab-dot is-error" />
-                      ) : undefined,
-                  },
-                ]
-              : []),
-            {
-              id: 'browser',
-              label: 'Браузер',
-              icon: <Globe size={15} />,
-              extra:
-                preview.state.status === 'ready' ? (
-                  <span className="tab-dot is-ok" />
-                ) : preview.state.status === 'starting' ? (
-                  <span className="tab-live" />
-                ) : undefined,
-            },
-          ]}
-        />
-        <button className="manager-collapse side-collapse" title="Скрыть панель" aria-label="Скрыть панель" onClick={() => onPane(null)}>
-          <PanelRightClose size={16} />
-        </button>
-      </div>
+      {/* Название открытого инструмента: вкладок над ним нет, выбирается он в полосе справа. */}
+      <header className="chat-side-head">
+        {PANE_TITLE[pane].icon}
+        <h2>{PANE_TITLE[pane].label}</h2>
+      </header>
       <div className="chat-side-body" hidden={pane !== 'session'}>
         {pane === 'session' && <ChatSessionPane chat={chat} model={model} busy={busy} />}
       </div>
@@ -228,7 +184,31 @@ export function ChatSide({
  * Свёрнутая панель — узкая полоса справа: сверху заполнение контекста («Сессия»),
  * ниже — иконки доступных вкладок; клик открывает панель сразу на нужной.
  */
-export function ChatSideRail({ chat, changed, onOpen }: { chat: ChatFile; changed: string[] | null; onOpen: (p: ChatPane) => void }) {
+/** Заголовки инструментов панели — те же названия, что в подсказках полосы. */
+const PANE_TITLE: Record<ChatPane, { label: string; icon: ReactNode }> = {
+  session: { label: 'Сессия', icon: <Activity size={16} /> },
+  files: { label: 'Файлы проекта', icon: <FolderTree size={16} /> },
+  code: { label: 'Изменения', icon: <FileCode2 size={16} /> },
+  git: { label: 'Git', icon: <GitBranch size={16} /> },
+  run: { label: 'Запуск приложения', icon: <Play size={16} /> },
+  browser: { label: 'Браузер', icon: <Globe size={16} /> },
+};
+
+/**
+ * Полоса значков справа — всегда на месте. Значок открывает инструмент слева от полосы,
+ * повторное нажатие на выбранный — закрывает.
+ */
+export function ChatSideRail({
+  chat,
+  changed,
+  active,
+  onOpen,
+}: {
+  chat: ChatFile;
+  changed: string[] | null;
+  active: ChatPane | null;
+  onOpen: (p: ChatPane | null) => void;
+}) {
   const ctx = chatSession(chat).context;
   const preview = usePreview(chat.id);
   // Свои подсказки: системные title в окне Electron появляются не всегда.
@@ -273,10 +253,11 @@ export function ChatSideRail({ chat, changed, onOpen }: { chat: ChatFile; change
   return (
     <aside className="run-main chat-side is-collapsed" aria-label="Панель чата">
       <button
-        className="chat-rail-session"
+        className={`chat-rail-session ${active === 'session' ? 'is-on' : ''}`}
+        aria-pressed={active === 'session'}
         onClick={() => {
           setTip(null);
-          onOpen('session');
+          onOpen(active === 'session' ? null : 'session');
         }}
         onMouseEnter={(e) => showTip(sessionTip, e.currentTarget)}
         onMouseLeave={() => setTip(null)}
@@ -291,15 +272,16 @@ export function ChatSideRail({ chat, changed, onOpen }: { chat: ChatFile; change
         {items.map((it) => (
           <button
             key={it.id}
-            className="chat-rail-tab"
+            className={`chat-rail-tab ${active === it.id ? 'is-on' : ''}`}
             aria-label={it.label}
+            aria-pressed={active === it.id}
             onMouseEnter={(e) => showTip(it.label, e.currentTarget)}
             onMouseLeave={() => setTip(null)}
             onFocus={(e) => showTip(it.label, e.currentTarget)}
             onBlur={() => setTip(null)}
             onClick={() => {
               setTip(null);
-              onOpen(it.id);
+              onOpen(active === it.id ? null : it.id);
             }}
           >
             {it.icon}
@@ -379,4 +361,37 @@ function ChatCode({ chat, busy }: { chat: ChatFile; busy: boolean }) {
       )}
     </div>
   );
+}
+
+/**
+ * Панель справа появляется и уходит с анимацией: при закрытии она ещё ~0,25 с остаётся на месте
+ * (closing), а уже потом её место занимает свёрнутая полоса.
+ */
+export function useSideExit<T>(value: T | null, ms = 260): [T | null, boolean] {
+  const [shown, setShown] = useState<T | null>(value);
+  const [closing, setClosing] = useState(false);
+  useEffect(() => {
+    if (value !== null) {
+      setShown(value);
+      setClosing(false);
+      return;
+    }
+    let reduce = false;
+    try {
+      reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      /* без настроек — с анимацией */
+    }
+    if (reduce) {
+      setShown(null);
+      return;
+    }
+    setClosing(true);
+    const t = window.setTimeout(() => {
+      setShown(null);
+      setClosing(false);
+    }, ms);
+    return () => window.clearTimeout(t);
+  }, [value, ms]);
+  return [shown, closing];
 }

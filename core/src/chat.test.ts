@@ -837,6 +837,18 @@ test('чат: после первого ответа модель даёт на�
   await untilIdle(core, chat.id);
   assert.equal(prompts.filter((p) => /Придумай короткое название/.test(p)).length, 1);
 
+  // Заглушка — сразу после отправки первого сообщения, ещё до ответа.
+  const firstSave = events.find((e) => e.type === 'chat.updated' && e.chat.id === chat.id && e.chat.messages.length === 1);
+  assert.equal(firstSave?.type === 'chat.updated' && firstSave.chat.titling, true);
+
+  // Первый ответ не удался — заглушка уходит, название остаётся из сообщения.
+  const failing = makeCore({ claude: async () => ({ ok: false, text: '', usage: emptyUsage(), error: 'нет сети' }) }, { chatTitles: true });
+  const broken = await failing.createChat({ agent: 'claude' });
+  await failing.sendChat(broken.id, 'упадёт');
+  const after = await untilIdle(failing, broken.id);
+  assert.equal(after.titling, undefined);
+  assert.equal(after.title, 'упадёт');
+
   // Человек переименовал до ответа — название модели не применяется.
   const other = await core.createChat({ agent: 'claude' });
   await core.sendChat(other.id, 'вопрос');

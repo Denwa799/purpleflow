@@ -1,6 +1,17 @@
 // API ядра, доступное окну: каждый метод выполняется в utilityProcess и вызывается через IPC.
 // Orchestrator реализует этот интерфейс; список методов для моста — CORE_METHODS в app/src/shared/ipc.ts.
-import type { ChatFile, ChatFileContent, ChatSkill, ChatSummary, McpEntry, McpHit, McpInstall, McpScope, McpStatus, SkillHit } from './chat.js';
+import type {
+  ChatFile,
+  ChatFileContent,
+  ChatSkill,
+  ChatSummary,
+  McpEntry,
+  McpHit,
+  McpInstall,
+  McpScope,
+  McpStatus,
+  SkillHit,
+} from './chat.js';
 import type { GitGraph } from './git.js';
 import type { MergeCheck, PrDetails, PrStatus } from './pr.js';
 import type {

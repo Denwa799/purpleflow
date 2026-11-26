@@ -90,3 +90,30 @@ export function insertMention(text: string, caret: number, rel: string): { text:
 
 /** Тип данных перетаскивания пути из дерева файлов чата. */
 export const PATH_DRAG = 'application/x-purpleflow-path';
+
+/** Кусок текста поля ввода: обычный текст или упоминание, которое рисуется чипом. */
+export interface MentionSegment {
+  text: string;
+  kind?: 'file' | 'skill';
+}
+
+/**
+ * Текст поля → куски для подсветки: «@путь» и «/скилл» (только известный скилл — путь вроде /usr/bin не чип)
+ * в начале строки или после пробела. Знак препинания в конце слова остаётся обычным текстом.
+ */
+export function mentionSegments(text: string, skills: ReadonlySet<string>): MentionSegment[] {
+  const out: MentionSegment[] = [];
+  let last = 0;
+  for (const m of text.matchAll(/(^|\s)([@/][^\s]+)/g)) {
+    const word = m[2];
+    const start = (m.index ?? 0) + m[1].length;
+    const token = word.replace(/[.,;:!?)»"']+$/, '');
+    const kind = word[0] === '@' ? (token.length > 1 ? 'file' : null) : skills.has(token.slice(1)) ? 'skill' : null;
+    if (!kind) continue;
+    if (start > last) out.push({ text: text.slice(last, start) });
+    out.push({ text: token, kind });
+    last = start + token.length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
+}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { applyMention, rankFiles, rankSkills, tokenAt } from './mentions';
+import { applyMention, mentionSegments, rankFiles, rankSkills, tokenAt } from './mentions';
 
 test('tokenAt: @ и / в начале слова под курсором', () => {
   assert.deepEqual(tokenAt('посмотри @src/a', 15), { kind: 'file', query: 'src/a', start: 9, end: 15 });
@@ -54,4 +54,17 @@ test('applyMention: заменяет набранное слово и стави
   assert.deepEqual(applyMention(text, t, 'src/Button.tsx'), { text: 'глянь @src/Button.tsx и ответь', caret: 22 });
   const s = tokenAt('/re', 3)!;
   assert.deepEqual(applyMention('/re', s, 'review'), { text: '/review ', caret: 8 });
+});
+
+test('mentionSegments: @путь и известный /скилл — чипы, остальное текст', () => {
+  const skills = new Set(['chrome-browser', 'review']);
+  assert.deepEqual(mentionSegments('/chrome-browser Можешь открыть @src/a.ts?', skills), [
+    { text: '/chrome-browser', kind: 'skill' },
+    { text: ' Можешь открыть ' },
+    { text: '@src/a.ts', kind: 'file' },
+    { text: '?' },
+  ]);
+  // Неизвестный «скилл», путь и одинокая @ — просто текст.
+  assert.deepEqual(mentionSegments('/usr/bin и /nope и @ и e@mail', skills), [{ text: '/usr/bin и /nope и @ и e@mail' }]);
+  assert.deepEqual(mentionSegments('', skills), []);
 });

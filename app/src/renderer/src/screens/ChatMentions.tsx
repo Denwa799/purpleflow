@@ -1,5 +1,5 @@
 // «@» и «/» в поле ввода чата: список файлов проекта или скиллов над полем, выбор стрелками и Enter.
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { FileText, Sparkles } from 'lucide-react';
 import type { ChatSkill } from '@purpleflow/core';
 import { bridge } from '../lib/api';
@@ -31,6 +31,8 @@ export function useMentions(o: {
   onInput: () => void;
   onCaret: () => void;
   menu: ReactNode;
+  /** Имена скиллов — для подсветки «/скилл» чипом в поле. */
+  skillNames: ReadonlySet<string>;
 } {
   const { text, setText, input, projectPath } = o;
   const [caret, setCaret] = useState(0);
@@ -180,5 +182,6 @@ export function useMentions(o: {
       </div>
     ) : null;
 
-  return { onKeyDown, onInput, onCaret, menu };
+  const skillNames = useMemo(() => new Set((skills ?? []).map((s) => s.name)), [skills]);
+  return { onKeyDown, onInput, onCaret, menu, skillNames };
 }

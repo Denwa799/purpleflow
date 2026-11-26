@@ -894,6 +894,44 @@ input.chat-title:focus {
   font-size: var(--fs-14);
   line-height: 1.5;
 }
+/* Поле с подсветкой: подложка повторяет текст один в один, textarea поверх с прозрачным текстом. */
+.compose-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+.compose-field textarea {
+  position: relative;
+  z-index: 1;
+  color: transparent;
+  caret-color: var(--text-1);
+}
+.compose-field textarea::selection {
+  background: rgba(138, 116, 238, 0.35);
+  color: transparent;
+}
+.compose-mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 7px 0;
+  color: var(--text-1);
+  font: inherit;
+  font-size: var(--fs-14);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  pointer-events: none;
+}
+/* Чип не меняет ширину букв: фон и скругление рисуются тенью за пределами текста — курсор не съезжает. */
+.compose-chip {
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+  color: var(--text-1);
+}
 .chat-compose textarea::placeholder {
   color: var(--text-4);
 }
@@ -1236,6 +1274,22 @@ button.dd:hover:not(:disabled),
   flex-direction: column;
   overflow: hidden;
 }
+/* Заголовок открытого инструмента — на месте прежних вкладок. */
+.chat-side-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 56px;
+  padding: 0 var(--s-6);
+  color: var(--text-2);
+}
+.chat-side-head h2 {
+  margin: 0;
+  color: var(--text-1);
+  font-size: var(--fs-14);
+  font-weight: 500;
+}
 .chat-side-body[hidden] {
   display: none;
 }
@@ -1412,7 +1466,51 @@ button.dd:hover:not(:disabled),
   min-width: 380px;
   max-width: calc(100% - 360px);
   overflow: visible;
-  animation: cardIn 0.5s var(--ease) both;
+  /* Инструмент вырастает слева от полосы значков: от нулевой ширины до своей. */
+  animation: sideIn 0.32s var(--ease) both;
+}
+.chat-side.run-main:not(.is-collapsed) > * {
+  animation: sideContentIn 0.28s var(--ease) 0.08s both;
+}
+/* Закрытие — карточка сжимается к полосе и гаснет, содержимое уходит первым. */
+.chat-side.run-main.is-closing {
+  overflow: hidden;
+  pointer-events: none;
+  animation: sideOut 0.26s var(--ease) both;
+}
+.chat-side.run-main.is-closing > * {
+  animation: sideContentOut 0.12s var(--ease) both;
+}
+@keyframes sideIn {
+  from {
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+  }
+}
+@keyframes sideOut {
+  to {
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+  }
+}
+@keyframes sideContentIn {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sideContentOut {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-side.run-main,
+  .chat-side.run-main.is-closing,
+  .chat-side.run-main > * {
+    animation: none;
+  }
 }
 .chat-side .tab-groups {
   flex: none;
@@ -1440,12 +1538,14 @@ button.dd:hover:not(:disabled),
   position: absolute;
   top: 8px;
   bottom: 8px;
-  left: calc(var(--gap) / -2 - 8px);
+  /* Ручка — капсула прямо на краю панели, без линии во всю высоту; тянуть можно за весь край. */
+  left: -8px;
   width: 16px;
   cursor: col-resize;
   z-index: 3;
 }
 .side-resize::before {
+  display: none;
   content: '';
   position: absolute;
   top: 0;
@@ -2295,6 +2395,14 @@ body.is-side-resizing webview {
 }
 .chat-rail-tab:hover {
   background: var(--bg-4);
+  color: var(--text-1);
+}
+/* Открытый сейчас инструмент — подсвечен; повторное нажатие закрывает его. */
+.chat-rail-tab.is-on {
+  background: var(--bg-5);
+  color: var(--text-1);
+}
+.chat-rail-session.is-on {
   color: var(--text-1);
 }
 .chat-rail-tab .tab-dot,

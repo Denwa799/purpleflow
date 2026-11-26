@@ -30,8 +30,8 @@ import { enabledList } from '../lib/tools';
 import { EFFORT_LEVELS, effortOf, effortOptions } from '../lib/effort';
 import { ACCESS_OPTIONS, accessOf, accessPatch, type ChatAccess } from '../lib/chatAccess';
 import { formatPick, insertPick, type PickedElement } from '../lib/pickElement';
-import { PATH_DRAG, insertMention } from '../lib/mentions';
-import { ChatSide, ChatSideRail, useChatChanged, useSideWidth, type ChatPane } from './ChatSide';
+import { PATH_DRAG, insertMention, mentionSegments } from '../lib/mentions';
+import { ChatSide, ChatSideRail, useChatChanged, useSideExit, useSideWidth, type ChatPane } from './ChatSide';
 import { DictationButton } from '../components/Dictation';
 import { TitleSkeleton, useTypedTitle } from '../components/ChatTitle';
 import { insertDictation } from '../lib/wav';
@@ -87,6 +87,7 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
   const [confirmDelete, setConfirmDelete] = useState(false);
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  const mirror = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const stick = useRef(true);
   // Правая панель: код или браузер; запоминается для всех чатов.
@@ -350,6 +351,8 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
   // Без проекта вкладок «Код» и «Запуск» нет — остаётся браузер.
   const sidePane: ChatPane | null =
     (pane === 'files' || pane === 'code' || pane === 'git' || pane === 'run') && !chat?.projectPath ? 'browser' : pane;
+  // Закрытая панель ещё доигрывает анимацию, прежде чем уступить место полосе.
+  const [shownPane, closingPane] = useSideExit(sidePane);
   const toolOk = (a: AgentKind) => Boolean(state.tools?.[a]?.path && !state.tools[a].error);
 
   return (
@@ -534,26 +537,43 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
                 </div>
               )}
               <div className="chat-compose-row">
-                <textarea
-                  ref={input}
-                  rows={1}
-                  value={text}
-                  placeholder={
-                    busy
-                      ? 'Агент отвечает — можно дописать уточнение, оно уйдёт следующим'
-                      : conf.edits && projectPath
-                        ? 'Спросите или попросите правку… @ — файл, / — скилл'
-                        : projectPath
-                          ? 'Напишите сообщение… @ — файл, / — скилл'
-                          : 'Напишите сообщение… / — скилл'
-                  }
-                  onChange={(e) => {
-                    setText(e.target.value);
-                    mention.onInput();
-                  }}
-                  onSelect={mention.onCaret}
-                  onKeyDown={onKey}
-                />
+                <div className="compose-field">
+                  {/* Подложка с тем же текстом: «/скилл» и «@путь» в ней — чипы; сам textarea прозрачный поверх. */}
+                  <div className="compose-mirror" ref={mirror} aria-hidden>
+                    {mentionSegments(text, mention.skillNames).map((seg, i) =>
+                      seg.kind ? (
+                        <span key={i} className={`compose-chip is-${seg.kind}`}>
+                          {seg.text}
+                        </span>
+                      ) : (
+                        <span key={i}>{seg.text}</span>
+                      ),
+                    )}
+                    {/* Пустая строка в конце текста иначе не занимает высоту. */}
+                    {'\u200b'}
+                  </div>
+                  <textarea
+                    ref={input}
+                    rows={1}
+                    value={text}
+                    placeholder={
+                      busy
+                        ? 'Агент отвечает — можно дописать уточнение, оно уйдёт следующим'
+                        : conf.edits && projectPath
+                          ? 'Спросите или попросите правку… @ — файл, / — скилл'
+                          : projectPath
+                            ? 'Напишите сообщение… @ — файл, / — скилл'
+                            : 'Напишите сообщение… / — скилл'
+                    }
+                    onChange={(e) => {
+                      setText(e.target.value);
+                      mention.onInput();
+                    }}
+                    onSelect={mention.onCaret}
+                    onKeyDown={onKey}
+                    onScroll={(e) => mirror.current && (mirror.current.scrollTop = e.currentTarget.scrollTop)}
+                  />
+                </div>
               </div>
               <div className="chat-compose-bar">
                 <button
@@ -652,22 +672,23 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
             </form>
           </div>
         </div>
-        {chat && !sidePane && <ChatSideRail chat={chat} changed={changed} onOpen={setPane} />}
-        {chat && sidePane && (
+        {chat && shownPane && (
           <ChatSide
             chat={chat}
             busy={busy}
-            pane={sidePane}
+            closing={closingPane}
+            pane={shownPane}
             model={shownModel}
             onPick={onPick}
             onMention={mentionPath}
             onPane={setPane}
-            changed={changed}
             width={side.width}
             onResize={side.startResize}
             onResetWidth={side.reset}
           />
         )}
+        {/* Полоса значков — всегда справа; выбранный инструмент открывается слева от неё. */}
+        {chat && <ChatSideRail chat={chat} changed={changed} active={sidePane} onOpen={setPane} />}
       </div>
     </div>
   );
