@@ -62,8 +62,11 @@ export function usePopover(open: boolean, anchor: React.RefObject<HTMLElement | 
       const below = viewBottom - r.bottom - 12;
       const above = r.top - viewTop - 12;
       const up = below < 220 && above > below;
-      const width = Math.max(r.width, minWidth ?? 0);
-      const left = Math.min(r.left, window.innerWidth - width - 8) - ox;
+      // По горизонтали — тоже в видимой части контейнера: вылезший за край диалога список даёт ему прокрутку вбок.
+      const viewLeft = doc ? 0 : Math.max(0, c.left + sp.clientLeft);
+      const viewRight = doc ? window.innerWidth : Math.min(window.innerWidth, c.left + sp.clientLeft + sp.clientWidth);
+      const width = Math.min(Math.max(r.width, minWidth ?? 0), viewRight - viewLeft - 16);
+      const left = Math.max(viewLeft + 8, Math.min(r.left, viewRight - width - 8)) - ox;
       setPop({
         container: sp,
         style: up
@@ -217,7 +220,11 @@ export function Select<T extends string | number>({
       e.preventDefault();
       const o = options[active];
       if (o && !o.disabled) pick(o);
-    } else if (e.key === 'Escape' || e.key === 'Tab') setOpen(false);
+    } else if (e.key === 'Escape') {
+      // Escape закрывает только список: диалог, в котором он открыт, этого нажатия не получает.
+      e.stopPropagation();
+      setOpen(false);
+    } else if (e.key === 'Tab') setOpen(false);
   };
 
   return (
@@ -313,7 +320,10 @@ export function ComboInput({
         onCommit?.(value);
         input.current?.blur();
       }
-    } else if (e.key === 'Escape') setOpen(false);
+    } else if (e.key === 'Escape') {
+      if (open) e.stopPropagation();
+      setOpen(false);
+    }
   };
 
   return (

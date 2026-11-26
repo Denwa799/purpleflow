@@ -55,6 +55,17 @@ test('скиллы: поиск по каталогу показывает ист
       await page.waitForTimeout(600);
       await page.screenshot({ path: path.join(box.root, '..', 'pf-skills-search.png') });
     }
+    // «Куда ставить» у правого края: список остаётся в окне, у окна нет прокрутки вбок.
+    await dialog.getByRole('button', { name: 'Куда ставить' }).click();
+    const pop = page.getByRole('listbox');
+    await expect(pop.getByRole('option', { name: /Для всех проектов/ })).toBeVisible();
+    const dims = await dialog.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, right: el.getBoundingClientRect().right }));
+    expect(dims.sw).toBeLessThanOrEqual(dims.cw);
+    expect((await pop.boundingBox())!.x + (await pop.boundingBox())!.width).toBeLessThanOrEqual(dims.right);
+    // Escape закрывает только список, диалог остаётся.
+    await page.keyboard.press('Escape');
+    await expect(pop).toHaveCount(0);
+    await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Готово' }).click();
     await expect(dialog).toHaveCount(0);
     expect(l.errors).toEqual([]);
