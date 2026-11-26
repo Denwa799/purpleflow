@@ -292,7 +292,8 @@ function materialFor(enabled: boolean): Material {
 }
 
 let material: Material = 'none';
-const OPAQUE_BG = '#0a0b0d';
+/** Фон окна без прозрачности до первой отрисовки — как серый фон страницы под тонировкой. */
+const OPAQUE_BG = '#252527';
 
 function applyMaterial(w: BrowserWindow, m: Material) {
   material = m;

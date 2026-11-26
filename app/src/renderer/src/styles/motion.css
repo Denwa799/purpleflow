@@ -196,12 +196,18 @@ html[data-material='vibrancy'] body,
 html[data-material='acrylic'] body {
   background: transparent;
 }
+/* Без прозрачности — тот же вид на ровном сером, близком к тому, что ОС кладёт под стекло. */
+html[data-material='none'] body {
+  background: #2a2a2d;
+}
 html[data-material='vibrancy'] .app,
-html[data-material='acrylic'] .app {
+html[data-material='acrylic'] .app,
+html[data-material='none'] .app {
   background: rgba(8, 9, 11, 0.16);
 }
 html[data-material='vibrancy'],
-html[data-material='acrylic'] {
+html[data-material='acrylic'],
+html[data-material='none'] {
   /* --bg-3 здесь полупрозрачный, а размытие над прокручиваемой лентой Chromium не применяет: текст под списком просвечивал бы. */
   --pop-bg: #1b1b1d;
   --bg-0: rgba(0, 0, 0, 0.38);
