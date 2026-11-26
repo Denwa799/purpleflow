@@ -16,7 +16,7 @@ import { fingerprint, useViewed } from './viewed';
 
 interface Props {
   files: DiffFile[];
-  review?: { blocking: ReviewItem[]; notes: ReviewItem[]; plan?: PlanCoverage[] };
+  review?: { blocking: ReviewItem[]; notes: ReviewItem[]; passed?: string[]; plan?: PlanCoverage[] };
   comments: LineComment[];
   onComments: (c: LineComment[]) => void;
   readOnly?: boolean;
@@ -494,6 +494,7 @@ export function DiffReview({
             onPicked={onPicked}
             onJump={jumpTo}
           />
+          <PassedList items={review?.passed ?? []} title="Ревьюер подтвердил" />
           {comments.length > 0 && (
             <section className="notes">
               <h4>
@@ -523,7 +524,9 @@ export function DiffReview({
             onJump={jumpTo}
           />
           <PassedList items={visualPassed} />
-          {noteCount === 0 && !review?.plan?.length && !visualPassed.length && <p className="composer-hint">Замечаний нет.</p>}
+          {noteCount === 0 && !review?.plan?.length && !review?.passed?.length && !visualPassed.length && (
+            <p className="composer-hint">Замечаний нет.</p>
+          )}
           {history.length > 0 && (
             <section className="notes notes-history">
               <h4>

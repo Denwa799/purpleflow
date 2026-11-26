@@ -2,7 +2,7 @@
 import type { ReviewItem, RunFile } from '@purpleflow/core';
 import { CircleCheck, Sparkles } from 'lucide-react';
 import { useMemo } from 'react';
-import { OriginTag, PickBox, PlanCoverageList, planScore } from '../../../components/diff/ReviewNotes';
+import { OriginTag, PassedList, PickBox, PlanCoverageList, planScore } from '../../../components/diff/ReviewNotes';
 import { Empty } from '../../../components/ui';
 import { originSummary } from '../util';
 
@@ -74,6 +74,7 @@ export function ReviewView({
             </li>
           ))}
         </ul>
+        <PassedList items={r.passed ?? []} title="Ревьюер подтвердил" />
       </div>
     </div>
   );

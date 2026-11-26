@@ -14,7 +14,7 @@ import { ChatScreen } from './screens/Chat';
 import { FirstProjectScreen } from './screens/FirstProject';
 import { bridge } from './lib/api';
 import { ChatWebHost } from './components/ChatWebHost';
-import { dropChat, getAllChatWebIds } from './lib/chatWeb';
+import { dropChat, getAllChatWebIds, isRunOwner } from './lib/chatWeb';
 
 const SIDEBAR_KEY = 'purpleflow.sidebarCollapsed';
 
@@ -24,7 +24,7 @@ export function App() {
   // Чат удалили — закрываем вкладки его браузера.
   useEffect(() => {
     const ids = new Set(state.chats.map((c) => c.id));
-    for (const id of getAllChatWebIds()) if (!ids.has(id)) dropChat(id);
+    for (const id of getAllChatWebIds()) if (!isRunOwner(id) && !ids.has(id)) dropChat(id);
   }, [state.chats]);
   const viewKey =
     v.name === 'chat'

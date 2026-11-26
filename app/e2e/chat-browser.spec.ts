@@ -223,3 +223,49 @@ test('браузер чата: агент через pw видит и ведёт
     server.close();
   }
 });
+
+// Визуальная проверка задачи с настоящим pw: агент работает во вкладке окна (своя сессия прогона), человек видит её
+// на экране задачи, размер агента — в кнопке размера; после стадии вкладки закрываются. PURPLEFLOW_E2E_PW=1.
+test('визуальная проверка: браузер агента — живая вкладка на экране задачи', async () => {
+  test.skip(!process.env.PURPLEFLOW_E2E_PW, 'нужен Playwright CLI из npx: PURPLEFLOW_E2E_PW=1');
+  test.setTimeout(300_000);
+  const box = makeSandbox();
+  const pwLog = path.join(box.root, 'pw.log');
+  const l = await launch(box, { PURPLEFLOW_CHAT_BROWSER: 'on' });
+  try {
+    const page = l.page;
+    const task = 'Добавь функцию mul в src/math.js ДЕРЖИ_БРАУЗЕР';
+    await page.evaluate(
+      ({ repo, task }) =>
+        (window as unknown as { purpleflow: { core: { dispatch: (c: unknown) => Promise<unknown> } } }).purpleflow.core.dispatch({
+          type: 'run.start',
+          input: {
+            projectPath: repo,
+            task,
+            testCommand: '',
+            mode: 'quick',
+            visual: true,
+            runCommand: `node -e "require('http').createServer((q,s)=>s.writeHead(200,{'content-type':'text/html; charset=utf-8'}).end('<title>Калькулятор</title><h1>Калькулятор</h1>')).listen({port})"`,
+            appUrl: 'http://127.0.0.1:{port}',
+          },
+        }),
+      { repo: box.repo, task },
+    );
+    await page.getByText(task).first().click();
+    await page.getByRole('tab', { name: /Браузер/ }).click();
+    // Страница приложения — в webview слоя окна, а не трансляцией.
+    const view = page.locator('.chatweb-layer.is-shown webview:not(.is-hidden)');
+    await expect.poll(() => view.evaluate((w: Electron.WebviewTag) => w.getTitle()).catch(() => ''), { timeout: 180_000 }).toBe('Калькулятор');
+    expect(await view.getAttribute('partition')).toMatch(/^purpleflow-run-/);
+    // Агент задал телефонную ширину — она в кнопке размера и у самой страницы.
+    await expect(page.getByRole('button', { name: 'Размер страницы' })).toContainText('390×844', { timeout: 30_000 });
+    await expect.poll(() => view.evaluate((w: Electron.WebviewTag) => w.executeJavaScript('innerWidth'))).toBe(390);
+    // Стадия кончилась — вкладки прогона закрыты, скриншот агента сохранён.
+    await expect(page.locator('.chatweb-layer')).toHaveCount(0, { timeout: 60_000 });
+    const log = fs.readFileSync(pwLog, 'utf8');
+    expect(log).not.toContain('ERR');
+    expect(log).toContain('mobile.png');
+  } finally {
+    await quit(l);
+  }
+});

@@ -20,8 +20,24 @@ import {
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT, type PickedElement } from '../lib/pickElement';
 import { normalizeAddress } from '../../../shared/urls';
 import { SIZES, closeTab, openTab, patchTab, selectTab, setSlot, setTabSize, useChatWeb, viewOf, type WebTab } from '../lib/chatWeb';
+import { bridge } from '../lib/api';
 import { tabLabel, type usePreview } from './BrowserPane';
 import { Button } from './ui';
+
+/** Есть ли у агента чата браузер (мост к окну, не Windows) — спрашиваем ядро один раз. */
+let availability: Promise<boolean> | null = null;
+export function useChatBrowserAvailable(): boolean | null {
+  const [ok, setOk] = useState<boolean | null>(null);
+  useEffect(() => {
+    const p = (availability ??= bridge.core.chatBrowserAvailable().catch(() => false));
+    let alive = true;
+    void p.then((v) => alive && setOk(v));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return ok;
+}
 
 export function ChatWebPane({
   chatId,
@@ -31,7 +47,8 @@ export function ChatWebPane({
   onPick,
 }: {
   chatId: string;
-  preview: ReturnType<typeof usePreview>;
+  /** Своё приложение (чат): поднялось — открывается во вкладке. Нет у вкладок прогона — их ведёт агент стадии. */
+  preview?: ReturnType<typeof usePreview>;
   canRun: boolean;
   /** Агент отвечает — в адресе значок «Агент работает». */
   busy: boolean;
@@ -55,12 +72,12 @@ export function ChatWebPane({
   // Приложение проекта поднялось — открываем его во вкладке (один раз на адрес).
   const opened = useRef<string | null>(null);
   useEffect(() => {
-    const u = preview.state.status === 'ready' ? preview.state.url : null;
+    const u = preview?.state.status === 'ready' ? preview.state.url : null;
     if (!u || opened.current === u) return;
     opened.current = u;
     if (!web.tabs.some((t) => t.url.startsWith(u))) openTab(chatId, u);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preview.state]);
+  }, [preview?.state]);
 
   const url = cur?.url ?? '';
   const [draft, setDraft] = useState('');
@@ -227,12 +244,12 @@ export function ChatWebPane({
         /* Вкладок нет — как новая вкладка обычного браузера: адрес сверху, здесь — подсказка и своё приложение. */
         <div className="browser-stage browser-newtab">
           <span className="browser-empty-icon">
-            {preview.state.status === 'failed' ? <TriangleAlert size={22} /> : <Globe size={22} />}
+            {preview?.state.status === 'failed' ? <TriangleAlert size={22} /> : <Globe size={22} />}
           </span>
           <p>Введите адрес или запрос сверху — агент видит те же вкладки и может с ними работать.</p>
-          {preview.state.status === 'starting' && <span className="spinner big" />}
-          {preview.state.status === 'failed' && <p className="browser-error">{preview.state.error}</p>}
-          {canRun && preview.state.status !== 'starting' && (
+          {preview?.state.status === 'starting' && <span className="spinner big" />}
+          {preview?.state.status === 'failed' && <p className="browser-error">{preview.state.error}</p>}
+          {preview && canRun && preview.state.status !== 'starting' && (
             <Button tone="primary" icon={<Globe size={15} />} onClick={() => void preview.start()}>
               Открыть приложение
             </Button>

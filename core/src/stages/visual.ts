@@ -20,6 +20,7 @@ import { getChangeDocs } from '../services/runs.js';
 import { prepareApp } from '../services/workspace.js';
 import { repoChangedFiles } from '../services/repos.js';
 import type { RunFile, VisualResult } from '../types.js';
+import { hasWebBridge, webEndpoint } from '../webbridge.js';
 export function visualDir(k: Kernel, run: RunFile, attempt: number): string {
   return path.join(k.opts.dataDir, 'visual', run.id, String(attempt));
 }
@@ -40,7 +41,7 @@ export async function stageVisual(k: Kernel, run: RunFile) {
   fs.mkdirSync(dir, { recursive: true });
   const { port, url, command } = await expandPorts(run.appUrl!, run.runCommand!);
   const serverGroup = `${run.id}:server`;
-  let cast: Screencast | null = null;
+  let live: { stop(): void } | null = null;
   /** Хвост вывода команды запуска — показать человеку, если проверить не удалось (упал API и т. п.). */
   let serverOut = '';
 
@@ -89,8 +90,7 @@ export async function stageVisual(k: Kernel, run: RunFile) {
     writePw(dir, session);
 
     // Свой Chrome с портом отладки: агент подключается к нему через pw, а окно получает живую трансляцию экрана.
-    const live = await startLiveBrowser(k, run, dir, url, serverGroup, session);
-    cast = live?.cast ?? null;
+    live = await startLiveBrowser(k, run, dir, url, serverGroup, session);
     k.checkStop(run);
     const docs = await getChangeDocs(k, run.id);
     const tg = await k.tools(['git']);
@@ -229,8 +229,10 @@ export async function stageVisual(k: Kernel, run: RunFile) {
     };
     k.nextImplementOrLimit(run, 'Визуальная проверка снова нашла проблемы, а попытки реализации исчерпаны.');
   } finally {
-    cast?.stop();
+    live?.stop();
     k.emit({ type: 'visual.frame', runId: run.id, frame: null });
+    // Вкладки прогона в окне закрываются, даже если стадию остановили посреди подключения.
+    k.emit({ type: 'browser.drop', owner: runOwner(run) });
     // «Стоп» прерывает attach, но закрытию сессии даём завершиться.
     await closePw(k, dir, `purpleflow-${run.id.slice(0, 8)}`, `${run.id}:visual-cleanup`);
     await killGroup(serverGroup);
@@ -260,9 +262,47 @@ export async function closePw(k: Kernel, dir: string, session: string, group: st
   }).catch(() => undefined);
 }
 
+/** Владелец вкладок прогона в окне: визуальная проверка и самопроверка исполнителя (сессия — своя, не как у чатов). */
+export const runOwner = (run: RunFile) => `run:${run.id}`;
+
 /**
- * Chrome без окна с портом отладки в группе процессов сервера (гаснет вместе с ним), pw подключается к нему.
- * null — Chrome не найден или не поднялся: агент откроет свой браузер через `pw open`, без трансляции.
+ * Браузер агента — настоящие вкладки окна (webview) через мост: человек видит страницу вживую и может вмешаться.
+ * pwRun — запуск pw прогона с аргументами. url — сразу открыть. null — моста нет, окно не ответило или pw не
+ * подключился: тогда Chrome без окна или свой браузер агента.
+ */
+export async function attachWebBrowser(
+  k: Kernel,
+  run: RunFile,
+  pwRun: (args: string[]) => Promise<{ code: number | null }>,
+  url?: string,
+): Promise<{ stop(): void } | null> {
+  if (!hasWebBridge(k)) return null;
+  const owner = runOwner(run);
+  const endpoint = webEndpoint(owner);
+  if (!endpoint) return null;
+  const drop = () => k.emit({ type: 'browser.drop', owner });
+  const att = await pwRun(['attach', `--cdp=${endpoint}`]).catch(() => ({ code: 1 }));
+  k.checkStop(run);
+  if (att.code !== 0) {
+    drop();
+    return null;
+  }
+  if (url) {
+    const go = await pwRun(['goto', url]).catch(() => ({ code: 1 }));
+    k.checkStop(run);
+    if (go.code !== 0) {
+      await pwRun(['close']).catch(() => undefined);
+      drop();
+      return null;
+    }
+  }
+  k.log(run, c.dim('Браузер агента — во вкладке «Браузер»: страницу видно вживую.') + '\n');
+  return { stop: drop };
+}
+
+/**
+ * Браузер агента: вкладки окна через мост, а без него — Chrome без окна с портом отладки в группе процессов сервера
+ * (гаснет вместе с ним) и трансляцией в окно. null — ни того ни другого: агент откроет свой браузер через `pw open`.
  */
 export async function startLiveBrowser(
   k: Kernel,
@@ -271,7 +311,20 @@ export async function startLiveBrowser(
   url: string,
   group: string,
   session: string,
-): Promise<{ cast: Screencast } | null> {
+): Promise<{ stop(): void } | null> {
+  const web = await attachWebBrowser(
+    k,
+    run,
+    (args) =>
+      runProc('npx', ['-y', '@playwright/cli@latest', `-s=${session}`, ...args], {
+        cwd: dir,
+        env: k.opts.env,
+        group: run.id,
+        timeoutMs: 120_000,
+      }),
+    url,
+  );
+  if (web) return web;
   const chrome = findChrome(k.opts.env);
   if (!chrome) return null;
   const port = await freePort();
@@ -312,7 +365,7 @@ export async function startLiveBrowser(
   const cast = new Screencast(port, (frame) => k.emit({ type: 'visual.frame', runId: run.id, frame }));
   cast.start();
   k.log(run, c.dim('Браузер агента транслируется во вкладку «Браузер».') + '\n');
-  return { cast };
+  return { stop: () => cast.stop() };
 }
 
 /** Скриншот визуальной проверки для окна: data URL (только из каталога прогона). */

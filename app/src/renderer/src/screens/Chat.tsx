@@ -31,7 +31,6 @@ import { EFFORT_LEVELS, effortOf, effortOptions } from '../lib/effort';
 import { ACCESS_OPTIONS, accessOf, accessPatch, type ChatAccess } from '../lib/chatAccess';
 import { formatPick, insertPick, type PickedElement } from '../lib/pickElement';
 import { useChatWeb } from '../lib/chatWeb';
-import { useAgentScreen } from '../components/BrowserPane';
 import { PATH_DRAG, insertMention, mentionSegments } from '../lib/mentions';
 import { ChatSide, ChatSideRail, useChatChanged, useSideExit, useSideWidth, type ChatPane } from './ChatSide';
 import { DictationButton } from '../components/Dictation';
@@ -352,12 +351,6 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
   }, [projects, draft.projectPath]);
   // Без проекта вкладок «Код» и «Запуск» нет — остаётся браузер.
   const sidePane: ChatPane | null = (pane === 'code' || pane === 'git' || pane === 'run') && !chat?.projectPath ? 'browser' : pane;
-  // Браузер агента чата: кадры его экрана приходят из ядра; начал работать — открываем «Браузер», если панель закрыта.
-  const agentScreen = useAgentScreen(chat?.id ?? '');
-  useEffect(() => {
-    if (agentScreen.live && !pane) setPane('browser');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentScreen.live]);
   // Агент открыл вкладку в браузере чата (webview) — показываем её.
   const agentOpened = useChatWeb(chat?.id ?? '').agentOpened;
   const seenOpened = useRef(agentOpened);
@@ -692,7 +685,6 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
             chat={chat}
             busy={busy}
             closing={closingPane}
-            agentScreen={agentScreen}
             pane={shownPane}
             model={shownModel}
             onPick={onPick}

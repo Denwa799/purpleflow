@@ -125,6 +125,8 @@ export interface ReviewResult {
   at: string;
   blocking: ReviewItem[];
   notes: ReviewItem[];
+  /** Что ревьюер подтвердил (исправленные прошлые замечания, проверенное) — не замечания, без «Исправить». */
+  passed?: string[];
   /** Сверка «план → факт» по пунктам tasks.md. Нет у быстрой правки и у ревью до 0.4.2. */
   plan?: PlanCoverage[];
 }

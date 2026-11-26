@@ -15,6 +15,8 @@ import { GitView } from '../components/GitView';
 import { ChatFiles } from './ChatFiles';
 import { useEffect, useRef, useState } from 'react';
 import { AgentScreen, BrowserPane, useAgentScreen, usePreview } from '../components/BrowserPane';
+import { ChatWebPane } from '../components/ChatWebPane';
+import { useChatWeb } from '../lib/chatWeb';
 import { PillTabs } from '../components/PillTabs';
 import { PrPane } from '../components/PrPane';
 import { LiveLog } from '../components/Terminal';
@@ -49,6 +51,9 @@ export function RunScreen({ runId }: { runId: string }) {
   const gateKey = useRef('');
   const preview = usePreview(runId);
   const agentScreen = useAgentScreen(runId);
+  // Браузер агента стадии (визуальная проверка, самопроверка) — настоящие вкладки окна, когда ядро в приложении.
+  const webOwner = `run:${runId}`;
+  const agentWeb = useChatWeb(webOwner).tabs.length > 0;
   /** Команды проекта: у прогонов до вкладки «Браузер» команда запуска не сохранена в run.json. */
   const [projectRun, setProjectRun] = useState(false);
   const projectPath = run?.projectPath;
@@ -138,7 +143,7 @@ export function RunScreen({ runId }: { runId: string }) {
     }
   };
   const dispatch = bridge.core.dispatch;
-  const agentLive = agentScreen.live || (run.status === 'running' && run.next === 'visual');
+  const agentLive = agentWeb || agentScreen.live || (run.status === 'running' && run.next === 'visual');
   const canRunApp = projectRun || Boolean(run.runCommand && run.appUrl) || preview.state.status !== 'idle';
   const openApp = () => {
     setView('browser');
@@ -245,13 +250,14 @@ export function RunScreen({ runId }: { runId: string }) {
                   id: 'browser',
                   label: 'Браузер',
                   icon: <Globe size={15} />,
-                  extra: agentScreen.live ? (
-                    <span className="tab-dot is-live" title="Агент работает в браузере" />
-                  ) : preview.state.status === 'ready' ? (
-                    <span className="tab-dot is-ok" />
-                  ) : preview.state.status === 'starting' ? (
-                    <span className="tab-live" />
-                  ) : undefined,
+                  extra:
+                    agentWeb || agentScreen.live ? (
+                      <span className="tab-dot is-live" title="Агент работает в браузере" />
+                    ) : preview.state.status === 'ready' ? (
+                      <span className="tab-dot is-ok" />
+                    ) : preview.state.status === 'starting' ? (
+                      <span className="tab-live" />
+                    ) : undefined,
                 },
                 {
                   id: 'code',
@@ -309,7 +315,11 @@ export function RunScreen({ runId }: { runId: string }) {
             {/* Пока идёт визуальная проверка — экран браузера агента; потом — своё приложение для ручной проверки. */}
             {view === 'browser' && agentLive && (
               <div className="pane pane-browser">
-                <AgentScreen screen={agentScreen} />
+                {agentWeb ? (
+                  <ChatWebPane chatId={webOwner} canRun={false} busy={run.status === 'running'} />
+                ) : (
+                  <AgentScreen screen={agentScreen} />
+                )}
               </div>
             )}
             {(view === 'browser' || preview.state.status === 'ready') && (

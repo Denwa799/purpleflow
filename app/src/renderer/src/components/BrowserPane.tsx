@@ -269,50 +269,6 @@ const BrowserTab = forwardRef<
   );
 });
 
-/** Мышь и клавиши на кадре браузера агента — в его страницу (координаты — доли кадра). */
-export function frameInput(ctl: (a: Parameters<typeof bridge.core.controlChatBrowser>[1]) => Promise<unknown>) {
-  const at = (e: { clientX: number; clientY: number; currentTarget: Element }) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
-  };
-  let lastMove = 0;
-  const button = (b: number) => (b === 2 ? 'right' : b === 1 ? 'middle' : 'left') as 'left' | 'right' | 'middle';
-  const mods = (e: { altKey: boolean; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) =>
-    (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
-  return {
-    onMouseMove: (e: React.MouseEvent<HTMLElement>) => {
-      const now = Date.now();
-      if (now - lastMove < 50) return;
-      lastMove = now;
-      void ctl({ type: 'mouse', event: 'move', ...at(e) });
-    },
-    onMouseDown: (e: React.MouseEvent<HTMLElement>) => {
-      e.currentTarget.focus();
-      void ctl({ type: 'mouse', event: 'down', ...at(e), button: button(e.button), clicks: e.detail || 1 });
-    },
-    onMouseUp: (e: React.MouseEvent<HTMLElement>) =>
-      void ctl({ type: 'mouse', event: 'up', ...at(e), button: button(e.button), clicks: e.detail || 1 }),
-    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
-    onWheel: (e: React.WheelEvent<HTMLElement>) => void ctl({ type: 'wheel', ...at(e), dx: e.deltaX, dy: e.deltaY }),
-    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
-      e.preventDefault();
-      void ctl({
-        type: 'key',
-        key: e.key,
-        code: e.code,
-        text: e.key.length === 1 ? e.key : undefined,
-        keyCode: e.keyCode,
-        modifiers: mods(e),
-      });
-    },
-  };
-}
-
-const noSubscribe = () => () => {};
-/** Один и тот же объект: useSyncExternalStore иначе перерисовывал бы без конца. */
-const NO_VIEW: AgentView = { frame: null, action: null };
-const noView = (): AgentView => NO_VIEW;
-
 /** Подпись вкладки: заголовок страницы, иначе хост, иначе «Новая вкладка». */
 export const tabLabel = (t: { title: string; address: string }) => {
   if (t.title.trim()) return t.title.trim();
@@ -333,8 +289,6 @@ export function BrowserPane({
   manual = false,
   intro,
   onPick,
-  agent,
-  agentControl,
 }: {
   preview: ReturnType<typeof usePreview>;
   canRun: boolean;
@@ -343,10 +297,6 @@ export function BrowserPane({
   intro?: string;
   /** Есть — в панели кнопка «Указать элемент»: выбранный на странице элемент уходит сюда (в поле ввода чата). */
   onPick?: (el: PickedElement) => void;
-  /** Браузер агента чата: пока он работает — своя вкладка «Агент» рядом с вкладками человека. */
-  agent?: ReturnType<typeof useAgentScreen>;
-  /** Управление браузером агента (чат): вкладка «Агент» работает как обычная — навигация, телефон, мышь, клавиши. */
-  agentControl?: (action: Parameters<typeof bridge.core.controlChatBrowser>[1]) => Promise<unknown>;
 }) {
   const { error, start, stop: stopApp } = preview;
   const [typed, setTyped] = useState('localhost:3000');
@@ -381,15 +331,6 @@ export function BrowserPane({
     setActive(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appReady, state.url]);
-  // Агент начал работать в браузере — один раз показываем его вкладку; закончил — возвращаемся к своим.
-  const agentLive = Boolean(agent?.live);
-  useEffect(() => {
-    if (agentLive) setActive('agent');
-    else setActive((a) => (a === 'agent' ? null : a));
-  }, [agentLive]);
-  const agentActive = agentLive && active === 'agent';
-  // Кадр и адрес страницы агента — из его трансляции.
-  const agentView = useSyncExternalStore(agent?.store.subscribe ?? noSubscribe, agent?.store.get ?? noView);
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   // Ссылка в новое окно со страницы одной из наших вкладок — новая вкладка рядом.
@@ -401,38 +342,9 @@ export function BrowserPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  const cur = agentActive ? undefined : (tabs.find((t) => t.id === active) ?? tabs[0]);
-  // Вкладка агента — тот же интерфейс, что у обычной: команды уходят в его браузер через ядро.
-  type AgentNav = { back: boolean; forward: boolean };
-  const [agentNav, setAgentNav] = useState<AgentNav>({ back: false, forward: false });
-  const ctl = async (a: Parameters<NonNullable<typeof agentControl>>[0]) => {
-    if (!agentControl) return null;
-    const r = await agentControl(a).catch(() => null);
-    if (r && typeof r === 'object' && 'back' in r)
-      setAgentNav({ back: Boolean((r as AgentNav).back), forward: Boolean((r as AgentNav).forward) });
-    return r;
-  };
-  const agentHandle: TabHandle = {
-    back: () => void ctl({ type: 'back' }),
-    forward: () => void ctl({ type: 'forward' }),
-    reload: () => void ctl({ type: 'reload' }),
-    load: (url) => void ctl({ type: 'navigate', url }),
-    emulate: (m) => void ctl({ type: 'mobile', on: m }),
-    pick: async () => ((await ctl({ type: 'eval', expression: PICK_SCRIPT })) as PickedElement | null) ?? null,
-    cancelPick: () => void ctl({ type: 'eval', expression: CANCEL_PICK_SCRIPT }),
-  };
-  const agentUrl = agentView.frame?.url ?? '';
-  // Агент перешёл на другую страницу — обновляем «назад/вперёд».
-  useEffect(() => {
-    if (agentLive && agentUrl) void ctl({ type: 'state' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentLive, agentUrl]);
-  const info: Partial<TabInfo> | undefined = agentActive
-    ? { address: agentUrl, back: agentNav.back, forward: agentNav.forward, loading: false }
-    : cur;
-  const canAgent = Boolean(agentControl);
-  const h = (): TabHandle | undefined =>
-    agentActive ? (canAgent ? agentHandle : undefined) : cur ? handles.current.get(cur.id) : undefined;
+  const cur = tabs.find((t) => t.id === active) ?? tabs[0];
+  const info: Partial<TabInfo> | undefined = cur;
+  const h = (): TabHandle | undefined => (cur ? handles.current.get(cur.id) : undefined);
   const setInfo = (id: string, i: Partial<Tab>) => setTabs((all) => all.map((t) => (t.id === id ? { ...t, ...i } : t)));
   const closeTab = (id: string) => {
     const tab = tabs.find((t) => t.id === id);
@@ -441,21 +353,19 @@ export function BrowserPane({
     const rest = tabs.filter((t) => t.id !== id);
     handles.current.delete(id);
     setTabs(rest);
-    if (active === id) setActive(rest[Math.max(0, tabs.findIndex((t) => t.id === id) - 1)]?.id ?? (agentLive ? 'agent' : null));
+    if (active === id) setActive(rest[Math.max(0, tabs.findIndex((t) => t.id === id) - 1)]?.id ?? null);
   };
 
   const [draft, setDraft] = useState('');
   const addressInput = useRef<HTMLInputElement>(null);
   // Адресная строка показывает адрес выбранной вкладки; пустая новая — фокус в строку.
   useEffect(() => {
-    // Пока человек печатает адрес, переходы агента его не перебивают.
-    if (document.activeElement === addressInput.current && agentActive) return;
     setDraft(info?.address ?? '');
     if (cur && !cur.address) addressInput.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentActive, cur?.id, info?.address]);
+  }, [cur?.id, info?.address]);
   const go = () => {
-    if (!cur && !agentActive) return;
+    if (!cur) return;
     h()?.load(normalizeAddress(draft, info?.address || state.url));
   };
 
@@ -484,12 +394,11 @@ export function BrowserPane({
   const [mobile, setMobile] = useState(false);
   const toggleMobile = (m: boolean) => {
     setMobile(m);
-    // Не готовые вкладки применят на dom-ready; браузер агента — тоже по этому переключателю.
+    // Не готовые вкладки применят на dom-ready.
     for (const t of handles.current.values()) t.emulate(m);
-    if (agentLive) agentHandle.emulate(m);
   };
 
-  if (!tabs.length && !agentLive) {
+  if (!tabs.length) {
     return (
       <div className="browser-empty">
         <div className="browser-empty-card">
@@ -566,28 +475,9 @@ export function BrowserPane({
   return (
     <div className="browser">
       <div className="browser-tabs" role="tablist" aria-label="Вкладки браузера">
-        {agentLive && (
-          <div
-            className={`browser-tab is-agent ${agentActive ? 'is-on' : ''}`}
-            title="Вкладка агента: браузер, в котором он сейчас работает"
-          >
-            <button type="button" role="tab" aria-selected={agentActive} className="browser-tab-main" onClick={() => setActive('agent')}>
-              <span className="browser-tab-live" />
-              <span className="browser-tab-title">
-                {tabLabel({ title: '', address: agentView.frame?.url ?? '' }).replace('Новая вкладка', 'Агент')}
-              </span>
-            </button>
-          </div>
-        )}
         {tabs.map((t) => (
-          <div key={t.id} className={`browser-tab ${!agentActive && t.id === cur?.id ? 'is-on' : ''}`} title={t.address || 'Новая вкладка'}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!agentActive && t.id === cur?.id}
-              className="browser-tab-main"
-              onClick={() => setActive(t.id)}
-            >
+          <div key={t.id} className={`browser-tab ${t.id === cur?.id ? 'is-on' : ''}`} title={t.address || 'Новая вкладка'}>
+            <button type="button" role="tab" aria-selected={t.id === cur?.id} className="browser-tab-main" onClick={() => setActive(t.id)}>
               {t.loading ? <span className="spinner" /> : <Globe size={13} />}
               <span className="browser-tab-title">{tabLabel(t)}</span>
             </button>
@@ -611,27 +501,13 @@ export function BrowserPane({
           <Plus size={14} />
         </button>
       </div>
-      {/* Вкладка агента — та же панель: навигация неактивна, в адресе — его страница и значок «Агент работает». */}
-      <div className="browser-bar" hidden={!agentActive && !tabs.length}>
-        <Button
-          tone="quiet"
-          icon={<ArrowLeft size={16} />}
-          title="Назад"
-          disabled={!info?.back || (agentActive && !canAgent)}
-          onClick={() => h()?.back()}
-        />
-        <Button
-          tone="quiet"
-          icon={<ArrowRight size={16} />}
-          title="Вперёд"
-          disabled={!info?.forward || (agentActive && !canAgent)}
-          onClick={() => h()?.forward()}
-        />
+      <div className="browser-bar">
+        <Button tone="quiet" icon={<ArrowLeft size={16} />} title="Назад" disabled={!info?.back} onClick={() => h()?.back()} />
+        <Button tone="quiet" icon={<ArrowRight size={16} />} title="Вперёд" disabled={!info?.forward} onClick={() => h()?.forward()} />
         <Button
           tone="quiet"
           icon={<RotateCw size={15} className={info?.loading ? 'spin' : ''} />}
           title="Обновить"
-          disabled={agentActive && !canAgent}
           onClick={() => h()?.reload()}
         />
         <form
@@ -644,18 +520,11 @@ export function BrowserPane({
           <input
             ref={addressInput}
             value={draft}
-            readOnly={agentActive && !canAgent}
             onChange={(e) => setDraft(e.target.value)}
             spellCheck={false}
             aria-label="Адрес"
             placeholder="Адрес или поиск"
           />
-          {agentActive && (
-            <span className="browser-agent-badge">
-              <i />
-              Агент работает
-            </span>
-          )}
         </form>
         {onPick && (
           <Button
@@ -665,7 +534,6 @@ export function BrowserPane({
             title={picking ? 'Отменить выбор (Esc)' : 'Указать элемент на странице — описание попадёт в поле ввода чата'}
             aria-label="Указать элемент"
             aria-pressed={picking}
-            disabled={agentActive && !canAgent}
             onClick={() => void togglePick()}
           />
         )}
@@ -687,32 +555,15 @@ export function BrowserPane({
           tone="quiet"
           icon={<ExternalLink size={15} />}
           title="Открыть в системном браузере"
-          onClick={() => void window.open((agentActive ? agentView.frame?.url : cur?.address) || state.url, '_blank')}
+          onClick={() => void window.open(cur?.address || state.url, '_blank')}
         />
         {tabs.some((t) => t.app) && (
           <Button tone="quiet" icon={<Square size={13} />} title="Остановить приложение" onClick={() => void stopApp()} />
         )}
       </div>
-      {!agentActive && cur?.error && <p className="browser-error browser-load-error">{cur.error}</p>}
+      {cur?.error && <p className="browser-error browser-load-error">{cur.error}</p>}
       {picking && <p className="browser-pick-hint">Наведите на элемент и нажмите — описание попадёт в чат. Esc — отмена.</p>}
-      {agentActive && (
-        <div className="browser-stage agent-stage">
-          {agentView.frame ? (
-            <img
-              className={`agent-frame ${canAgent ? 'is-live' : ''}`}
-              src={`data:image/jpeg;base64,${agentView.frame.data}`}
-              alt="Экран браузера агента"
-              draggable={false}
-              tabIndex={canAgent ? 0 : -1}
-              {...(canAgent ? frameInput(ctl) : {})}
-            />
-          ) : (
-            <span className="spinner big" />
-          )}
-        </div>
-      )}
-      {/* Вкладки живут и под экраном агента — просто не видны. */}
-      <div className={`browser-stage ${mobile ? 'is-mobile' : ''}`} hidden={agentActive || !tabs.length}>
+      <div className={`browser-stage ${mobile ? 'is-mobile' : ''}`}>
         {tabs.map((t) => (
           <BrowserTab
             key={t.id}
@@ -720,7 +571,7 @@ export function BrowserPane({
               if (el) handles.current.set(t.id, el);
             }}
             src={t.src}
-            hidden={agentActive || t.id !== cur?.id}
+            hidden={t.id !== cur?.id}
             mobile={mobile}
             onInfo={(i) => setInfo(t.id, i)}
             onId={(wcId) => setInfo(t.id, { wcId })}

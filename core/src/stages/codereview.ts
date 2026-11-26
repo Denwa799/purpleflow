@@ -4,7 +4,7 @@ import { isImageFile } from '../files.js';
 import { Git } from '../git.js';
 import { formatItem } from '../items.js';
 import type { Kernel } from '../kernel.js';
-import { parseReview } from '../parse.js';
+import { parseReview, parsePassed } from '../parse.js';
 import { GENERATED_GLOBS, lineStats, packReview, splitDiff } from '../reviewdiff.js';
 import { INLINE_DIFF, RUN_JSON_GLOB } from '../runtime.js';
 import { runRole } from '../services/agents.js';
@@ -82,7 +82,8 @@ export async function stageCodeReview(k: Kernel, run: RunFile) {
     blocking = verified.blocking;
     notes = [...notes, ...verified.demoted];
   }
-  const review: ReviewResult = { at: new Date().toISOString(), blocking, notes };
+  const passed = parsePassed(res.text);
+  const review: ReviewResult = { at: new Date().toISOString(), blocking, notes, ...(passed.length ? { passed } : {}) };
   run.reviews.push(review);
   k.emit({ type: 'review.result', runId: run.id, result: review });
   if (blocking.length)

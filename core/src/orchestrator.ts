@@ -361,7 +361,7 @@ export class Orchestrator implements CoreApi {
     return chat.deleteChat(this.kernel, id);
   }
   async controlChatBrowser(id: string, action: ChatBrowserAction) {
-    return controlChatBrowser(this.kernel, id, chat.chatFilesDirOf(this.kernel, id), action);
+    return controlChatBrowser(this.kernel, id, action);
   }
   async chatBrowserAvailable() {
     return chatBrowserAvailable(this.kernel);

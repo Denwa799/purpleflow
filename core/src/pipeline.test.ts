@@ -232,7 +232,7 @@ test(
       review: (n) =>
         n === 1
           ? { blocking: [{ file: 'src/math.js', line: 2, message: 'mul складывает вместо умножения', origin: null }], notes: [] }
-          : { blocking: [], notes: [] },
+          : { blocking: [], notes: [], passed: ['Исправлено: mul умножает'] },
     });
     const core = makeCore(fake);
     const { runId } = await core.dispatch({
@@ -269,6 +269,9 @@ test(
     // Первое ревью — с проверкой найденного вторым проходом: замечание подтверждено со сценарием.
     assert.match(r.reviews[0].blocking[0].message, /Сценарий: сценарий есть/);
     assert.equal(fake.reviews(), 2);
+    // Исправленное прошлое замечание — в подтверждениях повторного ревью, а не в заметках.
+    assert.deepEqual(r.reviews[1].passed, ['Исправлено: mul умножает']);
+    assert.equal(r.reviews[1].notes.length, 0);
   },
 );
 

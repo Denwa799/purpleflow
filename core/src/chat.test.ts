@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Orchestrator } from './orchestrator.js';
+import { setChatWebBridge } from './webbridge.js';
 import { cleanTitle } from './services/chat.js';
 import type { CoreSettings } from './types.js';
 import { claudeArgs } from './agents/claude.js';
@@ -868,14 +869,17 @@ test('cleanTitle: первая строка без кавычек, размет�
 test(
   'чат: браузер для агента — правила pw в системном промпте, пометка в сообщении, в «Вопросах» нет',
   { skip: process.platform === 'win32' },
-  async () => {
+  async (t) => {
     const calls: AgentRunOptions[] = [];
     const claude = async (o: AgentRunOptions) => {
       calls.push(o);
       return { ok: true, text: 'ок', usage: emptyUsage() };
     };
+    // Браузер чата даёт мост к окну приложения; адрес не важен — сообщения не про веб, pw не подключается.
+    setChatWebBridge({ port: 9, key: '00'.repeat(32) });
+    t.after(() => setChatWebBridge(null));
     const core = makeCore({ claude }, { browser: true });
-    // Сообщение не про веб — ядро браузер не открывает (в тесте не запускаем Chrome), но правила и пометка есть.
+    // Сообщение не про веб — pw к окну не подключается, но правила и пометка есть.
     for (const fullAccess of [true, false]) {
       const c = await core.createChat({ agent: 'claude', fullAccess });
       await core.sendChat(c.id, 'поправь опечатку в README');

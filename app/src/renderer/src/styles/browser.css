@@ -328,39 +328,7 @@
   background: var(--bg-4);
 }
 
-/* Вкладка «Агент»: живой индикатор вместо значка. */
-
-.browser-tab-live {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: breathe 1.4s var(--ease) infinite;
-}
-/* Экран агента внутри браузера с вкладками — без своей рамки. */
-.browser > .browser.is-agent {
-  flex: 1;
-  min-height: 0;
-  border-radius: 0;
-  margin: 0;
-}
-/* Панель и вкладки человека под экраном агента: скрыты, но страницы живут (display: none сбросил бы webview). */
-.browser {
-  position: relative;
-}
-.browser > .browser-bar[hidden] {
-  display: none;
-}
-.browser > .browser-stage[hidden] {
-  display: flex;
-  position: absolute;
-  inset: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
-
-/* Значок «Агент работает» в адресной строке вкладки агента. */
+/* Значок «Агент работает» в адресной строке браузера чата и задачи. */
 .browser-agent-badge {
   flex: none;
   display: inline-flex;
@@ -395,16 +363,7 @@
   min-width: 0;
   background: transparent;
 }
-/* Кадр браузера агента, которым можно управлять: как страница — без рамки фокуса. */
-.agent-frame.is-live {
-  cursor: default;
-  outline: none;
-}
-
-/* Страница грузится: бегущая полоска по верхнему краю. */
-.agent-stage.is-loading {
-  position: relative;
-}
+/* Страница грузится: бегущая полоска по нижнему краю строки браузера. */
 .browser-progress {
   position: absolute;
   top: 0;

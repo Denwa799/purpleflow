@@ -554,12 +554,14 @@ handle('dialog:file', async () => {
 const PREVIEW_PARTITION = 'purpleflow-preview';
 /** Во вкладке «Браузер» открываются сайты по http(s) и пустая новая вкладка; file:, chrome: и прочее — нет. */
 const browsable = (u: string) => isWebUrl(u) || u === 'about:blank';
-let previewGuarded = false;
+/** Вкладки прогона (визуальная проверка, самопроверка) — своя сессия на прогон: куки задач не смешиваются с чатами. */
+const RUN_PARTITION = /^purpleflow-run-[\w-]{1,80}$/;
+const guarded = new Set<string>();
 /** Сессия вкладки «Браузер»: сайты не получают камеру, микрофон, геолокацию и уведомления и ничего не скачивают. */
-function guardPreviewSession() {
-  if (previewGuarded) return;
-  previewGuarded = true;
-  const ses = session.fromPartition(PREVIEW_PARTITION);
+function guardPreviewSession(partition = PREVIEW_PARTITION) {
+  if (guarded.has(partition)) return;
+  guarded.add(partition);
+  const ses = session.fromPartition(partition);
   ses.setPermissionRequestHandler((_wc, _permission, done) => done(false));
   ses.setPermissionCheckHandler(() => false);
   ses.on('will-download', (ev) => ev.preventDefault());
@@ -573,8 +575,9 @@ app.on('web-contents-created', (_e, contents) => {
     prefs.contextIsolation = true;
     prefs.sandbox = true;
     prefs.webSecurity = true;
-    if (params.partition !== PREVIEW_PARTITION || !browsable(params.src)) return ev.preventDefault();
-    guardPreviewSession();
+    if ((params.partition !== PREVIEW_PARTITION && !RUN_PARTITION.test(params.partition)) || !browsable(params.src))
+      return ev.preventDefault();
+    guardPreviewSession(params.partition);
   });
   if (contents.getType() === 'webview') {
     // Ссылка в новое окно — новая вкладка браузера в окне приложения.

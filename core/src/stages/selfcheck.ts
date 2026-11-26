@@ -9,7 +9,7 @@ import { killGroup, run as runProc } from '../proc.js';
 import { workDir } from '../services/repos.js';
 import { prepareApp } from '../services/workspace.js';
 import type { RunFile } from '../types.js';
-import { closePw, writePw } from './visual.js';
+import { attachWebBrowser, closePw, writePw } from './visual.js';
 
 export interface SelfCheck {
   /** Блок для промпта исполнителя: адрес приложения, папка скриншотов, что проверять. */
@@ -81,17 +81,18 @@ export async function startSelfCheck(k: Kernel, run: RunFile, attempt: number): 
       return null;
     }
     writeDirectPw(dir, session, node, cli);
-    const opened = await runProc(path.join(dir, 'pw'), ['open', 'about:blank'], {
-      cwd: dir,
-      env: k.opts.env,
-      group: run.id,
-      timeoutMs: 120_000,
-    });
+  } else writePw(dir, session);
+  const pw = (args: string[]) => runProc(path.join(dir, 'pw'), args, { cwd: dir, env: k.opts.env, group: run.id, timeoutMs: 120_000 });
+  // Браузер — вкладка окна: человек видит, что исполнитель смотрит. Нет окна — как раньше.
+  const web = process.platform === 'win32' ? null : await attachWebBrowser(k, run, pw);
+  if (outside && !web) {
+    const opened = await pw(['open', 'about:blank']);
     if (opened.code !== 0) {
       k.log(run, c.dim('Самопроверка в браузере: браузер не открылся — исполнитель обойдётся без неё.') + '\n');
       return null;
     }
-  } else writePw(dir, session);
+  }
+  const attached = outside || Boolean(web);
   const { port, url, command } = await expandPorts(run.appUrl!, run.runCommand!);
   const group = `${run.id}:server`;
   let stopped = false;
@@ -129,7 +130,7 @@ export async function startSelfCheck(k: Kernel, run: RunFile, attempt: number): 
     block: k.prompts.render('selfcheck.md', {
       url,
       dir,
-      open: outside
+      open: attached
         ? `Браузер уже открыт и подключён к pw — не вызывай \`pw open\` и \`pw close\`, переходи командой \`pw goto ${url}\`.`
         : `Открой браузер командой \`pw open ${url}\`, в конце закрой — \`pw close\`.`,
     }),
@@ -137,6 +138,7 @@ export async function startSelfCheck(k: Kernel, run: RunFile, attempt: number): 
     async stop() {
       stopped = true;
       await closePw(k, dir, session, `${run.id}:visual-cleanup`);
+      web?.stop();
       await killGroup(group);
     },
   };

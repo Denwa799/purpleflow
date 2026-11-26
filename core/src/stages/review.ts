@@ -6,7 +6,7 @@ import { formatItem, originTag } from '../items.js';
 import { parseJsonReply } from '../json.js';
 import type { Kernel } from '../kernel.js';
 
-import { parsePlanCoverage, parseReview, parseVerdicts } from '../parse.js';
+import { parsePlanCoverage, parseReview, parseVerdicts, parsePassed } from '../parse.js';
 import { GENERATED_GLOBS, lineStats, packReview, splitDiff } from '../reviewdiff.js';
 import { afterReview } from '../route.js';
 import { INLINE_DIFF, RUN_JSON_GLOB } from '../runtime.js';
@@ -310,7 +310,13 @@ export async function reviewPass(k: Kernel, run: RunFile, quiet = false): Promis
   }
   // Без tasks.md сверять не с чем: что бы ни вернул ревьюер, пункты плана не показываем.
   const plan = docs.tasks.trim() ? parsePlanCoverage(res.text) : [];
-  const review: ReviewResult = { at: new Date().toISOString(), ...parsed, ...(plan.length ? { plan } : {}) };
+  const passed = parsePassed(res.text);
+  const review: ReviewResult = {
+    at: new Date().toISOString(),
+    ...parsed,
+    ...(passed.length ? { passed } : {}),
+    ...(plan.length ? { plan } : {}),
+  };
   run.reviews.push(review);
   k.emit({ type: 'review.result', runId: run.id, result: review });
   if (review.blocking.length)
@@ -332,6 +338,7 @@ export async function reviewPass(k: Kernel, run: RunFile, quiet = false): Promis
   }
   if (review.notes.length)
     out(c.amber(`• заметки (${review.notes.length}):\n`) + review.notes.map((i) => `  • ${formatItem(i)}`).join('\n') + '\n');
+  if (passed.length) out(c.mint(`✓ подтверждено (${passed.length}):\n`) + passed.map((x) => `  • ${x}`).join('\n') + '\n');
   k.end(
     run,
     attempt,

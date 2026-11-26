@@ -1,5 +1,6 @@
 // Фейковый claude: тот же протокол, что у настоящего (промпт в stdin, ответ — stream-json), ответ зависит от промпта.
 // Маркеры в тексте задачи задают сценарий: СЛОМАЙ_АГЕНТА — агент падает с сообщением в stderr.
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -104,6 +105,27 @@ if (/ревьюер в конвейере PurpleFlow/.test(prompt) && /РЕВЬ�
   reply(JSON.stringify({ blocking: [{ file: 'src/math.js', line: 1, message: 'mul не проверяет аргументы', origin }], notes: [] }));
 }
 if (/ревьюер в конвейере PurpleFlow/.test(prompt)) reply('{"blocking": [], "notes": []}');
+
+// Визуальная проверка: настоящий pw из PATH (браузер уже открыт PurpleFlow) — снимок, телефонная ширина, скриншот.
+// ДЕРЖИ_БРАУЗЕР в задаче — подождать, пока тест смотрит на окно; вывод pw — в pw.log рядом с журналом вызовов.
+if (/QA-инженер в конвейере PurpleFlow/.test(sys)) {
+  const pw = (...a) => {
+    let out;
+    try {
+      out = execFileSync('pw', a, { encoding: 'utf8', timeout: 60_000 });
+    } catch (e) {
+      out = `ERR ${e.stdout ?? ''} ${e.message}`;
+    }
+    if (process.env.FAKE_CLAUDE_LOG)
+      fs.appendFileSync(path.join(path.dirname(process.env.FAKE_CLAUDE_LOG), 'pw.log'), `$ pw ${a.join(' ')}\n${out}\n`);
+    return out;
+  };
+  pw('snapshot');
+  pw('resize', '390', '844');
+  pw('screenshot', '--filename', 'mobile.png');
+  if (/ДЕРЖИ_БРАУЗЕР/.test(prompt)) await new Promise((r) => setTimeout(r, 8000));
+  reply(JSON.stringify({ blocking: [], passed: ['Страница открылась, на 390px не ломается'], notes: [], shots: [{ file: 'mobile.png', caption: 'Телефон' }], unverified: null }));
+}
 
 if (/планировщик/.test(sys)) {
   const id = prompt.match(/используй ровно его\): `([^`]+)`/)?.[1];

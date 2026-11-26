@@ -7,9 +7,8 @@ import { chatSession } from '../lib/chatSession';
 import type { PickedElement } from '../lib/pickElement';
 import { ChatSessionPane, ContextRing } from './ChatSessionPane';
 import type { ChatFile, DiffFile, ProjectConfig } from '@purpleflow/core';
-import { BrowserPane, usePreview, type useAgentScreen } from '../components/BrowserPane';
-import { ChatBrowser, useChatBrowserAvailable } from '../components/ChatBrowser';
-import { ChatWebPane } from '../components/ChatWebPane';
+import { BrowserPane, usePreview } from '../components/BrowserPane';
+import { ChatWebPane, useChatBrowserAvailable } from '../components/ChatWebPane';
 import { DiffReview } from '../components/diff/DiffReview';
 import { Button, Empty } from '../components/ui';
 import { bridge, cleanErr } from '../lib/api';
@@ -101,13 +100,10 @@ export function ChatSide({
   onPick,
   onMention,
   closing = false,
-  agentScreen,
 }: {
   chat: ChatFile;
   /** Панель закрывается: доигрывает анимацию, потом её место займёт полоса. */
   closing?: boolean;
-  /** Экран браузера агента чата (трансляция из ядра). */
-  agentScreen?: ReturnType<typeof useAgentScreen>;
   /** Файл или папка из вкладки «Файлы» — «@путь» в поле ввода. */
   onMention: (path: string) => void;
   /** Выбранная модель: своя у чата или по умолчанию. */
@@ -187,11 +183,9 @@ export function ChatSide({
         )}
       </div>
       <div className="chat-side-body" hidden={pane !== 'browser'}>
-        {/* Есть Chrome — браузер общий с агентом (его вкладки и вкладки человека); нет — встроенный браузер окна. */}
-        {sharedBrowser === null ? null : sharedBrowser === 'webview' ? (
+        {/* Браузер общий с агентом (его вкладки и вкладки человека); без него (Windows) — встроенный браузер окна. */}
+        {sharedBrowser === null ? null : sharedBrowser ? (
           <ChatWebPane chatId={chat.id} preview={preview} canRun={canRun} busy={busy} onPick={onPick} />
-        ) : sharedBrowser && agentScreen ? (
-          <ChatBrowser chatId={chat.id} screen={agentScreen} preview={preview} canRun={canRun} busy={busy} onPick={onPick} />
         ) : (
           <BrowserPane
             preview={preview}

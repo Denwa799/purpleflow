@@ -755,13 +755,6 @@ export async function startChatPreview(k: Kernel, id: string): Promise<PreviewSt
   });
 }
 
-/** Файлы проекта для «@»: из git (без игнорируемых), без git — обходом папки. */
-/** Папка файлов чата (вложения, рабочая папка, браузер). */
-export function chatFilesDirOf(k: Kernel, id: string): string {
-  must(k, id);
-  return chatFilesDir(k, id);
-}
-
 /** Рабочая папка чата без проекта: агент работает в ней, вкладка «Файлы» показывает её. */
 export function chatWorkDir(k: Kernel, id: string): string {
   must(k, id);
@@ -770,6 +763,7 @@ export function chatWorkDir(k: Kernel, id: string): string {
   return dir;
 }
 
+/** Файлы проекта для «@»: из git (без игнорируемых), без git — обходом папки. */
 export async function listChatFiles(k: Kernel, projectPath: string): Promise<string[]> {
   if (!projectPath || !fs.existsSync(projectPath)) return [];
   if (await k.hasTool('git')) {

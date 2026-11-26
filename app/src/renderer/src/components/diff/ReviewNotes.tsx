@@ -72,7 +72,7 @@ export function NoteList({
   );
 }
 
-/** Что визуальная проверка подтвердила: не замечания — без «Исправить» и без счёта в «Заметках». */
+/** Что проверка подтвердила (визуальная, ревьюер): не замечания — без «Исправить» и без счёта в «Заметках». */
 export function PassedList({ items, title = 'Проверено в браузере' }: { items: string[]; title?: string }) {
   if (!items.length) return null;
   return (

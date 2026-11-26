@@ -1,7 +1,12 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["blocking", "notes", "plan"],
+  "required": [
+    "blocking",
+    "notes",
+    "passed",
+    "plan"
+  ],
   "properties": {
     "blocking": {
       "type": "array",
@@ -15,6 +20,12 @@
         "$ref": "#/$defs/item"
       }
     },
+    "passed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "plan": {
       "type": "array",
       "items": {
@@ -26,37 +37,67 @@
     "item": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["file", "line", "message", "origin"],
+      "required": [
+        "file",
+        "line",
+        "message",
+        "origin"
+      ],
       "properties": {
         "file": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "line": {
-          "type": ["integer", "null"]
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "message": {
           "type": "string"
         },
         "origin": {
-          "type": ["string", "null"],
-          "enum": ["new", "unfixed", "from_fix", null]
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "new",
+            "unfixed",
+            "from_fix",
+            null
+          ]
         }
       }
     },
     "planItem": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["task", "status", "note"],
+      "required": [
+        "task",
+        "status",
+        "note"
+      ],
       "properties": {
         "task": {
           "type": "string"
         },
         "status": {
           "type": "string",
-          "enum": ["done", "partial", "missing"]
+          "enum": [
+            "done",
+            "partial",
+            "missing"
+          ]
         },
         "note": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     }

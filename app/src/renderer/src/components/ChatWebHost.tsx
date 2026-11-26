@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { WebviewTag } from 'electron';
 import { bridge } from '../lib/api';
-import { patchTab, setView, slotOf, useAllChatWeb, type ChatWeb, type WebTab } from '../lib/chatWeb';
+import { partitionOf, patchTab, setView, slotOf, useAllChatWeb, type ChatWeb, type WebTab } from '../lib/chatWeb';
 
 /** Размер страницы, пока панели нет: последний показанный, иначе обычное окно ноутбука. */
 const lastSize = new Map<string, { width: number; height: number }>();
@@ -175,7 +175,7 @@ function WebTabView({
         ref.current = el as unknown as WebviewTag | null;
       }}
       src={tab.src}
-      partition="purpleflow-preview"
+      partition={partitionOf(chatId)}
       className={`chatweb-view ${hidden ? 'is-hidden' : ''} ${style ? 'is-sized' : ''}`}
       style={style}
     />

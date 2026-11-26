@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import type { WebviewTag } from 'electron';
 import { bridge } from './api';
+import { onCoreEvent } from './store';
 
 export interface WebTab {
   key: string;
@@ -57,6 +58,11 @@ function update(chatId: string, fn: (c: ChatWeb) => ChatWeb) {
 }
 
 export const getAllChatWebIds = () => [...chats.keys()];
+
+/** Владелец вкладок — прогон (`run:<id>`: визуальная проверка, самопроверка), а не чат. */
+export const isRunOwner = (owner: string) => owner.startsWith('run:');
+/** Сессия webview: у каждого прогона своя (куки задач не смешиваются), чаты — общая сессия браузера. */
+export const partitionOf = (owner: string) => (isRunOwner(owner) ? `purpleflow-run-${owner.slice(4)}` : 'purpleflow-preview');
 export const getChatWeb = (chatId: string): ChatWeb => chats.get(chatId) ?? EMPTY;
 export const useChatWeb = (chatId: string): ChatWeb => useSyncExternalStore(subscribe, () => getChatWeb(chatId));
 export const useAllChatWeb = (): [string, ChatWeb][] => useSyncExternalStore(subscribe, () => all);
@@ -64,7 +70,8 @@ export const useAllChatWeb = (): [string, ChatWeb][] => useSyncExternalStore(sub
 /** Окно открыло браузер чата — ядро подключит к нему агента в следующем ходе. */
 const told = new Set<string>();
 function tellCore(chatId: string) {
-  if (told.has(chatId)) return;
+  // Вкладки прогона открывает сам агент стадии — ядру сообщать не о чем.
+  if (told.has(chatId) || isRunOwner(chatId)) return;
   told.add(chatId);
   void bridge.core.controlChatBrowser(chatId, { type: 'opened' }).catch(() => told.delete(chatId));
 }
@@ -162,4 +169,9 @@ bridge.onChatWeb((e) => {
 // Страница открыла ссылку в новом окне — новая вкладка того же чата.
 bridge.onPreviewNewTab((fromId, url) => {
   for (const [chatId, c] of chats) if (c.tabs.some((t) => t.wcId === fromId)) return void openTab(chatId, url);
+});
+
+// Стадия кончилась — её вкладки закрываются.
+onCoreEvent((e) => {
+  if (e.type === 'browser.drop') dropChat(e.owner);
 });

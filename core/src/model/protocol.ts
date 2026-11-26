@@ -49,10 +49,8 @@ export type CoreEvent =
   | { type: 'run.finished'; runId: string; status: RunStatus; message?: string; reason?: FinishReason }
   /** Кадр браузера агента визуальной проверки (JPEG base64); null — трансляция закончилась. */
   | { type: 'visual.frame'; runId: string; frame: { data: string; url: string; width: number; height: number } | null }
-  /** Вкладки браузера чата (Chrome, общий с агентом) и показываемая. */
-  | { type: 'browser.tabs'; chatId: string; tabs: { id: string; url: string; title: string }[]; active: string | null }
-  /** Страница показываемой вкладки браузера чата грузится. */
-  | { type: 'browser.loading'; chatId: string; tab: string; loading: boolean }
+  /** Вкладки владельца в окне больше не нужны (визуальная проверка или самопроверка кончилась) — окно их закрывает. */
+  | { type: 'browser.drop'; owner: string }
   /** Приложение прогона для ручной проверки во вкладке «Браузер». */
   | { type: 'preview.state'; runId: string; state: PreviewState }
   /** Снимок run.json после каждого изменения — UI просто перерисовывается. */
