@@ -411,7 +411,7 @@ const ChatRow = memo(function ChatRow({ c, on }: { c: ChatSummary; on: boolean }
   return (
     <button
       className={`side-run side-chat-row ${c.busy ? 'st-running' : c.last === 'error' ? 'st-stopped' : c.last === 'ok' ? 'st-finished' : 'st-new'} ${on ? 'is-on' : ''}`}
-      title={`Чат · ${c.title}\n${c.projectPath ? shortPath(c.projectPath) : 'без проекта'} · ${c.agent}`}
+      title={`Чат · ${c.title}\n${c.projectPath ? shortPath(c.projectPath) : 'без проекта'}`}
       onClick={() => go({ name: 'chat', chatId: c.id })}
     >
       <span
@@ -425,7 +425,7 @@ const ChatRow = memo(function ChatRow({ c, on }: { c: ChatSummary; on: boolean }
         <ChatTitleText className="side-run-title" title={c.title} titling={c.titling} />
         <span className="side-run-sub">
           <span className="side-run-project">{c.projectPath ? projectName(c.projectPath) : 'без проекта'}</span>
-          <span className="side-run-mode">Чат · {c.agent}</span>
+          <span className="side-run-mode">Чат</span>
         </span>
       </span>
     </button>

@@ -283,7 +283,7 @@ export function ProjectStats({ repo, multiRoot }: { repo: string; multiRoot?: st
                 <button className="side-run" onClick={() => go({ name: 'chat', chatId: c.id })}>
                   <MessageSquare size={14} className="muted" />
                   <span className="side-run-title">{c.title}</span>
-                  <span className="run-list-mode">{c.agent}</span>
+                  <span className="run-list-mode">Чат</span>
                   <time className="muted">{when(c.updatedAt)}</time>
                 </button>
               </li>
