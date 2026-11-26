@@ -162,85 +162,88 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         </button>
       </div>
 
-      <div className="side-create">
-        <button
-          className={`side-new ${v.name === 'new' || (v.name === 'chat' && !v.chatId) ? 'is-on' : ''}`}
-          aria-haspopup="menu"
-          aria-expanded={menu}
-          onClick={() => setMenu(!menu)}
-        >
-          <Plus size={16} /> Создать <ChevronDown size={14} className={`side-new-chev ${menu ? 'is-open' : ''}`} />
-        </button>
-        {menu && (
-          <>
-            <div className="side-create-scrim" onClick={() => setMenu(false)} />
-            <div className="side-create-menu" role="menu">
-              <button role="menuitem" onClick={() => create('task')}>
-                <span className="side-kind is-run">
-                  <Workflow size={15} />
-                </span>
-                <span>
-                  <strong>Задача</strong>
-                  <small>План, реализация, тесты, ревью и приёмка</small>
-                </span>
-              </button>
-              <button role="menuitem" onClick={() => create('chat')}>
-                <span className="side-kind is-chat">
-                  <MessageSquare size={15} />
-                </span>
-                <span>
-                  <strong>Чат</strong>
-                  <small>Вопросы и небольшие правки без конвейера</small>
-                </span>
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-      <div className="side-create">
-        <button
-          className={`side-new ${v.name === 'projects' || v.name === 'project' ? 'is-on' : ''}`}
-          aria-haspopup={recent.length ? 'menu' : undefined}
-          aria-expanded={recent.length ? projMenu : undefined}
-          // Проектов ещё нет — сразу на список, там «Открыть папку…».
-          onClick={() => (recent.length ? setProjMenu(!projMenu) : go({ name: 'projects' }))}
-        >
-          <FolderGit2 size={16} /> Проекты
-          {recent.length > 0 && <ChevronDown size={14} className={`side-new-chev ${projMenu ? 'is-open' : ''}`} />}
-        </button>
-        {projMenu && (
-          <>
-            <div className="side-create-scrim" onClick={() => setProjMenu(false)} />
-            <div className="side-create-menu side-projects-menu" role="menu" aria-label="Последние проекты">
-              {recent.map((p) => (
-                <button
-                  key={p.path}
-                  role="menuitem"
-                  className={v.name === 'project' && v.path === p.path ? 'is-on' : ''}
-                  title={p.root ?? p.path}
-                  onClick={() => openProject(p.path)}
-                >
-                  <span className="side-kind">
-                    <FolderGit2 size={14} />
+      {/* «Создать» и «Проекты» — в одну строку; меню открываются под строкой во всю ширину. */}
+      <div className="side-actions">
+        <div className="side-create">
+          <button
+            className={`side-new ${v.name === 'new' || (v.name === 'chat' && !v.chatId) ? 'is-on' : ''}`}
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            onClick={() => setMenu(!menu)}
+          >
+            <Plus size={16} /> Создать <ChevronDown size={14} className={`side-new-chev ${menu ? 'is-open' : ''}`} />
+          </button>
+          {menu && (
+            <>
+              <div className="side-create-scrim" onClick={() => setMenu(false)} />
+              <div className="side-create-menu" role="menu">
+                <button role="menuitem" onClick={() => create('task')}>
+                  <span className="side-kind is-run">
+                    <Workflow size={15} />
                   </span>
-                  <span className="side-project-name">
-                    <strong>{projectName(p.root ?? p.path)}</strong>
-                    <small>{shortPath(p.root ?? p.path)}</small>
+                  <span>
+                    <strong>Задача</strong>
+                    <small>План, реализация, тесты, ревью и приёмка</small>
                   </span>
-                  {p.active > 0 && (
-                    <span className="side-project-active" title="Идут, ждут решения или в очереди">
-                      {p.active}
-                    </span>
-                  )}
                 </button>
-              ))}
-              <div className="side-menu-sep" />
-              <button role="menuitem" className="side-projects-all" onClick={() => openProject(null)}>
-                Все проекты
-              </button>
-            </div>
-          </>
-        )}
+                <button role="menuitem" onClick={() => create('chat')}>
+                  <span className="side-kind is-chat">
+                    <MessageSquare size={15} />
+                  </span>
+                  <span>
+                    <strong>Чат</strong>
+                    <small>Вопросы и небольшие правки без конвейера</small>
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="side-create">
+          <button
+            className={`side-new ${v.name === 'projects' || v.name === 'project' ? 'is-on' : ''}`}
+            aria-haspopup={recent.length ? 'menu' : undefined}
+            aria-expanded={recent.length ? projMenu : undefined}
+            // Проектов ещё нет — сразу на список, там «Открыть папку…».
+            onClick={() => (recent.length ? setProjMenu(!projMenu) : go({ name: 'projects' }))}
+          >
+            <FolderGit2 size={16} /> Проекты
+            {recent.length > 0 && <ChevronDown size={14} className={`side-new-chev ${projMenu ? 'is-open' : ''}`} />}
+          </button>
+          {projMenu && (
+            <>
+              <div className="side-create-scrim" onClick={() => setProjMenu(false)} />
+              <div className="side-create-menu side-projects-menu" role="menu" aria-label="Последние проекты">
+                {recent.map((p) => (
+                  <button
+                    key={p.path}
+                    role="menuitem"
+                    className={v.name === 'project' && v.path === p.path ? 'is-on' : ''}
+                    title={p.root ?? p.path}
+                    onClick={() => openProject(p.path)}
+                  >
+                    <span className="side-kind">
+                      <FolderGit2 size={14} />
+                    </span>
+                    <span className="side-project-name">
+                      <strong>{projectName(p.root ?? p.path)}</strong>
+                      <small>{shortPath(p.root ?? p.path)}</small>
+                    </span>
+                    {p.active > 0 && (
+                      <span className="side-project-active" title="Идут, ждут решения или в очереди">
+                        {p.active}
+                      </span>
+                    )}
+                  </button>
+                ))}
+                <div className="side-menu-sep" />
+                <button role="menuitem" className="side-projects-all" onClick={() => openProject(null)}>
+                  Все проекты
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="side-filter">

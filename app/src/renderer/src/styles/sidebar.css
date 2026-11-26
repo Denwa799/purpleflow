@@ -101,6 +101,29 @@
   background: var(--bg-4);
   color: var(--text-1);
 }
+/* «Создать» и «Проекты» в одну строку. */
+.side-actions {
+  position: relative;
+  flex: none;
+  display: flex;
+  gap: var(--s-1);
+  margin: var(--s-2) var(--s-3) var(--s-1);
+}
+.side-actions .side-create {
+  position: static;
+  flex: 1;
+  min-width: 0;
+}
+.side-actions .side-create .side-new {
+  width: 100%;
+  margin: 0;
+  padding: 0 var(--s-3);
+  gap: 8px;
+}
+.side-actions .side-create-menu {
+  left: 0;
+  right: 0;
+}
 /* «Все · Чаты · Задачи» над историей. */
 .side-filter {
   flex: none;
