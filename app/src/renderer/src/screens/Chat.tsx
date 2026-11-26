@@ -5,6 +5,7 @@ import {
   Clock,
   Eye,
   FileText,
+  Folder,
   FolderOpen,
   FolderPlus,
   ListTodo,
@@ -72,6 +73,8 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [text, setText] = useState(initialText ?? '');
   const [files, setFiles] = useState<Picked[]>([]);
+  /** Папки для контекста нового чата — до первого сообщения чата ещё нет, они уйдут в createChat. */
+  const [draftDirs, setDraftDirs] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   /** Что человек набирает в заголовке: события ответа агента приходят постоянно и иначе затирали бы ввод. */
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
@@ -152,6 +155,20 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
 
   useEffect(() => input.current?.focus(), [chatId]);
 
+  const dirs = chat ? (chat.dirs ?? []) : draftDirs;
+  const setDirs = (next: string[]) => {
+    setError(null);
+    if (!chat) return setDraftDirs(next);
+    bridge.core.updateChat(chat.id, { dirs: next }).catch((e) => setError(cleanErr(e)));
+  };
+  const addDirs = (paths: string[]) => {
+    const fresh = paths.filter((p) => p && !dirs.includes(p) && p !== projectPath);
+    if (fresh.length) setDirs([...dirs, ...fresh]);
+  };
+  const pickDir = async () => {
+    const d = await bridge.pickFolder('Папка для контекста чата');
+    if (d) addDirs([d]);
+  };
   const addFiles = (list: FileList | File[]) => {
     const all = [...list];
     const big = all.filter((f) => f.size > MAX_MB * 1024 * 1024);
@@ -232,7 +249,7 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
       );
       let id = chat?.id;
       if (!id) {
-        const created = await bridge.core.createChat(draft);
+        const created = await bridge.core.createChat(draftDirs.length ? { ...draft, dirs: draftDirs } : draft);
         id = created.id;
       }
       await bridge.core.sendChat(id, t, attachments);
@@ -463,13 +480,36 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
                 e.preventDefault();
                 // Файл или папка из вкладки «Файлы» — упоминание, а не вложение.
                 const rel = e.dataTransfer.getData(PATH_DRAG);
-                if (rel) mentionPath(rel);
-                else if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+                if (rel) return mentionPath(rel);
+                // Папки с диска — в контекст чата целиком, остальное — вложениями.
+                const plain: File[] = [];
+                const folders: string[] = [];
+                for (const item of [...e.dataTransfer.items]) {
+                  const file = item.getAsFile();
+                  if (!file) continue;
+                  if (item.webkitGetAsEntry()?.isDirectory) folders.push(bridge.pathForFile(file));
+                  else plain.push(file);
+                }
+                if (folders.length) addDirs(folders);
+                if (plain.length) addFiles(plain);
               }}
             >
               {mention.menu}
-              {files.length > 0 && (
+              {(files.length > 0 || dirs.length > 0) && (
                 <div className="chat-files">
+                  {dirs.map((d) => (
+                    <span key={d} className="chat-file is-dir" title={d}>
+                      <Folder size={14} />
+                      <span>{baseName(d)}</span>
+                      <button
+                        type="button"
+                        aria-label={`Убрать папку ${baseName(d)} из контекста`}
+                        onClick={() => setDirs(dirs.filter((x) => x !== d))}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
                   {files.map((f) => (
                     <span key={f.id} className="chat-file">
                       {f.url ? <img src={f.url} alt="" /> : <FileText size={14} />}
@@ -511,6 +551,15 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
                   onClick={() => fileInput.current?.click()}
                 >
                   <Paperclip size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="chat-attach"
+                  aria-label="Добавить папку в контекст"
+                  title="Добавить папку в контекст чата: агент сможет читать её файлы (можно перетащить папку в поле)"
+                  onClick={() => void pickDir()}
+                >
+                  <FolderPlus size={16} />
                 </button>
                 <input
                   ref={fileInput}

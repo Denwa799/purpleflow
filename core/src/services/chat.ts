@@ -121,7 +121,7 @@ export function getChat(k: Kernel, id: string): { chat: ChatFile; busy: boolean 
 
 export async function createChat(
   k: Kernel,
-  o: { projectPath?: string; agent?: AgentKind; model?: string; effort?: string; edits?: boolean; fullAccess?: boolean },
+  o: { projectPath?: string; agent?: AgentKind; model?: string; effort?: string; edits?: boolean; fullAccess?: boolean; dirs?: string[] },
 ): Promise<ChatFile> {
   const now = new Date().toISOString();
   const agent = o.agent ?? (await serviceAgent(k));
@@ -136,6 +136,7 @@ export async function createChat(
     effort: effortFor(agent, o.effort),
     edits: o.edits ?? true,
     ...((o.edits ?? true) && o.fullAccess ? { fullAccess: true } : {}),
+    ...(o.dirs?.length ? { dirs: contextDirs(o.dirs, projectPath) } : {}),
     createdAt: now,
     updatedAt: now,
     messages: [],
@@ -149,9 +150,13 @@ export async function createChat(
 export function updateChat(
   k: Kernel,
   id: string,
-  patch: Partial<Pick<ChatFile, 'title' | 'agent' | 'model' | 'effort' | 'edits' | 'fullAccess'>>,
+  patch: Partial<Pick<ChatFile, 'title' | 'agent' | 'model' | 'effort' | 'edits' | 'fullAccess' | 'dirs'>>,
 ): ChatFile {
   const chat = must(k, id);
+  if (patch.dirs !== undefined) {
+    const dirs = contextDirs(patch.dirs, chat.projectPath);
+    chat.dirs = dirs.length ? dirs : undefined;
+  }
   if (patch.title !== undefined) chat.title = patch.title.trim().slice(0, 120) || chat.title;
   if (patch.agent && patch.agent !== chat.agent) chat.agent = patch.agent;
   if (patch.model !== undefined) chat.model = patch.model.trim();
@@ -168,6 +173,37 @@ export function updateChat(
   if (access(chat) !== was) chat.session = undefined;
   save(k, chat);
   return chat;
+}
+
+/**
+ * Папки для контекста: только существующие абсолютные каталоги, без повторов и без папки проекта —
+ * она у агента и так рабочая. Ошибка — если человек добавил то, что папкой не является.
+ */
+export function contextDirs(dirs: string[], projectPath?: string): string[] {
+  const out: string[] = [];
+  for (const raw of dirs) {
+    const d = raw.trim();
+    if (!d) continue;
+    if (!path.isAbsolute(d)) throw new Error(`Нужен полный путь к папке: ${d}`);
+    let st: fs.Stats;
+    try {
+      st = fs.statSync(d);
+    } catch {
+      throw new Error(`Папка не найдена: ${d}`);
+    }
+    if (!st.isDirectory()) throw new Error(`Это не папка: ${d}`);
+    const norm = path.resolve(d);
+    if (projectPath && path.resolve(projectPath) === norm) continue;
+    if (!out.includes(norm)) out.push(norm);
+  }
+  return out;
+}
+
+/** Папки чата в промпте хода: пути, чтобы агент знал, где искать. Удалённые с диска — пропускаем. */
+function dirsBlock(dirs: string[]): string {
+  return dirs.length
+    ? `\n\nПапки, добавленные в контекст чата (читай их, когда нужно для ответа; меняй только по прямой просьбе):\n${dirs.map((d) => `- ${d}`).join('\n')}`
+    : '';
 }
 
 export async function deleteChat(k: Kernel, id: string): Promise<void> {
@@ -409,6 +445,8 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
     let prompt = (session ? '' : historyBlock(prevMessages)) + (text.trim() || 'Посмотри вложения.');
     if (others.length) prompt += `\n\nПрикреплённые файлы (открой и прочитай):\n${others.map((f) => `- ${f}`).join('\n')}`;
     // @файлы и /скиллы из сообщения — отдельным блоком: CLI в неинтерактивном режиме их сами не разворачивают.
+    const dirs = (chat.dirs ?? []).filter((d) => fs.existsSync(d));
+    if (!compact) prompt += dirsBlock(dirs);
     prompt += mentionsBlock(findMentions(said, cwd, listSkills({ projectPath: chat.projectPath, userConfig: Boolean(s.userConfig) })));
     // Сжатие — встроенная команда CLI: только она, без истории и вложений.
     if (compact) prompt = '/compact';
@@ -428,7 +466,7 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
       onStep,
       proxy: s.proxy.baseUrl ? s.proxy : undefined,
       userConfig: s.userConfig,
-      addDirs: attachments.length ? [path.dirname(attachments[0])] : undefined,
+      addDirs: [...dirs, ...(attachments.length ? [path.dirname(attachments[0])] : [])].filter((d, i, all) => all.indexOf(d) === i),
     };
     if (agent === 'opencode') {
       let sid = session;

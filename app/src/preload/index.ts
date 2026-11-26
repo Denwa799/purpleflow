@@ -1,5 +1,5 @@
 import '@sentry/electron/preload';
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { coreMethodNames, type CoreApi, type CoreMethod, type PurpleFlowBridge } from '../shared/ipc';
 import type { CoreEvent } from '@purpleflow/core';
 import type { UpdateState } from '../shared/update';
@@ -47,6 +47,7 @@ const bridge: PurpleFlowBridge = {
   },
   proxyModels: () => ipcRenderer.invoke('models:list'),
   pickFolder: (title?: string) => ipcRenderer.invoke('dialog:folder', title),
+  pathForFile: (file: File) => webUtils.getPathForFile(file),
   pickFile: () => ipcRenderer.invoke('dialog:file'),
   openPath: (p) => ipcRenderer.invoke('shell:open', p),
   previewEmulate: (id, mobile) => ipcRenderer.invoke('preview:emulate', id, mobile),

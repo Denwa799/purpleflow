@@ -260,6 +260,8 @@ export interface PurpleFlowBridge {
   proxyModels(): Promise<ProxyModels | null>;
   /** Выбор папки; title — заголовок диалога. */
   pickFolder(title?: string): Promise<string | null>;
+  /** Путь на диске у перетащенного файла или папки; пусто — не с диска (например, из буфера). */
+  pathForFile(file: File): string;
   pickFile(): Promise<string | null>;
   openPath(p: string): Promise<void>;
   /** Вкладка «Браузер»: эмуляция телефона для webview по его webContentsId. */

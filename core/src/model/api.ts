@@ -111,10 +111,11 @@ export interface CoreApi {
     effort?: string;
     edits?: boolean;
     fullAccess?: boolean;
+    dirs?: string[];
   }): Promise<ChatFile>;
   updateChat(
     id: string,
-    patch: Partial<Pick<ChatFile, 'title' | 'agent' | 'model' | 'effort' | 'edits' | 'fullAccess'>>,
+    patch: Partial<Pick<ChatFile, 'title' | 'agent' | 'model' | 'effort' | 'edits' | 'fullAccess' | 'dirs'>>,
   ): Promise<ChatFile>;
   deleteChat(id: string): Promise<void>;
   sendChat(id: string, text: string, files?: { name: string; data: Uint8Array }[]): Promise<void>;

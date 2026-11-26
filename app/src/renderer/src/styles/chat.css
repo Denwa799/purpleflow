@@ -942,6 +942,10 @@ input.chat-title:focus {
   color: var(--text-2);
   font-size: var(--fs-12);
 }
+.chat-file.is-dir > svg {
+  flex: none;
+  color: var(--accent);
+}
 .chat-file img {
   width: 22px;
   height: 22px;

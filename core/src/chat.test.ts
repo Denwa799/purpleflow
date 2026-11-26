@@ -771,3 +771,34 @@ test('чат на agy: в «Вопросах» и с полным доступо
   await untilIdle(core, chat.id);
   assert.equal(calls.at(-1)!.askPermission, undefined);
 });
+
+test('чат: папки в контексте — агенту доступ (--add-dir) и пути в промпте; папка проекта и повторы отбрасываются', async () => {
+  const calls: AgentRunOptions[] = [];
+  const core = makeCore({
+    claude: async (o: AgentRunOptions) => {
+      calls.push(o);
+      return { ok: true, text: 'Ок', usage: emptyUsage() };
+    },
+  });
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pf-proj-')));
+  const docs = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pf-docs-')));
+  const chat = await core.createChat({ agent: 'claude', projectPath: project, dirs: [docs, docs, project] });
+  assert.deepEqual(chat.dirs, [docs]);
+  await core.sendChat(chat.id, 'Сравни с документацией');
+  await untilIdle(core, chat.id);
+  assert.deepEqual(calls[0].addDirs, [docs]);
+  assert.match(calls[0].prompt, new RegExp(`Папки, добавленные в контекст чата[\\s\\S]*- ${docs.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  assert.match(claudeArgs(calls[0] as never).join(' '), new RegExp(`--add-dir ${docs.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+
+  // Ошибочный путь — понятная ошибка, а не тихо пропущенная папка.
+  const file = path.join(docs, 'a.txt');
+  fs.writeFileSync(file, 'x');
+  await assert.rejects(core.updateChat(chat.id, { dirs: [docs, file] }), /Это не папка/);
+  await assert.rejects(core.updateChat(chat.id, { dirs: ['relative/dir'] }), /полный путь/);
+  // Убрали все — поля нет, следующему ходу папок не передаём.
+  assert.equal((await core.updateChat(chat.id, { dirs: [] })).dirs, undefined);
+  await core.sendChat(chat.id, 'Ещё');
+  await untilIdle(core, chat.id);
+  assert.deepEqual(calls[1].addDirs, []);
+  assert.doesNotMatch(calls[1].prompt, /Папки, добавленные в контекст/);
+});

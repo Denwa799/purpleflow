@@ -162,6 +162,8 @@ export interface ChatFile {
   mcpAllow?: { server: string; tool: string }[];
   /** Разрешённые только на следующий ход codex. */
   mcpOnce?: { server: string; tool: string }[];
+  /** Папки, добавленные в контекст чата: агент получает к ним доступ на чтение (claude и agy — --add-dir). */
+  dirs?: string[];
   /** Действия agy, которые человек разрешил «в этом чате»: точная команда или путь (agyPermissionKey). */
   agyAllow?: string[];
   createdAt: string;

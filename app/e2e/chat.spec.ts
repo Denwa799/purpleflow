@@ -671,3 +671,38 @@ test('чат на agy в «Правках»: агент просит разре�
     pre.cleanup();
   }
 });
+
+test('чат: папка в контексте — значок над полем, агенту путь и --add-dir; папку можно убрать', async () => {
+  const box = makeSandbox();
+  const docs = path.join(box.root, 'docs');
+  fs.mkdirSync(docs);
+  const l = await launch(box);
+  const { page } = l;
+  try {
+    await l.app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog;
+    }, docs);
+    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('menuitem', { name: /Чат/ }).click();
+    await page.getByRole('button', { name: 'Добавить папку в контекст' }).click();
+    const chip = page.locator('.chat-file.is-dir');
+    await expect(chip).toHaveText('docs');
+    await expect(chip).toHaveAttribute('title', docs);
+    if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-dir.png') });
+
+    const input = page.locator('.chat-compose textarea');
+    await input.fill('Что в документации?');
+    await input.press('Enter');
+    await expect(page.locator('.chat-msg.is-assistant').last()).not.toBeEmpty();
+    const call = box.calls().find((c) => /Что в документации/.test(c.prompt))!;
+    expect(call.prompt).toContain(`- ${docs}`);
+    expect(call.args.join(' ')).toContain(`--add-dir ${docs}`);
+    // Папка остаётся в чате и после отправки; убрать — кнопкой на значке.
+    await expect(chip).toBeVisible();
+    await page.getByRole('button', { name: 'Убрать папку docs из контекста' }).click();
+    await expect(chip).toHaveCount(0);
+  } finally {
+    await quit(l);
+    box.cleanup();
+  }
+});
