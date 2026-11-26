@@ -76,6 +76,13 @@ export function applyStep(a: ChatAnswer, st: AgentStep): void {
     case 'question':
       parts.push(defined({ kind: 'question', id: st.id, questions: st.questions }));
       return;
+    case 'permission': {
+      // Повтор с тем же id — ответ человека: карточка остаётся на месте, меняется состояние.
+      const cur = parts.find((p): p is Extract<ChatPart, { kind: 'permission' }> => p.kind === 'permission' && p.id === st.id);
+      if (cur) cur.state = st.state;
+      else parts.push(defined({ kind: 'permission', id: st.id, text: st.text, detail: st.detail, reason: st.reason, state: st.state }));
+      return;
+    }
     case 'notice': {
       const next: ChatPart = defined({ kind: 'notice', level: st.level, text: st.text, key: st.key });
       const i = st.key ? parts.findIndex((p) => p.kind === 'notice' && p.key === st.key) : -1;

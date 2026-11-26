@@ -406,6 +406,9 @@ export class Orchestrator implements CoreApi {
     await Promise.race([turn, new Promise((r) => setTimeout(r, 50))]);
     turn.catch(() => {});
   }
+  async answerChatPermission(id: string, requestId: string, answer: 'once' | 'always' | 'deny') {
+    chat.answerChatPermission(id, requestId, answer);
+  }
   stopChat(id: string) {
     return chat.stopChat(this.kernel, id);
   }

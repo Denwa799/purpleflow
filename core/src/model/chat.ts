@@ -55,7 +55,24 @@ export type ChatPart =
   | ChatToolPart
   | { kind: 'todos'; items: ChatTodo[] }
   | { kind: 'notice'; level: 'info' | 'warn' | 'error'; text: string; key?: string }
-  | { kind: 'question'; id?: string; questions: ChatQuestion[] };
+  | { kind: 'question'; id?: string; questions: ChatQuestion[] }
+  | ChatPermissionPart;
+
+/** Ответ человека на запрос разрешения; expired — ход кончился раньше ответа. */
+export type PermissionState = 'pending' | 'once' | 'always' | 'denied' | 'expired';
+
+/** Агент просит действие, которое режим «Правки» не пускает (agy спрашивает перед каждым действием): решает человек. */
+export interface ChatPermissionPart {
+  kind: 'permission';
+  id: string;
+  /** Действие одной строкой: «Bash git commit -m …». */
+  text: string;
+  /** Команда или путь целиком. */
+  detail?: string;
+  /** Почему режим его не пускает. */
+  reason: string;
+  state: PermissionState;
+}
 
 export interface ChatMcpServer {
   name: string;
@@ -145,6 +162,8 @@ export interface ChatFile {
   mcpAllow?: { server: string; tool: string }[];
   /** Разрешённые только на следующий ход codex. */
   mcpOnce?: { server: string; tool: string }[];
+  /** Действия agy, которые человек разрешил «в этом чате»: точная команда или путь (agyPermissionKey). */
+  agyAllow?: string[];
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];

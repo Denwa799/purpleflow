@@ -376,3 +376,71 @@ test('runAgy: ход кончился на отказе — agy просят з�
   assert.equal(prompts.length, 2);
   assert.match(prompts[1].params.prompt[0].text, /отклонил последнее действие: стадия только читает/);
 });
+
+test('runAgy: в «Правках» спрашивает человека — один раз, в этом чате и отказ', unix, async (t) => {
+  const cwd = tmp(t);
+  const push = { toolCallId: 'c1', name: 'run_command', kind: 'execute', rawInput: { CommandLine: 'git push' } };
+  const f = fakeAgy(t, {
+    steps: [
+      { permission: push },
+      { permission: { ...push, toolCallId: 'c2' } },
+      {
+        permission: {
+          toolCallId: 'c3',
+          name: 'write_file',
+          kind: 'edit',
+          rawInput: { Path: '/etc/hosts' },
+          locations: [{ path: '/etc/hosts' }],
+        },
+      },
+      text('Готово'),
+    ],
+  });
+  const asked: string[] = [];
+  const kept: string[] = [];
+  const o = opts(f.bin, cwd, {
+    limited: true,
+    // Молчание agy, пока человек думает, — не зависание.
+    idleTimeoutMs: 300,
+    askPermission: async (q) => {
+      asked.push(q.id);
+      await new Promise((r) => setTimeout(r, 600));
+      return q.id === 'c1' ? 'always' : 'deny';
+    },
+    onAllow: (key) => kept.push(key),
+  });
+  const r = await runAgy(o);
+  assert.equal(r.ok, true, r.error);
+  // c2 — та же команда: после «в этом чате» не спрашиваем.
+  assert.deepEqual(asked, ['c1', 'c3']);
+  assert.deepEqual(kept, ['command:git push']);
+  const answers = f.read().filter((m) => m.method === undefined && m.result) as { result: { outcome: { optionId: string } } }[];
+  assert.deepEqual(
+    answers.map((a) => a.result.outcome.optionId),
+    ['allow', 'allow', 'deny'],
+  );
+  const denied = o.steps.find((s) => s.kind === 'tool_result' && s.id === 'c3') as Extract<AgentStep, { kind: 'tool_result' }>;
+  // Отказ человека — не «песочница»: карточки «Нужен полный доступ» под ним не будет.
+  assert.equal(denied.output, 'Вы отклонили это действие.');
+});
+
+test('runAgy: разрешённое раньше «в этом чате» проходит без вопроса', unix, async (t) => {
+  const cwd = tmp(t);
+  const f = fakeAgy(t, {
+    steps: [{ permission: { toolCallId: 'c1', name: 'run_command', kind: 'execute', rawInput: { CommandLine: 'git push' } } }, text('ок')],
+  });
+  let asked = false;
+  await runAgy(
+    opts(f.bin, cwd, {
+      limited: true,
+      allowed: ['command:git push'],
+      askPermission: async () => {
+        asked = true;
+        return 'deny';
+      },
+    }),
+  );
+  assert.equal(asked, false);
+  const answer = f.read().find((m) => m.method === undefined && m.result) as { result: { outcome: { optionId: string } } };
+  assert.equal(answer.result.outcome.optionId, 'allow');
+});

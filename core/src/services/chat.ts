@@ -23,7 +23,7 @@ import type {
   PreviewState,
 } from '../types.js';
 import { effortFor, enabledAgent } from '../types.js';
-import { AGY_PROXY_DEFAULT_MODEL } from '../agents/agy.js';
+import { AGY_PROXY_DEFAULT_MODEL, type AgyPermissionAnswer } from '../agents/agy.js';
 import { PROXY_DEFAULT_MODEL } from '../agents/opencode.js';
 import { agentModel, service, serviceAgent } from './agents.js';
 import { findMentions, listSkills, mentionsBlock, walkFiles } from './mentions.js';
@@ -45,6 +45,16 @@ const chatFile = (k: Kernel, id: string) => path.join(chatsDir(k), `${id}.json`)
 /** Вложения и рабочая папка чата без проекта. */
 const chatFilesDir = (k: Kernel, id: string) => path.join(chatsDir(k), id);
 const group = (id: string) => `chat:${id}`;
+
+/** Запросы разрешений agy, которые ждут ответа человека: чат → id запроса → ответ (expired — ход кончился без ответа). */
+const asks = new Map<string, Map<string, (a: AgyPermissionAnswer | 'expired') => void>>();
+
+/** Ответ человека на запрос разрешения agy в «Правках». */
+export function answerChatPermission(id: string, requestId: string, answer: AgyPermissionAnswer): void {
+  const r = asks.get(id)?.get(requestId);
+  if (!r) throw new Error('Запрос уже не ждёт ответа');
+  r(answer);
+}
 
 /** Чат, по которому идёт ход: одна копия в памяти, чтобы сообщения в очередь и правки настроек не затирались сохранениями хода. */
 const live = new WeakMap<Kernel, Map<string, ChatFile>>();
@@ -371,6 +381,11 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
     applyStep(acc, st);
     if (!timer) timer = setTimeout(flush, FLUSH_MS);
   };
+  /** Сразу в окно: карточка запроса не должна ждать следующего куска ответа. */
+  const flushNow = () => {
+    if (timer) clearTimeout(timer);
+    flush();
+  };
 
   let res: AgentResult;
   let changed: string[] | undefined;
@@ -432,19 +447,46 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
       if (sid) chat.session = { agent, id: sid };
     } else if (agent === 'agy') {
       let conv = session;
-      res = await k.agy({
-        ...common,
-        prompt,
-        systemPrompt: session ? undefined : sys,
-        images,
-        // Режимы чата: решения по каждому запросу разрешения agy (ACP), как песочницы codex и claude.
-        readOnly: !chat.edits,
-        limited: chat.edits && !chat.fullAccess,
-        resumeConversation: session,
-        onSession: (sid) => {
-          conv = sid;
-        },
-      });
+      const waiting = new Map<string, (a: AgyPermissionAnswer | 'expired') => void>();
+      asks.set(id, waiting);
+      try {
+        res = await k.agy({
+          ...common,
+          prompt,
+          systemPrompt: session ? undefined : sys,
+          images,
+          // В «Правках» действие вне режима решает человек: карточка в ответе, agy ждёт.
+          askPermission:
+            chat.edits && !chat.fullAccess
+              ? (q) =>
+                  new Promise<AgyPermissionAnswer>((resolve) => {
+                    waiting.set(q.id, (a) => {
+                      waiting.delete(q.id);
+                      onStep({ kind: 'permission', ...q, state: a === 'deny' ? 'denied' : a });
+                      flushNow();
+                      resolve(a === 'expired' ? 'deny' : a);
+                    });
+                    onStep({ kind: 'permission', ...q, state: 'pending' });
+                    flushNow();
+                  })
+              : undefined,
+          allowed: chat.agyAllow,
+          onAllow: (key) => {
+            chat.agyAllow = [...new Set([...(chat.agyAllow ?? []), key])];
+          },
+          // Режимы чата: решения по каждому запросу разрешения agy (ACP), как песочницы codex и claude.
+          readOnly: !chat.edits,
+          limited: chat.edits && !chat.fullAccess,
+          resumeConversation: session,
+          onSession: (sid) => {
+            conv = sid;
+          },
+        });
+      } finally {
+        // Ход кончился (ответ, стоп, сбой) — неотвеченные карточки гаснут, agy уже не ждёт.
+        for (const r of [...waiting.values()]) r('expired');
+        asks.delete(id);
+      }
       if (conv) chat.session = { agent, id: conv };
     } else if (agent === 'codex') {
       let thread = session;

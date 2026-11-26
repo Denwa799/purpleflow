@@ -618,3 +618,56 @@ test('чат: вкладка «Запуск» — старт, вывод сер�
     box.cleanup();
   }
 });
+
+test('чат на agy в «Правках»: агент просит разрешение — карточка с командой, ответ уходит агенту', async () => {
+  const pre = makeSandbox();
+  const agyLog = path.join(pre.root, 'agy.jsonl');
+  const agy = path.join(pre.root, 'bin', 'agy');
+  fs.writeFileSync(agy, `#!/bin/sh\nFAKE_AGY_LOG="${agyLog}" exec "${process.execPath}" "${path.join(__dirname, 'fake-agy.mjs')}" "$@"\n`, {
+    mode: 0o755,
+  });
+  const settingsFile = path.join(pre.profile, 'settings.json');
+  const cur = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+  fs.writeFileSync(
+    settingsFile,
+    JSON.stringify({
+      ...cur,
+      toolPaths: { ...cur.toolPaths, agy },
+      enabledAgents: ['claude', 'agy'],
+      agents: { ...cur.agents, executor: 'agy' },
+    }),
+  );
+  const l = await launch(pre);
+  const { page } = l;
+  try {
+    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('menuitem', { name: /Чат/ }).click();
+    const input = page.locator('.chat-compose textarea');
+    await input.fill('Отправь ветку');
+    await input.press('Enter');
+
+    const card = page.getByRole('group', { name: 'Агент просит разрешение' });
+    await expect(card).toBeVisible();
+    await expect(card.locator('.chat-permission-cmd')).toHaveText('git push origin main');
+    if (process.env.PURPLEFLOW_SHOTS) {
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: path.join(pre.root, '..', 'pf-chat-permission.png') });
+    }
+    await card.getByRole('button', { name: 'Разрешать в этом чате' }).click();
+    const answer = page.locator('.chat-msg.is-assistant').last();
+    await expect(answer).toContainText('Отправил ветку.');
+    await expect(answer.locator('.chat-permission-done')).toContainText('Разрешено в этом чате');
+    await expect(card).toHaveCount(0);
+    // Разрешение — не отказ песочницы: карточки полного доступа нет.
+    await expect(page.getByRole('button', { name: 'Дать доступ и повторить' })).toHaveCount(0);
+    const answers = fs
+      .readFileSync(agyLog, 'utf8')
+      .trim()
+      .split('\n')
+      .map((x) => JSON.parse(x));
+    expect(answers.at(-1).answer.outcome.optionId).toBe('allow');
+  } finally {
+    await quit(l);
+    pre.cleanup();
+  }
+});

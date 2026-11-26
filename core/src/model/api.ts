@@ -122,6 +122,8 @@ export interface CoreApi {
   allowChatMcp(id: string, tool: { server: string; tool: string; always?: boolean }): Promise<void>;
   /** Песочница правок не пустила команду: полный доступ этому чату и просьба повторить. */
   grantChatFullAccess(id: string): Promise<void>;
+  /** Ответ на запрос разрешения agy в «Правках»: once — один раз, always — до конца чата, deny — отказ. */
+  answerChatPermission(id: string, requestId: string, answer: 'once' | 'always' | 'deny'): Promise<void>;
   stopChat(id: string): Promise<void>;
   /** Убрать сообщение из очереди, пока агент его не получил. */
   unqueueChat(id: string, messageId: string): Promise<ChatFile>;

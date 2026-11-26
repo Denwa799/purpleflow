@@ -9,8 +9,11 @@ export interface RunOptions {
   env: NodeJS.ProcessEnv;
   /** Текст в stdin; без него stdin закрывается сразу. */
   input?: string;
-  /** Диалог по stdin (JSON-RPC): stdin остаётся открытым, закрывает его сам вызывающий. Сильнее input. */
-  onStdin?: (stdin: Writable) => void;
+  /**
+   * Диалог по stdin (JSON-RPC): stdin остаётся открытым, закрывает его сам вызывающий. Сильнее input.
+   * pauseIdle — пока процесс ждёт ответа человека, его молчание не считается зависанием.
+   */
+  onStdin?: (stdin: Writable, ctl: { pauseIdle: (paused: boolean) => void }) => void;
   /** Запуск строки через системный шелл (команда тестов). */
   shell?: boolean;
   timeoutMs?: number;
@@ -239,9 +242,12 @@ export function run(cmd: string, args: string[], opts: RunOptions): Promise<RunR
     let idle = false;
     let spawnError: string | undefined;
     let idleTimer: NodeJS.Timeout | null = null;
+    let idlePaused = 0;
     const touch = () => {
       if (!opts.idleTimeoutMs) return;
       if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = null;
+      if (idlePaused > 0) return;
       idleTimer = setTimeout(() => {
         timedOut = true;
         idle = true;
@@ -275,7 +281,11 @@ export function run(cmd: string, args: string[], opts: RunOptions): Promise<RunR
     child.stdin?.on('error', () => {
       /* процесс мог закрыть stdin раньше */
     });
-    if (opts.onStdin && child.stdin) opts.onStdin(child.stdin);
+    const pauseIdle = (paused: boolean) => {
+      idlePaused = Math.max(0, idlePaused + (paused ? 1 : -1));
+      touch();
+    };
+    if (opts.onStdin && child.stdin) opts.onStdin(child.stdin, { pauseIdle });
     else if (opts.input != null) child.stdin?.end(opts.input);
     else child.stdin?.end();
 

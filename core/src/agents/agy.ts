@@ -34,6 +34,38 @@ export interface AgyOptions extends AgentRunOptions {
   limited?: boolean;
   /** Продолжить сохранённую беседу ACP (session/resume). */
   resumeConversation?: string;
+  /**
+   * Спросить человека о действии, которое режим не пускает (чат в «Правках»). Без него — отказ сразу.
+   * once — только этот вызов, always — до конца хода и дальше по allowed, deny — отказ.
+   */
+  askPermission?: (q: AgyPermissionQuestion) => Promise<AgyPermissionAnswer>;
+  /** Ключи действий (agyPermissionKey), которые человек уже разрешил «в этом чате». */
+  allowed?: string[];
+  /** Человек разрешил действие «в этом чате»: ключ сохранить для следующих ходов. */
+  onAllow?: (key: string) => void;
+}
+
+export interface AgyPermissionQuestion {
+  id: string;
+  /** Действие одной строкой, как в ленте. */
+  text: string;
+  /** Команда или путь целиком. */
+  detail?: string;
+  /** Почему режим его не пускает. */
+  reason: string;
+}
+export type AgyPermissionAnswer = 'once' | 'always' | 'deny';
+
+/**
+ * Ключ «то же самое действие»: команда — дословно, правка — по пути. «Разрешать в этом чате»
+ * пускает ровно это, а не все команды или всю запись вне проекта.
+ */
+export function agyPermissionKey(call: Record<string, unknown>): string {
+  const args = (call.rawInput ?? call.args ?? {}) as Record<string, unknown>;
+  const command = typeof args.CommandLine === 'string' ? args.CommandLine : typeof args.command === 'string' ? args.command : '';
+  if (command) return `command:${command.trim()}`;
+  const p = toolPaths(call)[0];
+  return `${String(call.kind ?? 'other')}:${p ? path.resolve(p) : String(call.name ?? '')}`;
 }
 
 /** Модель по умолчанию через прокси: своя модель agy по умолчанию (gemini-3.1-pro) в прокси не продаётся. */
@@ -274,6 +306,9 @@ const MAX_DENIAL_ROUNDS = 2;
 export const continueAfterDenial = (why: string) =>
   `PurpleFlow отклонил последнее действие: ${why}. Не повторяй его и не обходи другими средствами. Закончи задачу без него и дай итоговый ответ; если без него никак — так и скажи.`;
 
+/** Метка отказа человеком: в ленте — «Вы отклонили», без карточки «Нужен полный доступ». */
+const HUMAN_DENIED = '\0human';
+
 /** Текст отказа: под него настроено распознавание в чате (карточка «Нужен полный доступ»). */
 export const denialText = (why: string) => `Operation not permitted: PurpleFlow отклонил действие — ${why}.`;
 
@@ -402,6 +437,8 @@ export async function runAgy(o: AgyOptions): Promise<AgentResult> {
   const denied = new Map<string, string>();
   const reported = new Set<string>();
   let rpc: Rpc | null = null;
+  let ctl: { pauseIdle: (paused: boolean) => void } | null = null;
+  const allowed = new Set(o.allowed ?? []);
   let ready: () => void = () => {};
   const started = new Promise<void>((r) => (ready = r));
 
@@ -451,7 +488,7 @@ export async function runAgy(o: AgyOptions): Promise<AgentResult> {
       if ((status === 'completed' || status === 'failed') && !reported.has(id)) {
         reported.add(id);
         const why = denied.get(id);
-        const output = why ? denialText(why) : toolOutput(u);
+        const output = why === HUMAN_DENIED ? 'Вы отклонили это действие.' : why ? denialText(why) : toolOutput(u);
         if (status === 'failed' || why) out(c.coral(clip(output, 400)) + '\n');
         step(defined({ kind: 'tool_result' as const, id, ok: status === 'completed' && !why, output: plainOutput(output) || undefined }));
       }
@@ -471,21 +508,47 @@ export async function runAgy(o: AgyOptions): Promise<AgentResult> {
     }
   };
 
-  const onRequest = (m: Part) => {
+  const onRequest = async (m: Part) => {
     const params = (m.params ?? {}) as Part;
+    const conn = rpc!;
     if (m.method === 'session/request_permission') {
       const call = (params.toolCall ?? {}) as Part;
-      const why = agyDecision(mode, call, roots);
-      if (why) {
-        denied.set(String(call.toolCallId ?? ''), why);
-        lastDenial = why;
-        out(c.amber(`✕ ${describeTool(String(call.name ?? 'tool'), (call.rawInput ?? call.args ?? {}) as Part)} — ${why}`) + '\n');
+      const id = String(call.toolCallId ?? '');
+      const args = (call.rawInput ?? call.args ?? {}) as Part;
+      const line = describeTool(String(call.name ?? 'tool'), args);
+      const key = agyPermissionKey(call);
+      let why = allowed.has(key) ? null : agyDecision(mode, call, roots);
+      let human = false;
+      if (why && o.askPermission) {
+        const command = typeof args.CommandLine === 'string' ? args.CommandLine : undefined;
+        out(c.amber(`? ${line} — ждёт решения: ${why}`) + '\n');
+        ctl?.pauseIdle(true);
+        let answer: AgyPermissionAnswer = 'deny';
+        try {
+          answer = await o.askPermission(defined({ id, text: line, detail: command ?? toolPaths(call)[0], reason: why }));
+        } catch {
+          /* чат закрыт или ход остановлен — отказ */
+        } finally {
+          ctl?.pauseIdle(false);
+        }
+        if (answer !== 'deny') {
+          why = null;
+          if (answer === 'always') {
+            allowed.add(key);
+            o.onAllow?.(key);
+          }
+        } else human = true;
       }
-      rpc!.respond(m.id, permissionOutcome(params.options, !why));
+      if (why) {
+        denied.set(id, human ? HUMAN_DENIED : why);
+        lastDenial = human ? 'человек отклонил его в чате' : why;
+        out(c.amber(`✕ ${line} — ${human ? 'отклонено' : why}`) + '\n');
+      }
+      conn.respond(m.id, permissionOutcome(params.options, !why));
       return;
     }
     // Файловую систему и терминал клиента мы не объявляли: agy работает со своими.
-    rpc!.fail(m.id, `PurpleFlow не поддерживает ${String(m.method)}`);
+    conn.fail(m.id, `PurpleFlow не поддерживает ${String(m.method)}`);
   };
 
   const proc = run(o.bin, agyArgs(o), {
@@ -494,7 +557,8 @@ export async function runAgy(o: AgyOptions): Promise<AgentResult> {
     timeoutMs: o.timeoutMs,
     idleTimeoutMs: o.idleTimeoutMs,
     group: o.group,
-    onStdin: (stdin) => {
+    onStdin: (stdin, control) => {
+      ctl = control;
       rpc = new Rpc(stdin);
       ready();
     },
@@ -508,7 +572,7 @@ export async function runAgy(o: AgyOptions): Promise<AgentResult> {
       }
       if (!rpc || rpc.settle(m)) return;
       if (m.method === 'session/update') onUpdate(((m.params ?? {}) as Part).update as Part);
-      else if (m.method !== undefined && m.id !== undefined) onRequest(m);
+      else if (m.method !== undefined && m.id !== undefined) void onRequest(m);
     },
   });
 

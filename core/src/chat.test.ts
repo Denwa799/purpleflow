@@ -10,16 +10,18 @@ import type { CoreSettings } from './types.js';
 import { claudeArgs } from './agents/claude.js';
 import { codexArgs } from './agents/codex.js';
 import { emptyUsage, type AgentRunOptions } from './agents/common.js';
+import type { AgyOptions } from './agents/agy.js';
 import type { ChatFile, CoreEvent } from './types.js';
 
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'prompts');
 
 /** Ядро с «установленными» claude и codex (скрипты отвечают версией) и подменёнными запусками. */
-function makeCore(runners: { claude?: unknown; codex?: unknown }) {
+function makeCore(runners: { claude?: unknown; codex?: unknown; agy?: unknown }) {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-bin-'));
-  for (const n of ['codex', 'claude']) fs.writeFileSync(path.join(bin, n), `#!/bin/sh\necho "${n} 1.0.0"\n`, { mode: 0o755 });
+  for (const n of ['codex', 'claude', 'agy']) fs.writeFileSync(path.join(bin, n), `#!/bin/sh\necho "${n} 1.0.0"\n`, { mode: 0o755 });
   const settings = {
-    toolPaths: { codex: path.join(bin, 'codex'), claude: path.join(bin, 'claude') },
+    toolPaths: { codex: path.join(bin, 'codex'), claude: path.join(bin, 'claude'), agy: path.join(bin, 'agy') },
+    enabledAgents: ['claude', 'codex', 'agy'],
     proxy: { baseUrl: '', apiKey: '' },
     models: { planner: 'opus', executor: 'sonnet', reviewer: '' },
     agents: { planner: 'claude', executor: 'claude', reviewer: 'codex' },
@@ -694,4 +696,78 @@ test('Git (просмотр): ветки с отставанием от main, и
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
   }
+});
+
+test('чат на agy в «Правках»: запрос разрешения ждёт человека, «в этом чате» запоминается на следующие ходы', async () => {
+  const calls: AgyOptions[] = [];
+  const answers: string[] = [];
+  const agy = async (o: AgyOptions) => {
+    calls.push(o);
+    if (calls.length === 1) {
+      const a = await o.askPermission!({
+        id: 'p1',
+        text: 'Bash git push',
+        detail: 'git push',
+        reason: 'git-операции доступны только с полным доступом',
+      });
+      answers.push(a);
+      if (a === 'always') o.onAllow?.('command:git push');
+    }
+    o.onStep?.({ kind: 'text', text: 'Готово' });
+    return { ok: true, text: 'Готово', usage: emptyUsage() };
+  };
+  const core = makeCore({ agy });
+  const chat = await core.createChat({ agent: 'agy' });
+  await core.updateChat(chat.id, { edits: true });
+  await core.sendChat(chat.id, 'Отправь ветку');
+  // Карточка появляется, пока ход идёт.
+  let part;
+  for (let i = 0; i < 200 && !part; i++) {
+    part = (await core.getChat(chat.id))!.chat.messages.at(-1)!.parts?.find((p) => p.kind === 'permission');
+    if (!part) await new Promise((r) => setTimeout(r, 10));
+  }
+  assert.deepEqual(part, {
+    kind: 'permission',
+    id: 'p1',
+    text: 'Bash git push',
+    detail: 'git push',
+    reason: 'git-операции доступны только с полным доступом',
+    state: 'pending',
+  });
+  await core.answerChatPermission(chat.id, 'p1', 'always');
+  const done = await untilIdle(core, chat.id);
+  assert.deepEqual(answers, ['always']);
+  assert.equal((done.messages.at(-1)!.parts!.find((p) => p.kind === 'permission') as { state: string }).state, 'always');
+  assert.deepEqual(done.agyAllow, ['command:git push']);
+  await assert.rejects(core.answerChatPermission(chat.id, 'p1', 'once'), /не ждёт ответа/);
+
+  await core.sendChat(chat.id, 'Ещё раз');
+  await untilIdle(core, chat.id);
+  assert.deepEqual(calls[1].allowed, ['command:git push']);
+  assert.equal(calls[1].limited, true);
+});
+
+test('чат на agy: в «Вопросах» и с полным доступом человека не спрашивают; карточка без ответа гаснет с ходом', async () => {
+  const calls: AgyOptions[] = [];
+  const agy = async (o: AgyOptions) => {
+    calls.push(o);
+    // Ход кончился, не дождавшись ответа (стоп или сбой agy).
+    if (o.askPermission)
+      void o.askPermission({ id: 'p1', text: 'Bash rm -rf /tmp/x', reason: 'запись вне папки проекта доступна только с полным доступом' });
+    return { ok: true, text: 'Ок', usage: emptyUsage() };
+  };
+  const core = makeCore({ agy });
+  const chat = await core.createChat({ agent: 'agy', edits: false });
+  await core.sendChat(chat.id, 'Вопрос');
+  await untilIdle(core, chat.id);
+  assert.equal(calls[0].askPermission, undefined);
+  assert.equal(calls[0].readOnly, true);
+  await core.updateChat(chat.id, { edits: true });
+  await core.sendChat(chat.id, 'Правка');
+  const after = await untilIdle(core, chat.id);
+  assert.equal((after.messages.at(-1)!.parts!.find((p) => p.kind === 'permission') as { state: string }).state, 'expired');
+  await core.updateChat(chat.id, { fullAccess: true });
+  await core.sendChat(chat.id, 'Полный');
+  await untilIdle(core, chat.id);
+  assert.equal(calls.at(-1)!.askPermission, undefined);
 });

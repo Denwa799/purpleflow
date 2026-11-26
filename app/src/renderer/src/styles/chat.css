@@ -568,6 +568,57 @@ input.chat-title:focus {
   height: 32px;
   margin-left: auto;
 }
+.chat-permission .chat-permission-cmd {
+  flex: 1 0 100%;
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-m);
+  background: var(--bg-1);
+  color: var(--text-1);
+  font-family: var(--font-code);
+  font-size: var(--fs-12);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: auto;
+}
+.chat-permission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  flex: 1 0 100%;
+}
+.chat-permission .chat-permission-actions .btn {
+  margin-left: 0;
+}
+.chat-permission-error {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--err);
+  font-size: var(--fs-12);
+}
+.chat-permission-done {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-3);
+  font-size: var(--fs-12);
+}
+.chat-permission-done > svg {
+  flex: none;
+}
+.chat-permission-done.is-once,
+.chat-permission-done.is-always {
+  color: var(--ok);
+}
+.chat-permission-done code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .chat-question {
   display: flex;
   flex-direction: column;
