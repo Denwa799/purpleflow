@@ -1036,7 +1036,8 @@
   }
 }
 /* Скиллы и команды: экран проекта и вкладка «Сессия» чата */
-.overview-skills {
+.overview-skills,
+.overview-mcp {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);

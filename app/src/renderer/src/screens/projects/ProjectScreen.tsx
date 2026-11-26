@@ -1,5 +1,5 @@
 // Страница проекта с вкладками «Обзор», «Команды и окружение», «Знания о проекте».
-import { MessageSquare, Plus, TriangleAlert } from 'lucide-react';
+import { BookOpen, ChartColumn, GitBranch, LayoutGrid, MessageSquare, Plus, Terminal, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { PillTabs } from '../../components/PillTabs';
 import { Button, Topbar } from '../../components/ui';
@@ -59,16 +59,17 @@ export function ProjectScreen({ path, initialTab }: { path: string; initialTab?:
           value={tab}
           onChange={setTab}
           items={[
-            { id: 'overview', label: 'Обзор' },
+            { id: 'overview', label: 'Обзор', icon: <LayoutGrid size={15} /> },
+            { id: 'stats', label: 'Статистика', icon: <ChartColumn size={15} />, disabled: !repo },
             {
               id: 'commands',
               label: 'Команды и окружение',
+              icon: <Terminal size={15} />,
               disabled: !repo,
               extra: repo && (!p?.cfg || dirty) ? <span className="tab-dot" title="Не сохранены" /> : undefined,
             },
-            { id: 'knowledge', label: 'Знания о проекте', disabled: !repo },
-            { id: 'git', label: 'Git', disabled: !repo },
-            { id: 'stats', label: 'Статистика', disabled: !repo },
+            { id: 'knowledge', label: 'Знания о проекте', icon: <BookOpen size={15} />, disabled: !repo },
+            { id: 'git', label: 'Git', icon: <GitBranch size={15} />, disabled: !repo },
           ]}
         />
       </div>

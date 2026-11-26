@@ -31,7 +31,7 @@ export function McpPanel({ repo }: { repo: string }) {
     };
   }, [repo]);
   return (
-    <section className="panel overview-skills overview-mcp">
+    <section className="panel overview-mcp">
       <header className="overview-runs-head">
         <h3>MCP-серверы</h3>
         <span className="muted">{servers?.length || ''}</span>
