@@ -11,6 +11,7 @@ import { Kernel } from './kernel.js';
 import type { CoreOptions, Listener } from './runtime.js';
 import { getAttachment } from './services/attachments.js';
 import * as chat from './services/chat.js';
+import * as mcpstore from './services/mcpstore.js';
 import * as skillstore from './services/skillstore.js';
 import { listAgyModels, listOpencodeModels, testConnection } from './services/connection.js';
 import { control } from './services/control.js';
@@ -385,6 +386,21 @@ export class Orchestrator implements CoreApi {
   }
   async listAgyModels() {
     return listAgyModels(this.kernel);
+  }
+  async listMcp(projectPath?: string) {
+    return mcpstore.listMcp(this.kernel, projectPath);
+  }
+  async searchMcp(query: string) {
+    return mcpstore.searchMcp(query);
+  }
+  async installMcp(o: Parameters<typeof mcpstore.installMcp>[1]) {
+    return mcpstore.installMcp(this.kernel, o);
+  }
+  async removeMcp(o: Parameters<typeof mcpstore.removeMcp>[1]) {
+    return mcpstore.removeMcp(this.kernel, o);
+  }
+  async copyMcp(o: Parameters<typeof mcpstore.copyMcp>[1]) {
+    return mcpstore.copyMcp(this.kernel, o);
   }
   async searchSkills(query: string) {
     return skillstore.searchSkills(query);

@@ -7,7 +7,7 @@ import { shortPath } from '../../lib/format';
 import { useActions, type ProjectTab } from '../../lib/store';
 import { CommandsPanel } from './Commands';
 import { KnowledgeView } from './Knowledge';
-import { Overview } from './Overview';
+import { Overview, ProjectStats } from './Overview';
 import { type LoadedProject, loadProject, projectName } from './common';
 import { GitView } from '../../components/GitView';
 import { cleanErr } from '../../lib/api';
@@ -68,6 +68,7 @@ export function ProjectScreen({ path, initialTab }: { path: string; initialTab?:
             },
             { id: 'knowledge', label: 'Знания о проекте', disabled: !repo },
             { id: 'git', label: 'Git', disabled: !repo },
+            { id: 'stats', label: 'Статистика', disabled: !repo },
           ]}
         />
       </div>
@@ -100,6 +101,11 @@ export function ProjectScreen({ path, initialTab }: { path: string; initialTab?:
               {repo && tab === 'git' && (
                 <div className="project-tab step-enter project-git">
                   <GitView projectPath={p.info.path} />
+                </div>
+              )}
+              {repo && tab === 'stats' && (
+                <div className="project-tab step-enter">
+                  <ProjectStats repo={p.info.path} />
                 </div>
               )}
               {repo && tab === 'knowledge' && (

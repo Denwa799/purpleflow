@@ -150,6 +150,48 @@ export interface SkillHit {
   installs: number;
 }
 
+/** Где записан MCP-сервер: в проекте или у вас (для всех проектов). */
+export type McpScope = 'project' | 'user';
+
+/** MCP-сервер из настроек агента. Значения переменных и заголовков не передаются — только имена. */
+export interface McpEntry {
+  name: string;
+  agent: AgentKind;
+  scope: McpScope;
+  transport: 'stdio' | 'http' | 'sse';
+  /** Команда запуска целиком (stdio). */
+  command?: string;
+  url?: string;
+  env: string[];
+  headers: string[];
+  /** claude: сервер этого проекта только у вас (в ~/.claude.json), а не в .mcp.json. */
+  local?: boolean;
+  disabled?: boolean;
+}
+
+/** Вариант установки сервера из реестра MCP. */
+export interface McpInstall {
+  kind: 'remote' | 'npm' | 'pypi';
+  label: string;
+  transport: 'stdio' | 'http' | 'sse';
+  command?: string;
+  args?: string[];
+  url?: string;
+  /** Что спросить у человека: переменные окружения (stdio) или заголовки (удалённый). */
+  inputs: { key: string; kind: 'env' | 'header'; description?: string; required: boolean; secret: boolean; default?: string }[];
+}
+
+/** Сервер из реестра MCP. */
+export interface McpHit {
+  id: string;
+  /** Короткое имя для настроек агента. */
+  name: string;
+  title?: string;
+  description: string;
+  version: string;
+  installs: McpInstall[];
+}
+
 export interface ChatFile {
   id: string;
   title: string;

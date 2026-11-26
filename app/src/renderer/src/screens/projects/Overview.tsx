@@ -8,6 +8,7 @@ import { MODES, stageTitle } from '../../lib/stages';
 import { useStore, type ProjectTab } from '../../lib/store';
 import { CmdChips, InitRepoButton, type LoadedProject, plural } from './common';
 import { useSkills } from '../../components/SkillList';
+import { McpPanel } from '../../components/McpManager';
 import { SkillGroups, SkillSearchDialog } from '../../components/SkillManager';
 import { bridge, cleanErr } from '../../lib/api';
 
@@ -147,7 +148,7 @@ export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: 
 
       <SkillsPanel repo={repo} />
 
-      <StatsPanel repo={repo} runsKey={runs.map((r) => r.status + r.updatedAt).join()} />
+      <McpPanel repo={repo} />
 
       <section className="panel overview-runs">
         <header className="overview-runs-head">
@@ -283,6 +284,16 @@ function ms(n: number | null): string {
   return `${Math.floor(h / 24)} д${h % 24 ? ` ${h % 24} ч` : ''}`;
 }
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+/** Вкладка «Статистика» проекта: пересчитывается, когда меняются прогоны. */
+export function ProjectStats({ repo }: { repo: string }) {
+  const { state } = useStore();
+  const runsKey = state.runs
+    .filter((r) => r.projectPath === repo)
+    .map((r) => r.status + r.updatedAt)
+    .join();
+  return <StatsPanel repo={repo} runsKey={runsKey} />;
+}
+
 function StatsPanel({ repo, runsKey }: { repo: string; runsKey: string }) {
   const [s, setS] = useState<ProjectStats | null>(null);
   useEffect(() => {

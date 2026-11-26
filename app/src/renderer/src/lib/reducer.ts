@@ -2,7 +2,7 @@
 import type { ChatFile, ChatSummary, RunFile, RunSummary, ToolInfo, ToolName, NextPartDraft, ReviewTarget } from '@purpleflow/core';
 import type { PublicSettings } from '../../../shared/ipc';
 
-export type ProjectTab = 'overview' | 'commands' | 'knowledge' | 'git';
+export type ProjectTab = 'overview' | 'commands' | 'knowledge' | 'git' | 'stats';
 export type SettingsTab = 'account' | 'stats' | 'tools' | 'models' | 'window';
 export type View =
   /** review — открыть сразу в режиме «Ревью кода» с выбранной целью (из вкладки «Git»). */
