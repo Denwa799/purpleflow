@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { when } from '../lib/format';
 import { MODES } from '../lib/stages';
 import { useStore } from '../lib/store';
+import { ChatTitleText } from '../components/ChatTitle';
 import { projectName } from './projects/common';
 
 /** Карточка — одна большая кнопка: значок, стрелка, название и описание внизу. */
@@ -37,7 +38,15 @@ export function HomeScreen() {
   const waiting = state.runs.filter((r) => r.status === 'waiting');
   // «Продолжить» — последние прогоны и чаты вместе, свежие сверху.
   const recent = [
-    ...state.runs.map((r) => ({ kind: 'run' as const, id: r.id, title: r.title, at: r.updatedAt, project: r.projectPath, mode: r.mode })),
+    ...state.runs.map((r) => ({
+      kind: 'run' as const,
+      id: r.id,
+      title: r.title,
+      at: r.updatedAt,
+      project: r.projectPath,
+      mode: r.mode,
+      titling: false,
+    })),
     ...state.chats.map((c) => ({
       kind: 'chat' as const,
       id: c.id,
@@ -45,6 +54,7 @@ export function HomeScreen() {
       at: c.updatedAt,
       project: c.projectPath,
       mode: undefined,
+      titling: c.titling,
     })),
   ]
     .sort((a, b) => b.at.localeCompare(a.at))
@@ -89,7 +99,7 @@ export function HomeScreen() {
                     <span className={`home-recent-kind is-${it.kind}`}>
                       {it.kind === 'run' ? <Workflow size={14} /> : <MessageSquare size={14} />}
                     </span>
-                    <span className="home-recent-title">{it.title}</span>
+                    <ChatTitleText className="home-recent-title" title={it.title} titling={it.titling} />
                     <span className="home-recent-sub">
                       {it.project ? projectName(it.project) : 'без проекта'} ·{' '}
                       {it.kind === 'run' ? (MODES.find((m) => m.id === (it.mode ?? 'task'))?.title ?? 'Задача') : 'Чат'} · {when(it.at)}

@@ -589,3 +589,64 @@ html[data-theme='black'] {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
   color: #fff;
 }
+
+/* Заглушка названия, пока модель его придумывает: две мерцающие полоски. */
+.title-skel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 1.35em;
+  max-width: 100%;
+}
+.title-skel i {
+  display: block;
+  height: 9px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--bg-5) 0%, rgba(255, 255, 255, 0.2) 50%, var(--bg-5) 100%);
+  background-size: 200% 100%;
+  animation: titleShimmer 1.3s linear infinite;
+}
+.title-skel i:first-child {
+  width: 64px;
+}
+.title-skel i:last-child {
+  width: 92px;
+  animation-delay: 0.15s;
+}
+.title-skel.is-wide {
+  height: 32px;
+}
+.title-skel.is-wide i {
+  height: 14px;
+  border-radius: 7px;
+}
+.title-skel.is-wide i:first-child {
+  width: 140px;
+}
+.title-skel.is-wide i:last-child {
+  width: 200px;
+}
+@keyframes titleShimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+/* Курсор печати, пока название набирается по буквам. */
+.title-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.12em;
+  border-radius: 1px;
+  background: var(--text-2);
+  animation: breathe 0.8s var(--ease) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .title-skel i {
+    animation: none;
+  }
+}

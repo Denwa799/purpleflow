@@ -35,6 +35,13 @@ test('главный экран: «Создать задачу» и «Новый
     await page.locator('.chat-compose textarea').fill('Как устроен этот проект?');
     await page.locator('.chat-compose textarea').press('Enter');
     await expect(page.locator('.chat-msg.is-assistant')).toBeVisible({ timeout: 30_000 });
+    // Пока модель придумывает название — заглушка в истории и в шапке чата, потом название.
+    const history = page.getByRole('navigation', { name: 'История' });
+    await expect(history.getByRole('status', { name: 'Придумываю название' })).toBeVisible();
+    await expect(page.locator('.chat-head').getByRole('status', { name: 'Придумываю название' })).toBeVisible();
+    if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-title-skel.png') });
+    await expect(history.getByText('Как устроен этот проект?')).toBeVisible();
+    await expect(page.getByLabel('Название чата')).toHaveValue('Как устроен этот проект?');
     // «Продолжить» на главном — этот чат, клик открывает его.
     await page.getByRole('button', { name: 'Главная' }).click();
     const recent = page.getByRole('region', { name: 'Продолжить' });

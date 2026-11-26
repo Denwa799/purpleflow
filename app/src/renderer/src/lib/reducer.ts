@@ -68,7 +68,16 @@ export function summarize(r: RunFile, runJsonPath = ''): RunSummary {
 export function chatSummary(c: ChatFile, busy: boolean): ChatSummary {
   const answer = [...c.messages].reverse().find((m) => m.role === 'assistant' && !m.pending);
   const last = answer ? (answer.error || answer.stopped ? 'error' : 'ok') : null;
-  return { id: c.id, title: c.title, projectPath: c.projectPath, agent: c.agent, updatedAt: c.updatedAt, busy, last };
+  return {
+    id: c.id,
+    title: c.title,
+    projectPath: c.projectPath,
+    agent: c.agent,
+    updatedAt: c.updatedAt,
+    busy,
+    last,
+    ...(c.titling ? { titling: true } : {}),
+  };
 }
 
 export function reducer(s: State, a: Action): State {

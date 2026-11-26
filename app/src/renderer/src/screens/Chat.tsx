@@ -33,6 +33,7 @@ import { formatPick, insertPick, type PickedElement } from '../lib/pickElement';
 import { PATH_DRAG, insertMention } from '../lib/mentions';
 import { ChatSide, ChatSideRail, useChatChanged, useSideWidth, type ChatPane } from './ChatSide';
 import { DictationButton } from '../components/Dictation';
+import { TitleSkeleton, useTypedTitle } from '../components/ChatTitle';
 import { insertDictation } from '../lib/wav';
 import { bridge, cleanErr } from '../lib/api';
 
@@ -80,6 +81,8 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
   const [error, setError] = useState<string | null>(null);
   /** Что человек набирает в заголовке: события ответа агента приходят постоянно и иначе затирали бы ввод. */
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  // Название от модели: заглушка, пока думает, потом печать по буквам.
+  const typedTitle = useTypedTitle(chat?.title ?? '', chat?.titling);
   const [toTask, setToTask] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const list = useRef<HTMLDivElement>(null);
@@ -353,10 +356,12 @@ export function ChatScreen({ chatId, initialProject, initialText }: { chatId?: s
     <div className="screen chat-screen">
       <header className="chat-head">
         <div className="chat-head-title">
-          {chat ? (
+          {chat?.titling && titleDraft === null ? (
+            <TitleSkeleton wide />
+          ) : chat ? (
             <input
               className="chat-title"
-              value={titleDraft ?? chat.title}
+              value={titleDraft ?? typedTitle}
               aria-label="Название чата"
               onFocus={() => setTitleDraft(chat.title)}
               onChange={(e) => setTitleDraft(e.target.value)}

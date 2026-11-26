@@ -24,6 +24,7 @@ import { openWhatsNew, useUpdateState } from '../lib/update';
 import { recentProjects } from '../lib/recentProjects';
 import { UpdateButton, updatePending } from './WhatsNew';
 import { PillTabs } from './PillTabs';
+import { ChatTitleText } from './ChatTitle';
 
 const STATUS_WORD: Record<RunSummary['status'], string> = {
   queued: 'в очереди',
@@ -421,7 +422,7 @@ const ChatRow = memo(function ChatRow({ c, on }: { c: ChatSummary; on: boolean }
         {c.last || c.busy ? <span className="side-dot" /> : null}
       </span>
       <span className="side-run-text">
-        <span className="side-run-title">{c.title}</span>
+        <ChatTitleText className="side-run-title" title={c.title} titling={c.titling} />
         <span className="side-run-sub">
           <span className="side-run-project">{c.projectPath ? projectName(c.projectPath) : 'без проекта'}</span>
           <span className="side-run-mode">Чат · {c.agent}</span>

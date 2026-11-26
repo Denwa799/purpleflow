@@ -814,6 +814,8 @@ test('чат: после первого ответа модель даёт на�
     return { ok: true, text: 'Это монорепозиторий', usage: emptyUsage() };
   };
   const core = makeCore({ claude }, { chatTitles: true });
+  const events: CoreEvent[] = [];
+  core.on((e) => events.push(e));
   const chat = await core.createChat({ agent: 'claude' });
   await core.sendChat(chat.id, 'слушай, а как вообще устроен этот проект и где что лежит?');
   await untilIdle(core, chat.id);
@@ -822,6 +824,10 @@ test('чат: после первого ответа модель даёт на�
   const named = (await core.getChat(chat.id))!.chat;
   assert.equal(named.title, 'Устройство проекта');
   assert.equal(named.autoTitle, undefined);
+  // Пока модель думала, окно получало чат с titling — для заглушки; после — флага нет.
+  assert.ok(events.some((e) => e.type === 'chat.updated' && e.chat.titling === true));
+  assert.equal(named.titling, undefined);
+  assert.equal((await core.listChats()).find((c) => c.id === chat.id)?.titling, undefined);
   // В запросе названия — начало переписки.
   const ask = prompts.find((p) => /Придумай короткое название/.test(p))!;
   assert.match(ask, /Человек: слушай, а как вообще устроен/);

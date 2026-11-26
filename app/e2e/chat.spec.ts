@@ -603,7 +603,8 @@ test('боковая панель: «Проекты» раскрывает по�
 
     await projects.click();
     await menu.getByRole('menuitem', { name: 'Все проекты' }).click();
-    await expect(page.getByRole('button', { name: 'Открыть папку…' })).toBeVisible();
+    // На экране проектов «Открыть папку…» бывает и в шапке, и в пустом списке.
+    await expect(page.getByRole('button', { name: 'Открыть папку…' }).first()).toBeVisible();
     expect(l.errors).toEqual([]);
   } finally {
     await quit(l);

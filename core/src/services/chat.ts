@@ -64,6 +64,9 @@ const liveOf = (k: Kernel) => {
   return m;
 };
 
+/** Чаты, которым сейчас придумывается название. */
+const titlingNow = new Set<string>();
+
 function read(k: Kernel, id: string): ChatFile | null {
   const cur = liveOf(k).get(id);
   if (cur) return cur;
@@ -71,6 +74,8 @@ function read(k: Kernel, id: string): ChatFile | null {
     const chat = JSON.parse(fs.readFileSync(chatFile(k, id), 'utf8')) as ChatFile;
     // Ответ, который писался при закрытии приложения, уже не допишется.
     if (!k.chatBusy.has(id)) for (const m of chat.messages) if (m.pending) Object.assign(m, { pending: false, stopped: true });
+    // Название придумывалось, когда приложение закрыли, — заглушка не должна висеть вечно.
+    if (chat.titling && !titlingNow.has(id)) delete chat.titling;
     return chat;
   } catch {
     return null;
@@ -97,7 +102,16 @@ function save(k: Kernel, chat: ChatFile) {
 export function chatSummary(c: ChatFile, busy: boolean): ChatSummary {
   const answer = [...c.messages].reverse().find((m) => m.role === 'assistant' && !m.pending);
   const last = answer ? (answer.error || answer.stopped ? 'error' : 'ok') : null;
-  return { id: c.id, title: c.title, projectPath: c.projectPath, agent: c.agent, updatedAt: c.updatedAt, busy, last };
+  return {
+    id: c.id,
+    title: c.title,
+    projectPath: c.projectPath,
+    agent: c.agent,
+    updatedAt: c.updatedAt,
+    busy,
+    last,
+    ...(c.titling ? { titling: true } : {}),
+  };
 }
 
 export function listChats(k: Kernel): ChatSummary[] {
@@ -645,15 +659,26 @@ async function nameChat(k: Kernel, id: string, was: string): Promise<void> {
       ?.text.trim()
       .slice(0, 2000) ?? '';
   if (!user) return;
-  const prompt = `${TITLE_PROMPT}: 2–6 слов, на языке переписки, без кавычек и точки в конце. Верни только название.\n\nЧеловек: ${user}\n\nАссистент: ${reply}`;
-  const res = await service(k, { prompt, group: `${group(id)}:title`, timeoutMs: 60_000 });
-  const title = res.ok ? cleanTitle(res.text) : '';
-  if (!title) return;
-  // Пока ждали, чат мог измениться: берём живой экземпляр (идёт следующий ход) или свежий с диска.
-  const chat = liveOf(k).get(id) ?? must(k, id);
-  if (chat.title !== was) return;
-  chat.title = title;
-  save(k, chat);
+  // Окно показывает заглушку, пока модель думает. must() отдаёт живой экземпляр, если идёт ход.
+  titlingNow.add(id);
+  first.titling = true;
+  save(k, first);
+  let title = '';
+  try {
+    const prompt = `${TITLE_PROMPT}: 2–6 слов, на языке переписки, без кавычек и точки в конце. Верни только название.\n\nЧеловек: ${user}\n\nАссистент: ${reply}`;
+    const res = await service(k, { prompt, group: `${group(id)}:title`, timeoutMs: 60_000 });
+    title = res.ok ? cleanTitle(res.text) : '';
+  } finally {
+    titlingNow.delete(id);
+    // Пока ждали, чат могли удалить или изменить: берём живой экземпляр (идёт следующий ход) или свежий с диска.
+    const chat = read(k, id);
+    if (chat) {
+      delete chat.titling;
+      // Человек успел переименовать — его название остаётся.
+      if (title && chat.title === was) chat.title = title;
+      save(k, chat);
+    }
+  }
 }
 
 /** Черновик задачи для конвейера по переписке: формулировку пишет модель, вложения переходят в задачу. */
