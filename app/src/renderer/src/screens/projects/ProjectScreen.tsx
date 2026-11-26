@@ -106,7 +106,7 @@ export function ProjectScreen({ path, initialTab }: { path: string; initialTab?:
               )}
               {repo && tab === 'stats' && (
                 <div className="project-tab step-enter">
-                  <ProjectStats repo={p.info.path} />
+                  <ProjectStats repo={p.info.path} multiRoot={p.multi?.root} />
                 </div>
               )}
               {repo && tab === 'knowledge' && (

@@ -1410,7 +1410,23 @@ button.dd:hover:not(:disabled),
 }
 .chat-side .tab-groups {
   flex: none;
+  flex-wrap: nowrap;
+  gap: var(--s-2);
   margin: var(--s-5) var(--s-5) var(--s-4);
+}
+/* Вкладки не переносятся: при узкой панели прокручиваются, «Скрыть» остаётся справа отдельным кружком. */
+.chat-side .tab-groups .tabs {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chat-side .tab-groups .tabs::-webkit-scrollbar {
+  display: none;
+}
+.side-collapse {
+  width: 40px;
+  height: 40px;
+  background: var(--bg-2);
 }
 .side-resize {
   position: absolute;

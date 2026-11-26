@@ -123,6 +123,8 @@ test('mcp: список проекта, поиск в реестре с поля
     await expect(page.locator('.project-tab').getByText('Статистика', { exact: true })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Статистика' }).click();
     await expect(page.getByRole('tab', { name: 'Статистика' })).toHaveAttribute('aria-selected', 'true');
+    // Прогоны — тоже здесь, а не на обзоре.
+    await expect(page.getByText('Прогонов в этом проекте ещё не было.')).toBeVisible();
     expect(l.errors).toEqual([]);
   } finally {
     await quit(l);

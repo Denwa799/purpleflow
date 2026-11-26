@@ -167,6 +167,13 @@ test('чат: панель под полем ввода, таблица и бл�
     await rail.click();
     const ses = page.locator('.ses');
     await expect(ses.locator('.ses-ctx-num')).toHaveText('50 тыс. из 200 тыс.');
+    // «Скрыть панель» — кружок справа от вкладок, на одной строке с ними.
+    const side = page.locator('.chat-side .tab-groups');
+    const hide = side.getByRole('button', { name: 'Скрыть панель' });
+    const [tb, hb] = [await side.locator('.tabs').boundingBox(), await hide.boundingBox()];
+    expect(Math.abs(tb!.y + tb!.height / 2 - (hb!.y + hb!.height / 2))).toBeLessThan(2);
+    expect(hb!.x).toBeGreaterThan(tb!.x + tb!.width);
+    if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-side-tabs.png') });
     await expect(ses).toContainText('занято 25% окна модели');
     const gh = ses.locator('.ses-mcp li', { hasText: 'github' });
     await expect(gh).toContainText('подключён');
@@ -497,7 +504,8 @@ test('проект: кнопка «Чат» открывает новый чат
 
     await page.getByRole('button', { name: 'Проекты' }).click();
     await page.getByRole('button', { name: 'Открыть папку…' }).click();
-    await page.getByRole('tab', { name: 'Обзор' }).click();
+    // Чаты проекта — на вкладке «Статистика».
+    await page.getByRole('tab', { name: 'Статистика' }).click();
     const chats = page.locator('.overview-chats');
     await expect(chats.getByRole('button')).toHaveCount(1);
     await chats.getByRole('button').click();

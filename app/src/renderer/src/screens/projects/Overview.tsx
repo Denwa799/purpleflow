@@ -1,4 +1,4 @@
-// Вкладка «Обзор»: ветка, origin, готовность к PR, статистика и прогоны проекта.
+// Вкладка «Обзор»: ветка, origin, готовность к PR, скиллы и MCP; вкладка «Статистика» — цифры, прогоны и чаты.
 import type { ProjectKnowledge, ProjectOverview, ProjectStats, ChatSkill } from '@purpleflow/core';
 import { GitBranch, GitPullRequest, MessageSquare, Plus, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -13,7 +13,7 @@ import { SkillGroups, SkillSearchDialog } from '../../components/SkillManager';
 import { bridge, cleanErr } from '../../lib/api';
 
 export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: ProjectTab) => void; onReload: () => void }) {
-  const { state, go } = useStore();
+  const { go } = useStore();
   const [o, setO] = useState<ProjectOverview | null>(null);
   const [k, setK] = useState<ProjectKnowledge | null>(null);
   const [forgetting, setForgetting] = useState(false);
@@ -30,9 +30,6 @@ export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: 
       .then(setK)
       .catch(() => {});
   }, [repo, p.info.isRepo]);
-  const runs = state.runs.filter((r) => r.projectPath === repo);
-  // Чат проекта из нескольких репозиториев открывают на верхней папке — он тоже этого проекта.
-  const chats = state.chats.filter((c) => c.projectPath === repo || (p.multi && c.projectPath === p.multi.root));
   const sections = (k?.profile?.match(/^##\s/gm) ?? []).length;
 
   if (!p.info.isRepo) {
@@ -150,50 +147,6 @@ export function Overview({ p, onTab, onReload }: { p: LoadedProject; onTab: (t: 
 
       <McpPanel repo={repo} />
 
-      <section className="panel overview-runs">
-        <header className="overview-runs-head">
-          <h3>Прогоны</h3>
-          <span className="muted">{runs.length || ''}</span>
-        </header>
-        {runs.length ? (
-          <ul className="run-list">
-            {runs.slice(0, 12).map((r) => (
-              <li key={r.id}>
-                <button className={`side-run st-${r.status}`} onClick={() => go({ name: 'run', runId: r.id })}>
-                  <span className="side-dot" />
-                  <span className="side-run-title">{r.title}</span>
-                  <span className="run-list-mode">{MODES.find((m) => m.id === (r.mode ?? 'task'))?.title}</span>
-                  <time className="muted">{when(r.createdAt)}</time>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="muted">Прогонов в этом проекте ещё не было.</p>
-        )}
-      </section>
-
-      {chats.length > 0 && (
-        <section className="panel overview-runs overview-chats">
-          <header className="overview-runs-head">
-            <h3>Чаты</h3>
-            <span className="muted">{chats.length}</span>
-          </header>
-          <ul className="run-list">
-            {chats.slice(0, 8).map((c) => (
-              <li key={c.id}>
-                <button className="side-run" onClick={() => go({ name: 'chat', chatId: c.id })}>
-                  <MessageSquare size={14} className="muted" />
-                  <span className="side-run-title">{c.title}</span>
-                  <span className="run-list-mode">{c.agent}</span>
-                  <time className="muted">{when(c.updatedAt)}</time>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
       {p.cfg && (
         <div className="overview-forget">
           {forgetting ? (
@@ -285,13 +238,61 @@ function ms(n: number | null): string {
 }
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
 /** Вкладка «Статистика» проекта: пересчитывается, когда меняются прогоны. */
-export function ProjectStats({ repo }: { repo: string }) {
-  const { state } = useStore();
-  const runsKey = state.runs
-    .filter((r) => r.projectPath === repo)
-    .map((r) => r.status + r.updatedAt)
-    .join();
-  return <StatsPanel repo={repo} runsKey={runsKey} />;
+export function ProjectStats({ repo, multiRoot }: { repo: string; multiRoot?: string }) {
+  const { state, go } = useStore();
+  const runs = state.runs.filter((r) => r.projectPath === repo);
+  // Чат проекта из нескольких репозиториев открывают на верхней папке — он тоже этого проекта.
+  const chats = state.chats.filter((c) => c.projectPath === repo || (multiRoot && c.projectPath === multiRoot));
+  const runsKey = runs.map((r) => r.status + r.updatedAt).join();
+  return (
+    <>
+      <StatsPanel repo={repo} runsKey={runsKey} />
+
+      <section className="panel overview-runs">
+        <header className="overview-runs-head">
+          <h3>Прогоны</h3>
+          <span className="muted">{runs.length || ''}</span>
+        </header>
+        {runs.length ? (
+          <ul className="run-list">
+            {runs.slice(0, 12).map((r) => (
+              <li key={r.id}>
+                <button className={`side-run st-${r.status}`} onClick={() => go({ name: 'run', runId: r.id })}>
+                  <span className="side-dot" />
+                  <span className="side-run-title">{r.title}</span>
+                  <span className="run-list-mode">{MODES.find((m) => m.id === (r.mode ?? 'task'))?.title}</span>
+                  <time className="muted">{when(r.createdAt)}</time>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">Прогонов в этом проекте ещё не было.</p>
+        )}
+      </section>
+
+      {chats.length > 0 && (
+        <section className="panel overview-runs overview-chats">
+          <header className="overview-runs-head">
+            <h3>Чаты</h3>
+            <span className="muted">{chats.length}</span>
+          </header>
+          <ul className="run-list">
+            {chats.slice(0, 8).map((c) => (
+              <li key={c.id}>
+                <button className="side-run" onClick={() => go({ name: 'chat', chatId: c.id })}>
+                  <MessageSquare size={14} className="muted" />
+                  <span className="side-run-title">{c.title}</span>
+                  <span className="run-list-mode">{c.agent}</span>
+                  <time className="muted">{when(c.updatedAt)}</time>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
+  );
 }
 
 function StatsPanel({ repo, runsKey }: { repo: string; runsKey: string }) {

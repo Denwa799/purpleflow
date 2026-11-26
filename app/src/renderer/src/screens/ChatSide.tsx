@@ -180,8 +180,7 @@ export function ChatSide({
             },
           ]}
         />
-        <span className="grow" />
-        <button className="manager-collapse" title="Скрыть панель" aria-label="Скрыть панель" onClick={() => onPane(null)}>
+        <button className="manager-collapse side-collapse" title="Скрыть панель" aria-label="Скрыть панель" onClick={() => onPane(null)}>
           <PanelRightClose size={16} />
         </button>
       </div>
