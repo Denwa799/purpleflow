@@ -158,7 +158,7 @@ test('сбои: приложение не поднялось, ответ не JS
   await assert.rejects(stageVisual(bad.k, bad.run), /не в формате JSON/);
 });
 
-test('самопроверка исполнителя: только с визуальной проверкой и не на codex', () => {
+test('самопроверка исполнителя: только с визуальной проверкой; codex — через браузер снаружи, кроме Windows', () => {
   const base = {
     visual: true,
     runCommand: 'npm run dev',
@@ -168,7 +168,10 @@ test('самопроверка исполнителя: только с визу�
   assert.equal(selfCheckReason(base), 'on');
   assert.equal(selfCheckReason({ ...base, visual: false }), 'off');
   assert.equal(selfCheckReason({ ...base, appUrl: '' }), 'off');
-  assert.equal(selfCheckReason({ ...base, agents: { executor: 'codex' } } as never), 'codex');
+  const codex = { ...base, agents: { executor: 'codex' } } as never;
+  assert.equal(selfCheckReason(codex, 'darwin'), 'codex');
+  assert.equal(selfCheckReason(codex, 'linux'), 'codex');
+  assert.equal(selfCheckReason(codex, 'win32'), 'codex-win');
 });
 
 test('самопроверка исполнителя: приложение в фоне, pw в PATH, адрес в промпте; stop гасит сервер', unix, async (t) => {
@@ -192,6 +195,5 @@ test('самопроверка исполнителя: приложение в �
   await self.stop();
   await assert.rejects(fetch(url), 'сервер погашен');
 
-  // codex — без самопроверки: стадия идёт как раньше.
-  assert.equal(await startSelfCheck(k, { ...run, agents: { ...run.agents, executor: 'codex' } } as RunFile, 2), null);
+  assert.match(self.block, /pw open http/, 'не codex — браузер открывает сам');
 });
