@@ -247,6 +247,15 @@ test('чат: «@» подставляет файл проекта, «/» — с
       await page.screenshot({ path: process.env.PF_SHOT });
     }
 
+    // Копирование другому агенту: review из .claude/skills — для codex в .agents/skills.
+    await review.getByRole('button', { name: 'Скопировать review другому агенту' }).click();
+    await review.getByRole('button', { name: 'в codex' }).click();
+    await expect.poll(() => fs.existsSync(path.join(box.repo, '.agents', 'skills', 'review', 'SKILL.md'))).toBe(true);
+    await panel.getByRole('tab', { name: /^codex\s*\d+$/ }).click();
+    await expect(panel.locator('.skill-list .skill-name', { hasText: /^review$/ })).toBeVisible();
+    fs.rmSync(path.join(box.repo, '.agents', 'skills', 'review'), { recursive: true });
+    await claudeTab.click();
+
     // Удаление: положенный руками скилл уходит в корзину системы (здесь — заглушка), после подтверждения.
     await l.app.evaluate(({ shell }) => {
       shell.trashItem = (async (p: string) => {

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Kernel } from './kernel.js';
-import { installSkill, removeSkill } from './services/skillstore.js';
+import { copySkill, installSkill, removeSkill } from './services/skillstore.js';
 import type { CoreSettings } from './types.js';
 
 const unix = { skip: process.platform === 'win32' };
@@ -71,4 +71,28 @@ test('removeSkill: положенный руками — CLI его не зна�
   const r = await removeSkill(k, { projectPath: project, name: 'mine', source: 'project' });
   assert.deepEqual(r.leftovers.map((p) => path.relative(project, p)).sort(), ['.agents/skills/mine', '.claude/skills/mine']);
   await assert.rejects(removeSkill(k, { projectPath: project, name: 'нет-такого', source: 'project' }), /уже удалён|Неверное имя/);
+});
+
+test('installSkill: только для выбранных агентов из включённых', unix, async (t) => {
+  const { k, project, calls } = setup(t);
+  await installSkill(k, { projectPath: project, source: 'a/b', skill: 'x', agents: ['agy', 'codex'] });
+  // codex выключен в настройках — его нет; agy выбран.
+  assert.match(calls()[0], / -a antigravity-cli -y /);
+  assert.doesNotMatch(calls()[0], /claude-code|codex/);
+  await assert.rejects(installSkill(k, { projectPath: project, source: 'a/b', skill: 'x', agents: ['codex'] }), /ни один агент/);
+});
+
+test('copySkill: скилл claude копируется для agy в .agents/skills; повтор и команды — ошибка', unix, async (t) => {
+  const { k, project } = setup(t);
+  const dir = path.join(project, '.claude/skills/mine');
+  fs.mkdirSync(path.join(dir, 'refs'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'SKILL.md'), '---\ndescription: Свой\n---');
+  fs.writeFileSync(path.join(dir, 'refs/a.md'), 'справка');
+  const skills = await copySkill(k, { projectPath: project, name: 'mine', source: 'project', to: 'agy' });
+  assert.equal(fs.readFileSync(path.join(project, '.agents/skills/mine/refs/a.md'), 'utf8'), 'справка');
+  assert.ok(skills.find((s) => s.name === 'mine')!.agents!.includes('agy'));
+  await assert.rejects(copySkill(k, { projectPath: project, name: 'mine', source: 'project', to: 'agy' }), /уже видит/);
+  fs.mkdirSync(path.join(project, '.claude/commands'), { recursive: true });
+  fs.writeFileSync(path.join(project, '.claude/commands/deploy.md'), 'Выкатить');
+  await assert.rejects(copySkill(k, { projectPath: project, name: 'deploy', source: 'project', to: 'codex' }), /только скиллы/);
 });

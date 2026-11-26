@@ -1208,7 +1208,7 @@
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  margin: 0 var(--s-6) var(--s-3);
+  margin: 0 0 var(--s-3);
   padding: 0 var(--s-3);
   height: 40px;
   border-radius: var(--r-m);
@@ -1225,7 +1225,51 @@
   font-size: var(--fs-14, 14px);
 }
 .skill-search-error {
-  margin: 0 var(--s-6) var(--s-2);
+  margin: 0 0 var(--s-2);
+}
+.skill-search-opts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  margin-bottom: var(--s-3);
+}
+.skill-search-agents {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-13);
+}
+.skill-agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--text-3);
+  font: 450 var(--fs-12) / 1 var(--font-code);
+  transition:
+    background 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+.skill-agent-chip.is-on {
+  background: var(--accent-wash, var(--bg-5));
+  color: var(--text-1);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.skill-copy-to {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  animation: rise 0.2s var(--ease) both;
+}
+.skill-del.is-copy {
+  background: var(--bg-5);
+  color: var(--text-1);
 }
 .skill-search-list {
   display: flex;
@@ -1233,7 +1277,7 @@
   max-height: 380px;
   overflow-y: auto;
   margin: 0;
-  padding: 0 var(--s-6) var(--s-3);
+  padding: 0 0 var(--s-3);
   list-style: none;
 }
 .skill-search-list > li {
@@ -1267,6 +1311,9 @@
   font-size: var(--fs-13);
 }
 .skill-search-empty {
-  padding: var(--s-4) 0 !important;
+  justify-content: center;
+  padding: var(--s-8) 0 !important;
+  border-top: 0 !important;
   font-size: var(--fs-13);
+  text-align: center;
 }

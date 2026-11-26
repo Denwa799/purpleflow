@@ -239,6 +239,7 @@ export const CORE_METHODS: Record<CoreMethod, true> = {
   listOpencodeModels: true,
   searchSkills: true,
   installSkill: true,
+  copySkill: true,
   removeSkill: true,
   listAgyModels: true,
   compactChat: true,

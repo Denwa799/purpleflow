@@ -389,8 +389,11 @@ export class Orchestrator implements CoreApi {
   async searchSkills(query: string) {
     return skillstore.searchSkills(query);
   }
-  async installSkill(o: { projectPath?: string; source: string; skill: string }) {
+  async installSkill(o: Parameters<typeof skillstore.installSkill>[1]) {
     return skillstore.installSkill(this.kernel, o);
+  }
+  async copySkill(o: Parameters<typeof skillstore.copySkill>[1]) {
+    return skillstore.copySkill(this.kernel, o);
   }
   async removeSkill(o: { projectPath?: string; name: string; source: 'project' | 'user' }) {
     return skillstore.removeSkill(this.kernel, o);

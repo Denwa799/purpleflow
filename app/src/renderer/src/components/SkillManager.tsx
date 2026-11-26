@@ -1,5 +1,5 @@
 // Управление скиллами проекта: список по агентам с удалением и окно поиска по каталогу skills.sh с установкой.
-import { Check, ChevronRight, Download, LoaderCircle, Search, Trash2, TriangleAlert, X } from 'lucide-react';
+import { Check, ChevronRight, Copy, Download, LoaderCircle, Search, Trash2, TriangleAlert, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentKind, ChatSkill, SkillHit } from '@purpleflow/core';
@@ -86,6 +86,15 @@ export function SkillGroups({
                         key={`${s.source}:${s.name}`}
                         s={s}
                         others={(s.agents ?? []).filter((a) => a !== current.agent && enabled.includes(a))}
+                        copyTo={enabled.filter((a) => !s.agents?.includes(a))}
+                        onCopy={async (to) => {
+                          setError(null);
+                          try {
+                            onChange(await bridge.core.copySkill({ projectPath, name: s.name, source: s.source, to }));
+                          } catch (e) {
+                            setError(cleanErr(e));
+                          }
+                        }}
                         onRemove={async () => {
                           setError(null);
                           try {
@@ -107,8 +116,28 @@ export function SkillGroups({
   );
 }
 
-function SkillRow({ s, others, onRemove }: { s: ChatSkill; others: AgentKind[]; onRemove: () => Promise<void> }) {
+function SkillRow({
+  s,
+  others,
+  copyTo,
+  onCopy,
+  onRemove,
+}: {
+  s: ChatSkill;
+  others: AgentKind[];
+  /** Включённые агенты, которые этот скилл сами не найдут: ему можно скопировать. */
+  copyTo: AgentKind[];
+  onCopy: (to: AgentKind) => Promise<void>;
+  onRemove: () => Promise<void>;
+}) {
   const [confirm, setConfirm] = useState(false);
+  const [copying, setCopying] = useState<'pick' | AgentKind | null>(null);
+  const canCopy = s.kind === 'skill' && !s.plugin && copyTo.length > 0;
+  const copy = async (to: AgentKind) => {
+    setCopying(to);
+    await onCopy(to);
+    setCopying(null);
+  };
   const [busy, setBusy] = useState(false);
   const timer = useRef<number>(0);
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -138,6 +167,30 @@ function SkillRow({ s, others, onRemove }: { s: ChatSkill; others: AgentKind[]; 
           </span>
         )}
         <span className="grow" />
+        {canCopy &&
+          (copying === 'pick' ? (
+            <span className="skill-copy-to" role="group" aria-label={`Скопировать ${s.name}`}>
+              {copyTo.map((a) => (
+                <button key={a} type="button" className="skill-del is-copy" onClick={() => void copy(a)}>
+                  <Copy size={13} /> в {a}
+                </button>
+              ))}
+              <button type="button" className="skill-del" aria-label="Отмена" onClick={() => setCopying(null)}>
+                <X size={13} />
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="skill-del"
+              aria-label={`Скопировать ${s.name} другому агенту`}
+              title="Скопировать другому агенту"
+              disabled={copying !== null}
+              onClick={() => setCopying('pick')}
+            >
+              {copying ? <LoaderCircle size={14} className="spin" /> : <Copy size={14} />}
+            </button>
+          ))}
         {!s.plugin &&
           (confirm ? (
             <button
@@ -184,6 +237,10 @@ export function SkillSearchDialog({
   const [done, setDone] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState<'project' | 'user'>(projectPath ? 'project' : 'user');
+  const { state } = useStore();
+  const enabled = state.settings?.enabledAgents ?? ['claude', 'codex'];
+  const [agents, setAgents] = useState<AgentKind[]>(enabled);
+  const toggle = (a: AgentKind) => setAgents((l) => (l.includes(a) ? l.filter((x) => x !== a) : [...l, a]));
   const input = useRef<HTMLInputElement>(null);
   const has = new Set(installed.map((s) => s.name));
 
@@ -220,6 +277,7 @@ export function SkillSearchDialog({
         projectPath: scope === 'project' ? projectPath : undefined,
         source: h.source,
         skill: h.skill,
+        agents,
       });
       setDone((d) => [...d, h.id]);
       onInstalled(skills);
@@ -236,7 +294,7 @@ export function SkillSearchDialog({
         <header className="qs-head">
           <div>
             <h2 id="skill-search-title">Добавить скиллы</h2>
-            <p>Каталог skills.sh. Скилл ставится через npx skills для агентов, включённых в настройках.</p>
+            <p>Каталог skills.sh. Скилл ставится через npx skills для выбранных агентов.</p>
           </div>
           <button className="qs-close" aria-label="Закрыть" onClick={() => close()}>
             <X size={16} />
@@ -252,6 +310,35 @@ export function SkillSearchDialog({
             onChange={(e) => setQuery(e.target.value)}
           />
           {searching && <LoaderCircle size={15} className="spin" />}
+        </div>
+        <div className="skill-search-opts">
+          <span className="skill-search-agents" role="group" aria-label="Для агентов">
+            <span className="muted">Для агентов</span>
+            {enabled.map((a) => (
+              <button
+                key={a}
+                type="button"
+                className={`skill-agent-chip ${agents.includes(a) ? 'is-on' : ''}`}
+                aria-pressed={agents.includes(a)}
+                onClick={() => toggle(a)}
+              >
+                {agents.includes(a) && <Check size={12} />}
+                {a}
+              </button>
+            ))}
+          </span>
+          {projectPath && (
+            <Select<'project' | 'user'>
+              ariaLabel="Куда ставить"
+              value={scope}
+              minWidth={260}
+              onChange={setScope}
+              options={[
+                { value: 'project', label: 'В этот проект', hint: 'Папки скиллов в проекте — закоммитьте их, чтобы видели прогоны' },
+                { value: 'user', label: 'Для всех проектов', hint: 'В ваши папки агентов (~/.claude, ~/.agents…)' },
+              ]}
+            />
+          )}
         </div>
         {error && <p className="inline-error skill-search-error">{error}</p>}
         <ul className="skill-search-list" aria-label="Найденные скиллы">
@@ -274,7 +361,7 @@ export function SkillSearchDialog({
                     tone="ghost"
                     icon={<Download size={14} />}
                     busy={busy === h.id}
-                    disabled={Boolean(busy)}
+                    disabled={Boolean(busy) || !agents.length}
                     onClick={() => void install(h)}
                   >
                     Установить
@@ -287,23 +374,7 @@ export function SkillSearchDialog({
           {!hits && <li className="muted skill-search-empty">Введите, что нужно агентам: технологию, задачу или сервис.</li>}
         </ul>
         <footer className="qs-foot">
-          {projectPath ? (
-            <span className="dictation-lang">
-              Куда ставить
-              <Select<'project' | 'user'>
-                ariaLabel="Куда ставить"
-                value={scope}
-                minWidth={260}
-                onChange={setScope}
-                options={[
-                  { value: 'project', label: 'В этот проект', hint: 'Папки скиллов в проекте — закоммитьте их, чтобы видели прогоны' },
-                  { value: 'user', label: 'Для всех проектов', hint: 'В ваши папки агентов (~/.claude, ~/.agents…)' },
-                ]}
-              />
-            </span>
-          ) : (
-            <span className="grow" />
-          )}
+          <span className="grow" />
           <Button tone="primary" onClick={() => close()}>
             Готово
           </Button>

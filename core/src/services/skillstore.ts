@@ -1,4 +1,5 @@
 // Установка и удаление скиллов: каталог skills.sh и CLI `npx skills` (vercel-labs/skills).
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Kernel } from '../kernel.js';
@@ -51,9 +52,16 @@ async function skillsCli(k: Kernel, args: string[], cwd: string): Promise<string
  * Поставить скилл из каталога для включённых агентов: в проект (без projectPath — глобально, для всех проектов).
  * Возвращает обновлённый список скиллов проекта.
  */
-export async function installSkill(k: Kernel, o: { projectPath?: string; source: string; skill: string }): Promise<ChatSkill[]> {
+export async function installSkill(
+  k: Kernel,
+  o: { projectPath?: string; source: string; skill: string; agents?: AgentKind[] },
+): Promise<ChatSkill[]> {
   if (!SOURCE.test(o.source) || !NAME.test(o.skill)) throw new Error('Неверное имя скилла');
-  const agents = enabledAgents(k.opts.getSettings()).map((a) => CLI_AGENT[a]);
+  // Для каких агентов: выбранные из включённых; не выбрали — для всех включённых.
+  const on = enabledAgents(k.opts.getSettings());
+  const chosen = o.agents?.length ? on.filter((a) => o.agents!.includes(a)) : on;
+  if (!chosen.length) throw new Error('Не выбран ни один агент');
+  const agents = chosen.map((a) => CLI_AGENT[a]);
   // Агенты — отдельными -a: через запятую CLI их не принимает.
   const args = ['add', o.source, '-s', o.skill, ...agents.flatMap((a) => ['-a', a]), '-y', ...(o.projectPath ? [] : ['-g'])];
   await skillsCli(k, args, o.projectPath ?? os.homedir());
@@ -84,4 +92,41 @@ export async function removeSkill(
   // Скилл — папка с SKILL.md, команда — сам файл.
   const left = after ? (after.paths ?? [after.path]) : [];
   return { skills, leftovers: after?.kind === 'skill' ? left.map((f) => path.dirname(f)) : left };
+}
+
+/**
+ * Где агент сам ищет скиллы: в проекте и в домашней папке. Копия кладётся в первый каталог агента —
+ * общий .agents/skills, если агент его читает, иначе свой.
+ */
+const AGENT_DIR: Record<AgentKind, { project: string; user: string }> = {
+  claude: { project: '.claude/skills', user: '.claude/skills' },
+  codex: { project: '.agents/skills', user: '.agents/skills' },
+  opencode: { project: '.agents/skills', user: '.config/opencode/skills' },
+  agy: { project: '.agents/skills', user: '.gemini/config/skills' },
+};
+
+/**
+ * Скопировать скилл другому агенту: папка скилла (по ссылке — её содержимое) — в каталог, который этот агент читает.
+ * Только скиллы: у команд разных агентов разный формат. Скилл с таким именем там уже есть — ошибка, ничего не трогаем.
+ */
+export async function copySkill(
+  k: Kernel,
+  o: { projectPath?: string; name: string; source: ChatSkill['source']; to: AgentKind },
+): Promise<ChatSkill[]> {
+  if (!NAME.test(o.name)) throw new Error('Неверное имя скилла');
+  const skill = (await listChatSkills(k, o.projectPath)).find((s) => s.name === o.name && s.source === o.source && !s.plugin);
+  if (!skill) throw new Error('Скилл не найден');
+  if (skill.kind !== 'skill') throw new Error('Копировать можно только скиллы: у команд разных агентов свой формат');
+  if (skill.agents?.includes(o.to)) throw new Error(`${o.to} уже видит этот скилл`);
+  const root = o.source === 'project' ? o.projectPath : os.homedir();
+  if (!root) throw new Error('Не указан проект');
+  const rel = AGENT_DIR[o.to]?.[o.source === 'project' ? 'project' : 'user'];
+  if (!rel) throw new Error(`Неизвестный агент: ${o.to}`);
+  // Имя может быть с префиксом плагина или вложенным («synced/x»): в копии — только последнее имя папки.
+  const from = path.dirname(skill.path);
+  const target = path.join(root, rel, path.basename(from));
+  if (fs.existsSync(target)) throw new Error(`Уже есть: ${path.relative(root, target)}`);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.cpSync(fs.realpathSync(from), target, { recursive: true, dereference: true });
+  return listChatSkills(k, o.projectPath);
 }

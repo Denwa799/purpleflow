@@ -42,6 +42,14 @@ test('скиллы: поиск по каталогу показывает ист
     await expect(list).toContainText('vercel-react-native-skills');
     await expect(list).toContainText('vercel-labs/agent-skills · 290 тыс. установок');
     await expect(list.getByRole('button', { name: 'Установить' })).toBeEnabled();
+    // Для каких агентов ставить: по умолчанию все включённые; сняли всех — ставить некому.
+    const agents = dialog.getByRole('group', { name: 'Для агентов' });
+    const claude = agents.getByRole('button', { name: 'claude' });
+    await expect(claude).toHaveAttribute('aria-pressed', 'true');
+    for (const b of await agents.getByRole('button').all()) await b.click();
+    await expect(list.getByRole('button', { name: 'Установить' })).toBeDisabled();
+    await claude.click();
+    await expect(list.getByRole('button', { name: 'Установить' })).toBeEnabled();
     expect(queries.at(-1)).toBe('react native');
     if (process.env.PURPLEFLOW_SHOTS) {
       await page.waitForTimeout(600);

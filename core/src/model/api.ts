@@ -144,7 +144,9 @@ export interface CoreApi {
   /** Каталог скиллов skills.sh. */
   searchSkills(query: string): Promise<SkillHit[]>;
   /** Поставить скилл через `npx skills` для включённых агентов; без projectPath — глобально. */
-  installSkill(o: { projectPath?: string; source: string; skill: string }): Promise<ChatSkill[]>;
+  installSkill(o: { projectPath?: string; source: string; skill: string; agents?: AgentKind[] }): Promise<ChatSkill[]>;
+  /** Скопировать скилл другому агенту — в каталог скиллов, который тот читает. */
+  copySkill(o: { projectPath?: string; name: string; source: 'project' | 'user'; to: AgentKind }): Promise<ChatSkill[]>;
   /** Удалить скилл; leftovers — что не убрал `skills` CLI (положено руками): окно отправит в корзину. */
   removeSkill(o: { projectPath?: string; name: string; source: 'project' | 'user' }): Promise<{ skills: ChatSkill[]; leftovers: string[] }>;
   /** Сжать контекст сессии claude в чате (/compact); идёт в фоне, как ход. */
