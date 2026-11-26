@@ -1,5 +1,6 @@
 // Сквозные сценарии: настоящее окно, настоящее ядро и git, фейковый только claude.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import type { PurpleFlowBridge } from '../src/shared/ipc';
@@ -114,6 +115,17 @@ test('приёмка: дифф показывает изменение, возв
   await expect(l.page.locator('.monaco-diff-editor')).toHaveCount(0);
   await l.page.getByRole('tab', { name: /^Код/ }).first().click();
   await expect(l.page.locator('.monaco-diff-editor').getByText('mul', { exact: false }).first()).toBeVisible();
+  // Узкое окно: вкладки прогона сжимаются до иконок, все остаются в строке.
+  const size = await l.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize());
+  await l.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 800));
+  const runTabs = l.page.locator('.pilltabs:has(> .tab[aria-selected="true"])', { hasText: 'Таймлайн' }).first();
+  await expect(runTabs).toHaveClass(/is-compact/);
+  if (process.env.PURPLEFLOW_SHOTS) {
+    await l.page.waitForTimeout(600);
+    await l.page.screenshot({ path: path.join(os.tmpdir(), 'pf-run-narrow.png') });
+  }
+  await l.app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows()[0].setSize(w, h), size);
+  await expect(runTabs).not.toHaveClass(/is-compact/);
 });
 
 test('приёмка: клавиши ревью не срабатывают при поиске в диффе', async () => {

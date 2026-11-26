@@ -170,7 +170,7 @@ test('чат: панель под полем ввода, таблица и бл�
     // «Скрыть панель» — кружок справа от вкладок, на одной строке с ними.
     const side = page.locator('.chat-side .tab-groups');
     const hide = side.getByRole('button', { name: 'Скрыть панель' });
-    const [tb, hb] = [await side.locator('.tabs').boundingBox(), await hide.boundingBox()];
+    const [tb, hb] = [await side.locator('> .tabs').boundingBox(), await hide.boundingBox()];
     expect(Math.abs(tb!.y + tb!.height / 2 - (hb!.y + hb!.height / 2))).toBeLessThan(2);
     expect(hb!.x).toBeGreaterThan(tb!.x + tb!.width);
     // На узкой панели вкладки прокручиваются, а кнопка остаётся внутри панели.
@@ -341,7 +341,43 @@ test('чат: вкладка «Файлы» — дерево проекта, с�
     expect(sideBox.width).toBeLessThan(420);
     const hideBox = (await page.locator('.chat-side .tab-groups').getByRole('button', { name: 'Скрыть панель' }).boundingBox())!;
     expect(hideBox.x + hideBox.width).toBeLessThanOrEqual(sideBox.x + sideBox.width);
+    // Тесно — вкладки сжались до иконок: все шесть видны целиком, подписи — в подсказках.
+    const sideTabs = page.locator('.chat-side .tab-groups > .tabs');
+    await expect(sideTabs).toHaveClass(/is-compact/);
+    // Подписи съезжаются с анимацией — ждём, пока последняя вкладка встанет внутрь.
+    await expect
+      .poll(async () => {
+        const t = (await sideTabs.boundingBox())!;
+        const b = (await sideTabs.getByRole('tab', { name: 'Браузер' }).boundingBox())!;
+        return b.x + b.width - (t.x + t.width);
+      })
+      .toBeLessThanOrEqual(1);
+    await expect(sideTabs.getByRole('tab', { name: 'Git' }).locator('.tab-label')).toBeHidden();
     if (process.env.PURPLEFLOW_SHOTS) await page.screenshot({ path: path.join(box.root, '..', 'pf-chat-side-narrow.png') });
+    if (process.env.PURPLEFLOW_SHOTS) {
+      // Кадры анимации: подпись выбранной разъезжается, прежней — съезжается.
+      const g = (await page.locator('.side-resize').boundingBox())!;
+      await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(g.x - Number(process.env.PF_WIDEN ?? 130), g.y + g.height / 2, { steps: 5 });
+      await page.mouse.up();
+      await page.waitForTimeout(500);
+      const clip = (await page.locator('.chat-side .tab-groups').boundingBox())!;
+      await page.screenshot({ path: path.join(box.root, '..', 'pf-tabs-0.png') });
+      await sideTabs.getByRole('tab', { name: 'Git' }).click();
+      await page.waitForTimeout(120);
+      await page.screenshot({ path: path.join(box.root, '..', 'pf-tabs-1.png'), clip });
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: path.join(box.root, '..', 'pf-tabs-2.png'), clip });
+      await sideTabs.getByRole('tab', { name: 'Файлы' }).click();
+    }
+    // Шире — подписи возвращаются.
+    const grip2 = (await page.locator('.side-resize').boundingBox())!;
+    await page.mouse.move(grip2.x + grip2.width / 2, grip2.y + grip2.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip2.x - 500, grip2.y + grip2.height / 2, { steps: 5 });
+    await page.mouse.up();
+    await expect(sideTabs).not.toHaveClass(/is-compact/);
     const src = tree.getByRole('treeitem', { name: 'src' });
     await src.getByRole('button', { name: 'src', exact: true }).click();
     const math = src.getByRole('treeitem', { name: 'math.js' }).getByRole('button', { name: 'math.js', exact: true });

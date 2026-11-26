@@ -21,6 +21,7 @@ export function PillTabs<T extends string>({
   className = '',
   itemClassName = 'tab',
   role = 'tablist',
+  collapsible: collapsibleProp,
 }: {
   items: PillItem<T>[];
   value: T | null;
@@ -28,19 +29,31 @@ export function PillTabs<T extends string>({
   className?: string;
   itemClassName?: string;
   role?: string;
+  /**
+   * Не помещаются — подписи прячутся до иконок: сначала у всех, кроме выбранной, затем у всех.
+   * По умолчанию — у вкладок с иконками.
+   */
+  collapsible?: boolean;
 }) {
+  const collapsible = collapsibleProp ?? items.some((it) => it.icon);
   const box = useRef<HTMLDivElement>(null);
   const refs = useRef(new Map<T, HTMLButtonElement>());
   const [ind, setInd] = useState<{ x: number; w: number; ready: boolean }>({ x: 0, w: 0, ready: false });
+  // 0 — подписи у всех; 1 — подпись только у выбранной; 2 — одни иконки.
+  const [level, setLevel] = useState<0 | 1 | 2>(0);
+  const compact = level > 0;
+  // Невидимые копии вкладок на трёх уровнях, без анимации: по ним видно, какой уровень влезет.
+  const measure = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
-    const measure = () => {
+    const measureInd = () => {
       const el = value ? refs.current.get(value) : null;
       if (!el || !box.current) return setInd((s) => ({ ...s, w: 0 }));
       setInd((s) => ({ x: el.offsetLeft, w: el.offsetWidth, ready: s.ready || s.w > 0 }));
     };
-    measure();
-    const ro = new ResizeObserver(measure);
+    measureInd();
+    // Подписи разъезжаются и съезжаются — подсветка следует за шириной вкладок.
+    const ro = new ResizeObserver(measureInd);
     if (box.current) ro.observe(box.current);
     refs.current.forEach((el) => ro.observe(el));
     // Первое измерение — без анимации, дальше подсветка ездит.
@@ -49,10 +62,32 @@ export function PillTabs<T extends string>({
       ro.disconnect();
       cancelAnimationFrame(t);
     };
-  }, [value, items.length]);
+  }, [value, items.length, level]);
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    const parent = el?.parentElement;
+    if (!collapsible || !el || !parent) return;
+    const fit = () => {
+      // Сколько места у вкладок: ширина родителя без соседей (кнопки рядом) и зазоров.
+      // Растягивающиеся соседи (.grow) занимают остаток — их не считаем.
+      const others = ([...parent.children] as HTMLElement[]).filter(
+        (c) => c !== el && getComputedStyle(c).flexGrow === '0' && getComputedStyle(c).position !== 'absolute',
+      );
+      const gap = parseFloat(getComputedStyle(parent).columnGap) || 0;
+      const avail = parent.clientWidth - others.reduce((w, c) => w + c.offsetWidth, 0) - gap * others.length;
+      const widths = [...(measure.current?.children ?? [])].map((c) => (c as HTMLElement).offsetWidth);
+      const next = widths.findIndex((w) => w <= avail + 1);
+      setLevel((next < 0 ? 2 : next) as 0 | 1 | 2);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(parent);
+    return () => ro.disconnect();
+  }, [collapsible, value, items]);
 
   return (
-    <div ref={box} className={`pilltabs ${className}`} role={role}>
+    <div ref={box} className={`pilltabs ${className} ${compact ? 'is-compact' : ''} ${level === 2 ? 'is-icons' : ''}`} role={role}>
       <span
         className={`pill-indicator ${ind.ready ? 'is-ready' : ''}`}
         style={{ transform: `translateX(${ind.x}px)`, width: ind.w, opacity: ind.w ? 1 : 0 }}
@@ -70,12 +105,29 @@ export function PillTabs<T extends string>({
           className={`${itemClassName} ${value === it.id ? 'is-on' : ''}`}
           disabled={it.disabled}
           onClick={() => onChange(it.id)}
+          title={compact && (level === 2 || value !== it.id) && typeof it.label === 'string' ? it.label : undefined}
+          aria-label={compact && typeof it.label === 'string' ? it.label : undefined}
         >
           {it.icon}
-          {it.label}
+          {collapsible ? <span className="tab-label">{it.label}</span> : it.label}
           {it.extra}
         </button>
       ))}
+      {collapsible && (
+        <div ref={measure} className="pilltabs-measure" aria-hidden>
+          {([0, 1, 2] as const).map((l) => (
+            <div key={l} className={`pilltabs ${className} ${l > 0 ? 'is-compact' : ''} ${l === 2 ? 'is-icons' : ''}`}>
+              {items.map((it) => (
+                <button key={it.id} tabIndex={-1} className={`${itemClassName} ${value === it.id ? 'is-on' : ''}`}>
+                  {it.icon}
+                  <span className="tab-label">{it.label}</span>
+                  {it.extra}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
