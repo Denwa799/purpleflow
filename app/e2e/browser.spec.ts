@@ -15,7 +15,7 @@ test('browser: phone mode settles after one reload and returns to desktop', asyn
   const l = await launch(box);
   try {
     const page = l.page;
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     await page.locator('.chat-compose textarea').fill('Привет');
     await page.keyboard.press('Enter');

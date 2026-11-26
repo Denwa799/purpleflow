@@ -140,7 +140,7 @@
 }
 .clarify-opt.is-on {
   color: var(--text-1);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  box-shadow: inset 0 0 0 1px var(--line-on);
   background: var(--accent-wash);
 }
 .clarify-opt.is-on i {
@@ -908,7 +908,7 @@
 .fp-step.is-active .fp-num {
   background: var(--accent-wash);
   color: var(--accent-hi);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  box-shadow: inset 0 0 0 1px var(--line-on);
 }
 .fp-step.is-done .fp-num {
   background: var(--ok-wash);
@@ -1260,7 +1260,7 @@
 .skill-agent-chip.is-on {
   background: var(--accent-wash, var(--bg-5));
   color: var(--text-1);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  box-shadow: inset 0 0 0 1px var(--line-on);
 }
 .skill-copy-to {
   display: inline-flex;

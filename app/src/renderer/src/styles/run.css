@@ -1186,7 +1186,7 @@ body.is-col-resizing .monaco-editor {
   transition: box-shadow 0.3s var(--ease);
 }
 .composer.is-open {
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  box-shadow: inset 0 0 0 1px var(--line-on);
 }
 .composer-head {
   display: flex;

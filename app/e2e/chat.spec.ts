@@ -11,7 +11,7 @@ test('чат: ссылка с параметром сохраняет черно
   const l = await launch(box);
   const { page } = l;
   try {
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     const input = page.locator('.chat-compose textarea');
     await input.fill('Покажи ссылки Markdown');
@@ -49,7 +49,7 @@ test('чат: агент без вызова просит полный дост�
   const l = await launch(box);
   const { page } = l;
   try {
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     const input = page.locator('.chat-compose textarea');
     await input.fill('Закоммить молча');
@@ -70,7 +70,7 @@ test('чат: песочница правок не пустила команду
   const l = await launch(box);
   const { page } = l;
   try {
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     const input = page.locator('.chat-compose textarea');
     await input.fill('Закоммить правки');
@@ -103,7 +103,7 @@ test('чат: панель под полем ввода, таблица и бл�
   const l = await launch(box, { HOME: home });
   const { page } = l;
   try {
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
 
     const bar = page.locator('.chat-compose-bar');
@@ -217,7 +217,7 @@ test('чат: «@» подставляет файл проекта, «/» — с
   const l = await launch(box);
   const { page } = l;
   try {
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     // Проект — через «Выбрать папку…»: системный диалог в обвязке отвечает папкой песочницы.
     await page.getByRole('button', { name: 'Проект', exact: true }).click();
@@ -318,7 +318,7 @@ test('чат: вкладка «Файлы» — дерево проекта, с�
   const l = await launch(box);
   const { page } = l;
   try {
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     await page.getByRole('button', { name: 'Проект', exact: true }).click();
     await page.getByRole('option', { name: /Выбрать папку/ }).click();
@@ -509,7 +509,7 @@ test('чат: уровень рассуждений рядом с моделью
   const l = await launch(box);
   const { page } = l;
   try {
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     const effort = page.getByRole('button', { name: 'Уровень рассуждений' });
     // По умолчанию — как в CLI: флаг не передаётся.
@@ -623,7 +623,7 @@ test('чат: «Указать элемент» в браузере вставл
   const l = await launch(box);
   const { page } = l;
   try {
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     const input = page.locator('.chat-compose textarea');
     await input.fill('Привет');
@@ -689,7 +689,7 @@ test('чат: вкладка «Запуск» — старт, вывод сер�
         }),
       box.repo,
     );
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     await page.getByRole('button', { name: 'Проект', exact: true }).click();
     await page.getByRole('option', { name: /Выбрать папку/ }).click();
@@ -752,7 +752,7 @@ test('чат на agy в «Правках»: агент просит разре�
   const l = await launch(pre);
   const { page } = l;
   try {
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     const input = page.locator('.chat-compose textarea');
     await input.fill('Отправь ветку');
@@ -794,7 +794,7 @@ test('чат: папка в контексте — значок над поле�
     await l.app.evaluate(({ dialog }, dir) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog;
     }, docs);
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     await page.getByRole('button', { name: 'Добавить папку в контекст' }).click();
     const chip = page.locator('.chat-file.is-dir');
@@ -824,7 +824,7 @@ test('боковая панель: «Все · Чаты · Задачи» фил
   const l = await launch(box);
   const { page } = l;
   try {
-    await page.getByRole('button', { name: /Создать/ }).click();
+    await page.getByRole('button', { name: 'Создать', exact: true }).click();
     await page.getByRole('menuitem', { name: /Чат/ }).click();
     const input = page.locator('.chat-compose textarea');
     await input.fill('фильтр истории');

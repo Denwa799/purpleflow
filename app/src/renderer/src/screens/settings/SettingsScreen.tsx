@@ -63,7 +63,7 @@ export function SettingsScreen() {
     await saveSettings({ onboarded: true });
     // Проектов ещё нет — ведём к первому: выбор папки, сканирование, подключение.
     const projects = await bridge.core.listProjects().catch(() => null);
-    go(projects && projects.length === 0 ? { name: 'start' } : { name: 'new' });
+    go(projects && projects.length === 0 ? { name: 'start' } : { name: 'home' });
   };
 
   return (

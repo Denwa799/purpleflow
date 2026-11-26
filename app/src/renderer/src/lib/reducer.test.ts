@@ -34,7 +34,7 @@ test('reducer: обновление прогона добавляет строк
 test('reducer: удаление открытого прогона уводит с его экрана, чужого — нет', () => {
   const base = reducer(state({ view: { name: 'run', runId: 'a' } }), { t: 'run', run: run('a') });
   const opened = reducer(base, { t: 'deleted', runId: 'a' });
-  assert.deepEqual(opened.view, { name: 'new' });
+  assert.deepEqual(opened.view, { name: 'home' });
   assert.deepEqual(opened.runs, []);
   assert.equal(opened.details.a, undefined);
   assert.deepEqual(reducer(base, { t: 'deleted', runId: 'b' }).view, { name: 'run', runId: 'a' });

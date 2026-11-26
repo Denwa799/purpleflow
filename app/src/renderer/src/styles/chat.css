@@ -85,20 +85,21 @@
 /* Статус — точкой в углу иконки: жёлтая — выполняется, красная — нужно ваше решение или ошибка, зелёная — готово. */
 .side-kind .side-dot {
   position: absolute;
-  right: -3px;
-  bottom: -3px;
-  width: 9px;
-  height: 9px;
+  right: -2px;
+  bottom: -2px;
+  width: 7px;
+  height: 7px;
   margin: 0;
   border: 0;
   border-radius: 50%;
   background: var(--text-4);
-  box-shadow: 0 0 0 2px var(--bg-window);
+  /* Мягкое кольцо — отделяет точку от значка на любом фоне темы. */
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.45);
   animation: none;
 }
 .side-run.st-running .side-kind .side-dot {
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   margin: 0;
   border: 0;
   background: var(--wait);
@@ -107,14 +108,14 @@
 .side-run.st-queued .side-kind .side-dot {
   background: transparent;
   box-shadow:
-    0 0 0 2px var(--bg-window),
+    0 0 0 1.5px rgba(0, 0, 0, 0.45),
     inset 0 0 0 1.5px var(--wait);
 }
 .side-run.st-waiting .side-kind .side-dot {
   background: var(--wait);
   box-shadow:
-    0 0 0 2px var(--bg-window),
-    0 0 0 4px var(--wait-wash);
+    0 0 0 1.5px rgba(0, 0, 0, 0.45),
+    0 0 0 3.5px var(--wait-wash);
 }
 .side-run.st-stopped .side-kind .side-dot {
   background: var(--err);
@@ -125,7 +126,7 @@
 .side-run.st-cancelled .side-kind .side-dot {
   background: transparent;
   box-shadow:
-    0 0 0 2px var(--bg-window),
+    0 0 0 1.5px rgba(0, 0, 0, 0.45),
     inset 0 0 0 1.5px var(--text-4);
 }
 .side-group.is-attention h4 {
@@ -171,7 +172,7 @@
   text-overflow: ellipsis;
 }
 input.chat-title:focus {
-  box-shadow: 0 1px 0 var(--accent-line);
+  box-shadow: 0 1px 0 var(--line-on);
 }
 .chat-head-sub {
   display: flex;
@@ -279,7 +280,8 @@ input.chat-title:focus {
   border-radius: 18px 18px 6px 18px;
   background: var(--bg-4);
   color: var(--text-1);
-  font-size: var(--fs-14);
+  font-size: 15px;
+  font-weight: 430;
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -295,6 +297,10 @@ input.chat-title:focus {
   padding: 0;
   max-width: none;
   color: var(--text-1);
+  /* Ответ читается как текст, а не подпись: крупнее, чуть плотнее начертание, строки ближе. */
+  font-size: 15px;
+  font-weight: 430;
+  line-height: 1.6;
 }
 .chat-md.md > :first-child {
   margin-top: 0;
@@ -624,7 +630,7 @@ input.chat-title:focus {
   flex-direction: column;
   gap: 10px;
   padding: 12px 14px;
-  border: 1px solid var(--accent-line);
+  border: 1px solid var(--line-on);
   border-radius: var(--r-m);
   background: var(--accent-wash);
 }
@@ -653,7 +659,7 @@ input.chat-title:focus {
   gap: 6px;
 }
 .chat-question-options .chip.is-on {
-  border-color: var(--accent);
+  border-color: var(--line-on);
   color: var(--text-1);
 }
 .chat-question-send {
@@ -997,7 +1003,7 @@ button.dd:hover:not(:disabled),
 .dd.is-open,
 .dd:focus-visible,
 .dd-combo:focus-within {
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  box-shadow: inset 0 0 0 1px var(--line-on);
   outline: 0;
 }
 .dd:disabled,
@@ -2394,7 +2400,7 @@ body.is-side-resizing webview {
   background: var(--bg-2);
 }
 .dictation-model.is-on {
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  box-shadow: inset 0 0 0 1px var(--line-on);
 }
 .dictation-model-pick {
   flex: 1;

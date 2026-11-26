@@ -14,6 +14,8 @@ export interface CoreOptions {
   getSettings: () => CoreSettings;
   /** Подмена агентов — для тестов конвейера без настоящих claude и codex. */
   runners?: { claude?: typeof runClaude; codex?: typeof runCodex; opencode?: typeof runOpencode; agy?: typeof runAgy };
+  /** Название чата от модели после первого ответа; false — в тестах, где запуски агента считаются поштучно. */
+  chatTitles?: boolean;
 }
 
 export type Listener = (e: CoreEvent) => void;

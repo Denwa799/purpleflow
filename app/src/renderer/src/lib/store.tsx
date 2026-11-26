@@ -33,7 +33,7 @@ export function onCoreEvent(fn: (e: CoreEvent) => void): () => void {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, {
-    view: { name: 'new' },
+    view: { name: 'home' },
     settings: null,
     tools: null,
     toolsLoading: false,

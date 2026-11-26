@@ -21,7 +21,14 @@ test.afterEach(async () => {
   expect(errors, 'необработанные ошибки страницы').toEqual([]);
 });
 
+/** Окно открывается на главном экране — оттуда к форме задачи. */
+async function toNewTask(page: Page) {
+  const card = page.getByRole('button', { name: /^Создать задачу/ });
+  if (await card.isVisible()) await card.click();
+}
+
 async function fillRun(page: Page, mode: string, task: string) {
+  await toNewTask(page);
   await page.getByRole('button', { name: /Выберите проект/ }).click();
   await page.getByRole('menuitem', { name: /Новый проект/ }).click();
   await expect(page.getByRole('button', { name: /demo/ }).first()).toBeVisible();
@@ -233,6 +240,7 @@ test('подпапка чужого репозитория: прогон не у
   await l.app.evaluate(({ dialog }, dir) => {
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog;
   }, sub);
+  await toNewTask(l.page);
   await l.page.getByRole('button', { name: /Выберите проект/ }).click();
   await l.page.getByRole('menuitem', { name: /Новый проект/ }).click();
   await expect(l.page.getByText(/Папка лежит внутри репозитория/)).toBeVisible();
@@ -297,6 +305,7 @@ test('ревью кода: незакоммиченные правки — за�
   const status = box.git('status', '--porcelain');
   const head = box.git('rev-parse', 'HEAD');
   const page = l.page;
+  await toNewTask(page);
   await page.getByRole('button', { name: /Выберите проект/ }).click();
   await page.getByRole('menuitem', { name: /Новый проект/ }).click();
   await expect(page.getByRole('button', { name: /demo/ }).first()).toBeVisible();

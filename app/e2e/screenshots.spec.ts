@@ -19,6 +19,7 @@ test('скриншоты для README', async () => {
     await page.screenshot({ path: path.join(OUT, `${name}.png`) });
   };
   try {
+    await page.getByRole('button', { name: /^Создать задачу/ }).click();
     await page.getByRole('button', { name: /Выберите проект/ }).click();
     await page.getByRole('menuitem', { name: /Новый проект/ }).click();
     await page.locator('#task').fill('Добавь функцию slugify(s) в src/slugify.js: транслитерация с русского в kebab-case, и тесты к ней');

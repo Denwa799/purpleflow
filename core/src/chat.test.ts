@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Orchestrator } from './orchestrator.js';
+import { cleanTitle } from './services/chat.js';
 import type { CoreSettings } from './types.js';
 import { claudeArgs } from './agents/claude.js';
 import { codexArgs } from './agents/codex.js';
@@ -16,7 +17,7 @@ import type { ChatFile, CoreEvent } from './types.js';
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'prompts');
 
 /** Ядро с «установленными» claude и codex (скрипты отвечают версией) и подменёнными запусками. */
-function makeCore(runners: { claude?: unknown; codex?: unknown; agy?: unknown }) {
+function makeCore(runners: { claude?: unknown; codex?: unknown; agy?: unknown }, o: { chatTitles?: boolean } = {}) {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'purpleflow-bin-'));
   for (const n of ['codex', 'claude', 'agy']) fs.writeFileSync(path.join(bin, n), `#!/bin/sh\necho "${n} 1.0.0"\n`, { mode: 0o755 });
   const settings = {
@@ -35,6 +36,7 @@ function makeCore(runners: { claude?: unknown; codex?: unknown; agy?: unknown })
     env: process.env,
     getSettings: () => settings,
     runners: runners as never,
+    chatTitles: o.chatTitles ?? false,
   });
   return core;
 }
@@ -801,4 +803,45 @@ test('чат: папки в контексте — агенту доступ (--
   await untilIdle(core, chat.id);
   assert.deepEqual(calls[1].addDirs, []);
   assert.doesNotMatch(calls[1].prompt, /Папки, добавленные в контекст/);
+});
+
+test('чат: после первого ответа модель даёт название; переименованный человеком чат не трогает', async () => {
+  const prompts: string[] = [];
+  const claude = async (o: AgentRunOptions) => {
+    prompts.push(o.prompt);
+    if (/Придумай короткое название/.test(o.prompt)) return { ok: true, text: '«Устройство проекта».', usage: emptyUsage() };
+    o.onStep?.({ kind: 'text', text: 'Это монорепозиторий', delta: true });
+    return { ok: true, text: 'Это монорепозиторий', usage: emptyUsage() };
+  };
+  const core = makeCore({ claude }, { chatTitles: true });
+  const chat = await core.createChat({ agent: 'claude' });
+  await core.sendChat(chat.id, 'слушай, а как вообще устроен этот проект и где что лежит?');
+  await untilIdle(core, chat.id);
+  for (let i = 0; i < 100 && (await core.getChat(chat.id))!.chat.title !== 'Устройство проекта'; i++)
+    await new Promise((r) => setTimeout(r, 20));
+  const named = (await core.getChat(chat.id))!.chat;
+  assert.equal(named.title, 'Устройство проекта');
+  assert.equal(named.autoTitle, undefined);
+  // В запросе названия — начало переписки.
+  const ask = prompts.find((p) => /Придумай короткое название/.test(p))!;
+  assert.match(ask, /Человек: слушай, а как вообще устроен/);
+  assert.match(ask, /Ассистент: Это монорепозиторий/);
+  // Второй ход названия не спрашивает.
+  await core.sendChat(chat.id, 'А тесты где?');
+  await untilIdle(core, chat.id);
+  assert.equal(prompts.filter((p) => /Придумай короткое название/.test(p)).length, 1);
+
+  // Человек переименовал до ответа — название модели не применяется.
+  const other = await core.createChat({ agent: 'claude' });
+  await core.sendChat(other.id, 'вопрос');
+  await core.updateChat(other.id, { title: 'Моё название' });
+  await untilIdle(core, other.id);
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal((await core.getChat(other.id))!.chat.title, 'Моё название');
+});
+
+test('cleanTitle: первая строка без кавычек, разметки и точки', () => {
+  assert.equal(cleanTitle('«Настройка CI».\nещё строка'), 'Настройка CI');
+  assert.equal(cleanTitle('## Название: **Ревью PR**'), 'Ревью PR');
+  assert.equal(cleanTitle('   '), '');
 });

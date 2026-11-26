@@ -120,7 +120,7 @@
     background 0.25s var(--ease);
 }
 .imgdrop.is-over {
-  border-color: var(--accent-line);
+  border-color: var(--line-on);
   background: var(--accent-wash);
 }
 .imgdrop-add {

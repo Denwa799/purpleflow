@@ -203,6 +203,8 @@ export interface McpHit {
 export interface ChatFile {
   id: string;
   title: string;
+  /** Название взято из первого сообщения — после первого ответа модель предложит нормальное. Человек переименовал — флага нет. */
+  autoTitle?: boolean;
   /** Папка проекта; нет — чат без проекта, агент работает во временной папке чата. */
   projectPath?: string;
   agent: AgentKind;

@@ -1,9 +1,10 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Bug,
   ChevronDown,
   FolderGit2,
   Gift,
+  House,
   LayoutList,
   MessageSquare,
   PanelLeftClose,
@@ -126,52 +127,77 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   };
 
   if (collapsed) {
+    // Свёрнутая панель — узкая колонка иконок: главное под рукой, настройки внизу.
+    const rail = (title: string, icon: ReactNode, onClick: () => void, on = false, extra?: ReactNode) => (
+      <button type="button" className={`side-icon side-rail-btn ${on ? 'is-on' : ''}`} title={title} aria-label={title} onClick={onClick}>
+        {icon}
+        {extra}
+      </button>
+    );
     return (
-      <div className="side-mini drag">
-        <button className="side-icon" title={toggleTitle} onClick={onToggle}>
-          <PanelLeftOpen size={17} />
-          {waiting > 0 && <span className="side-badge">{waiting}</span>}
-        </button>
-        <button className="side-icon" title="Новая задача" onClick={() => go({ name: 'new' })}>
-          <Workflow size={17} />
-        </button>
-        <button className="side-icon" title="Новый чат" onClick={() => go({ name: 'chat' })}>
-          <MessageSquare size={17} />
-        </button>
-        <button className="side-icon" title="Проекты" onClick={() => go({ name: 'projects' })}>
-          <FolderGit2 size={17} />
-        </button>
-        {noProjects && (
-          <button className="side-icon side-start-icon" title="Как начать?" onClick={() => go({ name: 'start' })}>
-            <Rocket size={17} />
-          </button>
+      <nav className="side-rail drag" aria-label="Панель">
+        {rail(
+          toggleTitle,
+          <PanelLeftOpen size={18} />,
+          onToggle,
+          false,
+          waiting > 0 ? <span className="side-badge">{waiting}</span> : undefined,
         )}
-      </div>
+        <span className="side-rail-sep" />
+        {rail('Главная', <House size={18} />, () => go({ name: 'home' }), v.name === 'home')}
+        {rail('Новая задача', <Workflow size={18} />, () => go({ name: 'new' }), v.name === 'new')}
+        {rail('Новый чат', <MessageSquare size={18} />, () => go({ name: 'chat' }), v.name === 'chat' && !v.chatId)}
+        {rail('Проекты', <FolderGit2 size={18} />, () => go({ name: 'projects' }), v.name === 'projects' || v.name === 'project')}
+        <span className="grow" />
+        {noProjects && rail('Как начать?', <Rocket size={18} />, () => go({ name: 'start' }))}
+        {rail(
+          'Что нового',
+          <Gift size={18} />,
+          openWhatsNew,
+          false,
+          updatePending(update) || update.kind === 'failed' ? (
+            <i className={`side-dot side-rail-dot ${update.kind === 'failed' ? 'is-err' : ''}`} aria-label="Есть обновление" />
+          ) : undefined,
+        )}
+        {rail('Настройки', <Settings size={18} />, () => go({ name: 'settings' }), v.name === 'settings')}
+      </nav>
     );
   }
 
   return (
     <aside className="side">
       <div className="side-top drag">
-        <div className="side-brand">
+        <button type="button" className="side-brand" title="Главная" onClick={() => go({ name: 'home' })}>
           <Mark size={22} />
           <span>PurpleFlow</span>
-        </div>
+        </button>
         <button className="side-icon" title={toggleTitle} onClick={onToggle}>
           <PanelLeftClose size={17} />
         </button>
       </div>
 
-      {/* «Создать» и «Проекты» — в одну строку; меню открываются под строкой во всю ширину. */}
+      {/* Главная и «Создать» — иконками, «Проекты» — текстом; меню открываются под строкой во всю ширину. */}
       <div className="side-actions">
-        <div className="side-create">
+        <button
+          type="button"
+          className={`side-new side-home ${v.name === 'home' ? 'is-on' : ''}`}
+          title="Главная"
+          aria-label="Главная"
+          onClick={() => go({ name: 'home' })}
+        >
+          <House size={16} />
+        </button>
+        <div className="side-create side-create-new">
           <button
+            title="Создать задачу или чат"
+            aria-label="Создать"
             className={`side-new ${v.name === 'new' || (v.name === 'chat' && !v.chatId) ? 'is-on' : ''}`}
             aria-haspopup="menu"
             aria-expanded={menu}
             onClick={() => setMenu(!menu)}
           >
-            <Plus size={16} /> Создать <ChevronDown size={14} className={`side-new-chev ${menu ? 'is-open' : ''}`} />
+            <Plus size={16} />
+            <ChevronDown size={14} className={`side-new-chev ${menu ? 'is-open' : ''}`} />
           </button>
           {menu && (
             <>

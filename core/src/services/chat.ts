@@ -157,7 +157,11 @@ export function updateChat(
     const dirs = contextDirs(patch.dirs, chat.projectPath);
     chat.dirs = dirs.length ? dirs : undefined;
   }
-  if (patch.title !== undefined) chat.title = patch.title.trim().slice(0, 120) || chat.title;
+  if (patch.title !== undefined) {
+    chat.title = patch.title.trim().slice(0, 120) || chat.title;
+    // Переименовал человек — модель название больше не трогает.
+    chat.autoTitle = undefined;
+  }
   if (patch.agent && patch.agent !== chat.agent) chat.agent = patch.agent;
   if (patch.model !== undefined) chat.model = patch.model.trim();
   // '' — снова «как в CLI»; уровень, которого новый агент не знает, сбрасывается.
@@ -285,7 +289,10 @@ export async function sendChat(k: Kernel, id: string, text: string, files: { nam
     attachments: attachments.length ? attachments : undefined,
     queued: true,
   });
-  if (chat.title === 'Новый чат' && text.trim()) chat.title = text.trim().replace(/\s+/g, ' ').slice(0, 60);
+  if (chat.title === 'Новый чат' && text.trim()) {
+    chat.title = text.trim().replace(/\s+/g, ' ').slice(0, 60);
+    chat.autoTitle = true;
+  }
   save(k, chat);
   if (k.chatBusy.has(id)) return;
   await drive(k, chat);
@@ -593,6 +600,59 @@ async function turn(k: Kernel, chat: ChatFile, batch: ChatMessage[], compact = f
   if (chat.edits && !chat.fullAccess && !res.stopped && needsFullAccess(parts)) answer.needsFullAccess = true;
   if (res.stopped) answer.stopped = true;
   else if (!res.ok) answer.error = res.error ?? 'Агент не ответил';
+  save(k, chat);
+  // Первый удачный ответ — название от модели, в фоне: ход и очередь его не ждут.
+  if (chat.autoTitle && res.ok && answer.text.trim() && k.opts.chatTitles !== false) {
+    chat.autoTitle = undefined;
+    void nameChat(k, chat.id, chat.title).catch(() => undefined);
+  }
+}
+
+/** Промпт названия чата: начало переписки. По нему же фейковый claude в e2e узнаёт этот запрос. */
+export const TITLE_PROMPT = 'Придумай короткое название для чата по началу переписки';
+
+/** Ответ модели → название: первая строка, без кавычек, разметки и точки в конце. */
+export function cleanTitle(text: string): string {
+  const line =
+    text
+      .trim()
+      .split('\n')
+      .find((l) => l.trim()) ?? '';
+  return line
+    .replace(/^#+\s*/, '')
+    .replace(/^(название|title)\s*:\s*/i, '')
+    .replace(/[.。]+$/, '')
+    .replace(/^[«"'`*_]+|[»"'`*_]+$/g, '')
+    .replace(/[.。]+$/, '')
+    .trim()
+    .slice(0, 60);
+}
+
+/**
+ * Название чата от модели: 2–6 слов по первому сообщению и ответу. Человек успел переименовать
+ * (название уже не то, с которым начинали) — не трогаем.
+ */
+async function nameChat(k: Kernel, id: string, was: string): Promise<void> {
+  const first = must(k, id);
+  const user =
+    first.messages
+      .find((m) => m.role === 'user')
+      ?.text.trim()
+      .slice(0, 2000) ?? '';
+  const reply =
+    first.messages
+      .find((m) => m.role === 'assistant' && !m.pending)
+      ?.text.trim()
+      .slice(0, 2000) ?? '';
+  if (!user) return;
+  const prompt = `${TITLE_PROMPT}: 2–6 слов, на языке переписки, без кавычек и точки в конце. Верни только название.\n\nЧеловек: ${user}\n\nАссистент: ${reply}`;
+  const res = await service(k, { prompt, group: `${group(id)}:title`, timeoutMs: 60_000 });
+  const title = res.ok ? cleanTitle(res.text) : '';
+  if (!title) return;
+  // Пока ждали, чат мог измениться: берём живой экземпляр (идёт следующий ход) или свежий с диска.
+  const chat = liveOf(k).get(id) ?? must(k, id);
+  if (chat.title !== was) return;
+  chat.title = title;
   save(k, chat);
 }
 

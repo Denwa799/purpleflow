@@ -6,6 +6,7 @@ import { useActions, useStore } from './lib/store';
 import { NewTaskScreen } from './screens/NewTask';
 import { ProjectScreen } from './screens/projects/ProjectScreen';
 import { ProjectsScreen } from './screens/projects/ProjectsScreen';
+import { HomeScreen } from './screens/Home';
 import { RunScreen } from './screens/Run';
 import { SettingsScreen } from './screens/settings/SettingsScreen';
 import { WelcomeScreen } from './screens/Welcome';
@@ -95,6 +96,7 @@ export function App() {
               review={v.review}
             />
           )}
+          {v.name === 'home' && <HomeScreen />}
           {v.name === 'projects' && <ProjectsScreen />}
           {v.name === 'project' && <ProjectScreen path={v.path} initialTab={v.tab} />}
           {v.name === 'run' && <RunScreen runId={v.runId} />}

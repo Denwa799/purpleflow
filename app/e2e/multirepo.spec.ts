@@ -17,6 +17,7 @@ test('папка с несколькими репозиториями: собр�
     await l.app.evaluate(({ dialog }, dir) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog;
     }, shop);
+    await page.getByRole('button', { name: /^Создать задачу/ }).click();
     await page.getByRole('button', { name: /Выберите проект/ }).click();
     await page.getByRole('menuitem', { name: /Новый проект/ }).click();
 

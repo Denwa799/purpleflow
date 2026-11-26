@@ -16,7 +16,7 @@ test('диктовка: без модели — окно выбора; с мод
   const box = makeSandbox();
   let l = await launch(box, { PURPLEFLOW_FAKE_MIC: SPEECH });
   try {
-    await l.page.getByRole('button', { name: /Создать/ }).click();
+    await l.page.getByRole('button', { name: 'Создать', exact: true }).click();
     await l.page.getByRole('menuitem', { name: /Чат/ }).click();
     // Модели ещё нет — кнопка открывает выбор модели.
     await l.page.getByRole('button', { name: 'Диктовка', exact: true }).click();
@@ -33,7 +33,7 @@ test('диктовка: без модели — окно выбора; с мод
     fs.mkdirSync(path.join(box.profile, 'whisper-models'), { recursive: true });
     fs.copyFileSync(MODEL, path.join(box.profile, 'whisper-models', 'ggml-small-q5_1.bin'));
     l = await launch(box, { PURPLEFLOW_FAKE_MIC: SPEECH });
-    await l.page.getByRole('button', { name: /Создать/ }).click();
+    await l.page.getByRole('button', { name: 'Создать', exact: true }).click();
     await l.page.getByRole('menuitem', { name: /Чат/ }).click();
     const input = l.page.locator('.chat-compose textarea');
     await input.fill('Задача:');

@@ -79,6 +79,8 @@ if (prompt.trim() === '/compact') {
   say({ type: 'result', subtype: 'success', is_error: false, result: '', usage: { input_tokens: 0, output_tokens: 0 } });
   process.exit(0);
 }
+// Название чата после первого ответа: отдаём начало первого сообщения — названия в тестах не меняются.
+if (/^Придумай короткое название для чата/.test(prompt)) reply(prompt.match(/Человек: ([^\n]*)/)?.[1]?.slice(0, 60) ?? 'Чат');
 if (/Ты — менеджер прогона/.test(prompt)) reply('{"reply": "Всё идёт по плану."}');
 if (/Перед планом проверь/.test(prompt)) reply('{"questions": []}');
 if (/второй, независимый ревьюер/.test(prompt)) reply('{"items": []}');

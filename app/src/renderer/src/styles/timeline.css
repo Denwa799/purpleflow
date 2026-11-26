@@ -541,7 +541,7 @@
 .st-active .gantt-node {
   background: var(--accent-wash);
   color: var(--accent-hi);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  box-shadow: inset 0 0 0 1px var(--line-on);
 }
 .st-waiting .gantt-node {
   background: var(--wait-wash);

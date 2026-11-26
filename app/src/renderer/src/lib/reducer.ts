@@ -5,6 +5,8 @@ import type { PublicSettings } from '../../../shared/ipc';
 export type ProjectTab = 'overview' | 'commands' | 'knowledge' | 'git' | 'stats';
 export type SettingsTab = 'account' | 'stats' | 'tools' | 'models' | 'window';
 export type View =
+  /** Главный экран: «Создать задачу» или «Новый чат». */
+  | { name: 'home' }
   /** review — открыть сразу в режиме «Ревью кода» с выбранной целью (из вкладки «Git»). */
   | { name: 'new'; project?: string; draft?: NextPartDraft; review?: ReviewTarget }
   | { name: 'run'; runId: string }
@@ -80,7 +82,7 @@ export function reducer(s: State, a: Action): State {
     case 'deleted': {
       const details = { ...s.details };
       delete details[a.runId];
-      const view: View = s.view.name === 'run' && s.view.runId === a.runId ? { name: 'new' } : s.view;
+      const view: View = s.view.name === 'run' && s.view.runId === a.runId ? { name: 'home' } : s.view;
       return { ...s, view, details, runs: s.runs.filter((r) => r.id !== a.runId) };
     }
     case 'chats':

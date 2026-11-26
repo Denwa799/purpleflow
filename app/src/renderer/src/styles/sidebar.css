@@ -38,6 +38,11 @@
 }
 .side-brand {
   display: flex;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border-radius: 8px;
+  color: var(--text-1);
+  transition: background 0.2s var(--ease);
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -101,6 +106,9 @@
   background: var(--bg-4);
   color: var(--text-1);
 }
+.side-brand:hover {
+  background: var(--bg-4);
+}
 /* «Создать» и «Проекты» в одну строку. */
 .side-actions {
   position: relative;
@@ -113,6 +121,21 @@
   position: static;
   flex: 1;
   min-width: 0;
+}
+/* Главная и «Создать» — компактные кнопки-иконки, остальное место — «Проектам». */
+.side-actions .side-create.side-create-new {
+  flex: none;
+}
+.side-actions .side-home {
+  flex: none;
+  width: 36px;
+  margin: 0;
+  padding: 0;
+  justify-content: center;
+}
+.side-actions .side-create-new .side-new {
+  width: auto;
+  gap: 4px;
 }
 .side-actions .side-create .side-new {
   width: 100%;
@@ -223,7 +246,8 @@
   min-width: 0;
 }
 .side-run-title {
-  color: var(--text-2);
+  /* Названия читаются в полную силу, приглушены только подписи под ними. */
+  color: var(--text-1);
   font-size: var(--fs-13);
   line-height: 1.35;
   overflow: hidden;
@@ -236,7 +260,7 @@
   color: var(--text-1);
 }
 .side-run-sub {
-  color: var(--text-4);
+  color: var(--text-3);
   font-size: 11.5px;
   white-space: nowrap;
   overflow: hidden;
@@ -315,22 +339,63 @@
 }
 
 /* Свёрнутая панель: две кнопки у кнопок окна, контент сдвигается вниз */
-.side-mini {
-  position: absolute;
-  top: 14px;
-  left: var(--s-3);
-  z-index: 6;
+/* Свёрнутая панель — узкая колонка иконок слева. */
+.app.is-collapsed {
+  grid-template-columns: 60px minmax(0, 1fr);
+}
+.side-rail {
   display: flex;
-  gap: 2px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+  padding: 14px 0 var(--s-4);
+  background: rgba(255, 255, 255, 0.018);
+  box-shadow: inset -1px 0 0 var(--line);
+  overflow: hidden;
 }
-.os-darwin .side-mini {
-  left: 84px;
+/* macOS: кнопки окна шире колонки. Сверху — чистая полоса заголовка без фона и границы колонки,
+   кнопки стоят на общем фоне окна; колонка начинается под ними. */
+.os-darwin .side-rail {
+  position: relative;
+  isolation: isolate;
+  padding-top: 56px;
+  background: none;
+  box-shadow: none;
 }
-.app.is-collapsed .main {
-  padding-top: 36px;
+.os-darwin .side-rail::before {
+  content: '';
+  position: absolute;
+  inset: 48px 0 0;
+  z-index: -1;
+  border-top-right-radius: 14px;
+  background: rgba(255, 255, 255, 0.018);
+  box-shadow:
+    inset -1px 0 0 var(--line),
+    inset 0 1px 0 var(--line);
 }
-.app.is-collapsed .main-drag {
-  height: 52px;
+.side-rail-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+.side-rail-btn.is-on {
+  background: var(--bg-4);
+  color: var(--text-1);
+}
+.side-rail-sep {
+  flex: none;
+  width: 20px;
+  height: 1px;
+  margin: 2px 0;
+  background: var(--line);
+}
+.side-rail-btn .side-rail-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
 }
 
 /* Windows и Linux: кнопки окна поверх правого верхнего угла */
@@ -378,7 +443,7 @@
 .side-link.side-start {
   background: var(--accent-wash);
   color: var(--accent-hi);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  box-shadow: inset 0 0 0 1px var(--line-on);
 }
 .side-link.side-start:hover {
   background: rgba(138, 116, 238, 0.16);

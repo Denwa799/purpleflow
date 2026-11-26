@@ -78,6 +78,8 @@ export function makeSandbox(o: { tmpRoot?: string; delayMs?: number; settings?: 
             .trim()
             .split('\n')
             .map((l) => JSON.parse(l) as { args: string[]; prompt: string })
+            // Фоновый запрос названия чата — не ход чата: тесты смотрят на ходы.
+            .filter((c) => !/^Придумай короткое название для чата/.test(c.prompt ?? ''))
         : [],
     cleanup: () => fs.rmSync(root, { recursive: true, force: true }),
   };
